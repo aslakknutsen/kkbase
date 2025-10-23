@@ -380,3 +380,114 @@ func (rb *RelationshipBuilder) CreateNamespaceEdge(ctx context.Context, resource
 		nil,
 	)
 }
+
+// Gateway API Relationship Builders
+
+// CreateGatewayImplementedByEdge creates IMPLEMENTED_BY edge from Gateway to GatewayClass
+func (rb *RelationshipBuilder) CreateGatewayImplementedByEdge(ctx context.Context, gatewayNamespace, gatewayName, gatewayClassName string) error {
+	gatewayID := models.GetNodeID("Gateway", gatewayNamespace, gatewayName)
+
+	return rb.graphStore.UpsertEdge(
+		ctx,
+		string(models.NodeTypeGateway),
+		gatewayID,
+		string(models.EdgeTypeImplementedBy),
+		string(models.NodeTypeGatewayClass),
+		gatewayClassName,
+		nil,
+	)
+}
+
+// CreateGatewayTLSEdge creates USES_TLS_FROM edge from Gateway to Secret
+func (rb *RelationshipBuilder) CreateGatewayTLSEdge(ctx context.Context, gatewayNamespace, gatewayName, secretNamespace, secretName, listenerName string) error {
+	gatewayID := models.GetNodeID("Gateway", gatewayNamespace, gatewayName)
+	secretID := models.GetNodeID("Secret", secretNamespace, secretName)
+
+	properties := map[string]interface{}{
+		"listener_name": listenerName,
+	}
+
+	return rb.graphStore.UpsertEdge(
+		ctx,
+		string(models.NodeTypeGateway),
+		gatewayID,
+		string(models.EdgeTypeUsesTLSFrom),
+		string(models.NodeTypeSecret),
+		secretID,
+		properties,
+	)
+}
+
+// CreateRouteAttachesToEdge creates ATTACHES_TO edge from Route to Gateway
+func (rb *RelationshipBuilder) CreateRouteAttachesToEdge(ctx context.Context, routeType models.NodeType, routeNamespace, routeName, gatewayNamespace, gatewayName string, sectionName *string) error {
+	routeID := models.GetNodeID(string(routeType), routeNamespace, routeName)
+	gatewayID := models.GetNodeID("Gateway", gatewayNamespace, gatewayName)
+
+	properties := map[string]interface{}{}
+	if sectionName != nil {
+		properties["section_name"] = *sectionName
+	}
+
+	return rb.graphStore.UpsertEdge(
+		ctx,
+		string(routeType),
+		routeID,
+		string(models.EdgeTypeAttachesTo),
+		string(models.NodeTypeGateway),
+		gatewayID,
+		properties,
+	)
+}
+
+// CreateRouteForwardsToEdge creates FORWARDS_TO edge from Route to Service
+func (rb *RelationshipBuilder) CreateRouteForwardsToEdge(ctx context.Context, routeType models.NodeType, routeNamespace, routeName, serviceNamespace, serviceName string, weight *int32) error {
+	routeID := models.GetNodeID(string(routeType), routeNamespace, routeName)
+	serviceID := models.GetNodeID("Service", serviceNamespace, serviceName)
+
+	properties := map[string]interface{}{}
+	if weight != nil {
+		properties["weight"] = *weight
+	}
+
+	return rb.graphStore.UpsertEdge(
+		ctx,
+		string(routeType),
+		routeID,
+		string(models.EdgeTypeForwardsTo),
+		string(models.NodeTypeService),
+		serviceID,
+		properties,
+	)
+}
+
+// CreateRoutePermittedByEdge creates PERMITTED_BY edge from Route to ReferenceGrant
+func (rb *RelationshipBuilder) CreateRoutePermittedByEdge(ctx context.Context, routeType models.NodeType, routeNamespace, routeName, grantNamespace, grantName string) error {
+	routeID := models.GetNodeID(string(routeType), routeNamespace, routeName)
+	grantID := models.GetNodeID("ReferenceGrant", grantNamespace, grantName)
+
+	return rb.graphStore.UpsertEdge(
+		ctx,
+		string(routeType),
+		routeID,
+		string(models.EdgeTypePermittedBy),
+		string(models.NodeTypeReferenceGrant),
+		grantID,
+		nil,
+	)
+}
+
+// CreateReferenceGrantAllowsEdge creates ALLOWS_ROUTE_TO edge from ReferenceGrant to Service
+func (rb *RelationshipBuilder) CreateReferenceGrantAllowsEdge(ctx context.Context, grantNamespace, grantName, serviceNamespace, serviceName string) error {
+	grantID := models.GetNodeID("ReferenceGrant", grantNamespace, grantName)
+	serviceID := models.GetNodeID("Service", serviceNamespace, serviceName)
+
+	return rb.graphStore.UpsertEdge(
+		ctx,
+		string(models.NodeTypeReferenceGrant),
+		grantID,
+		string(models.EdgeTypeAllowsRouteTo),
+		string(models.NodeTypeService),
+		serviceID,
+		nil,
+	)
+}

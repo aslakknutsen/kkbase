@@ -120,19 +120,43 @@ if cfg.EnableExtensions {
 
 ## Example Extensions
 
-### Istio Resources
+### Gateway API (Implemented)
+
+The Gateway API extension provides comprehensive support for Kubernetes Gateway API resources:
+
+**Supported Resources:**
+- `GatewayClass` - Gateway controller templates
+- `Gateway` - Load balancer instances with listeners
+- `HTTPRoute`, `GRPCRoute` - Application routing rules
+- `TCPRoute`, `UDPRoute`, `TLSRoute` - Layer 4 routing
+- `ReferenceGrant` - Cross-namespace permissions
+
+**Key Features:**
+- Automatic CRD detection and handler registration
+- Complete relationship mapping (Gateway → Route → Service → Pod)
+- TLS certificate tracking (Gateway → Secret)
+- Cross-namespace security modeling
+- Support for multiple API versions (v1, v1alpha2, v1beta1)
+
+**Documentation:** See [docs/GATEWAY_API.md](../../../../docs/GATEWAY_API.md) for detailed usage and query examples.
+
+**Implementation:** See `pkg/watchers/handlers/extensions/gateway/` for handler code.
+
+### Other Potential Extensions
+
+#### Istio Resources
 - `VirtualService`, `DestinationRule`, `Gateway`
 - Track service mesh configuration and routing
 
-### Prometheus Resources
+#### Prometheus Resources
 - `ServiceMonitor`, `PrometheusRule`, `Alertmanager`
 - Track observability configuration
 
-### cert-manager Resources
+#### cert-manager Resources
 - `Certificate`, `Issuer`, `ClusterIssuer`
 - Track TLS certificate management
 
-### Argo CD Resources
+#### Argo CD Resources
 - `Application`, `AppProject`
 - Track GitOps deployments
 

@@ -107,6 +107,16 @@ func RegisterCoreHandlers(registry *handlers.Registry) {
 		},
 	})
 
+	registry.Register(&handlers.HandlerRegistration{
+		Name:        "secret",
+		Description: "Watches Kubernetes Secrets",
+		Category:    "configuration",
+		Required:    false,
+		Factory: func(clientset *kubernetes.Clientset, graphStore graph.GraphStore, logger *zap.Logger, informerFactory informers.SharedInformerFactory) watchers.ResourceWatcher {
+			return NewSecretHandler(clientset, graphStore, logger, informerFactory)
+		},
+	})
+
 	// Observability resources
 	registry.Register(&handlers.HandlerRegistration{
 		Name:        "event",

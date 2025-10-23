@@ -23,6 +23,16 @@ const (
 	NodeTypeEndpoint      NodeType = "Endpoint"
 	NodeTypeNetworkPolicy NodeType = "NetworkPolicy"
 
+	// Gateway API
+	NodeTypeGatewayClass   NodeType = "GatewayClass"
+	NodeTypeGateway        NodeType = "Gateway"
+	NodeTypeHTTPRoute      NodeType = "HTTPRoute"
+	NodeTypeGRPCRoute      NodeType = "GRPCRoute"
+	NodeTypeTCPRoute       NodeType = "TCPRoute"
+	NodeTypeUDPRoute       NodeType = "UDPRoute"
+	NodeTypeTLSRoute       NodeType = "TLSRoute"
+	NodeTypeReferenceGrant NodeType = "ReferenceGrant"
+
 	// Storage
 	NodeTypePersistentVolume      NodeType = "PersistentVolume"
 	NodeTypePersistentVolumeClaim NodeType = "PersistentVolumeClaim"
@@ -59,6 +69,14 @@ const (
 	EdgeTypeHasEndpoint EdgeType = "HAS_ENDPOINT"
 	EdgeTypeRoutesTo    EdgeType = "ROUTES_TO"
 	EdgeTypeAffectedBy  EdgeType = "AFFECTED_BY"
+
+	// Gateway API
+	EdgeTypeImplementedBy EdgeType = "IMPLEMENTED_BY"
+	EdgeTypeAttachesTo    EdgeType = "ATTACHES_TO"
+	EdgeTypeForwardsTo    EdgeType = "FORWARDS_TO"
+	EdgeTypeUsesTLSFrom   EdgeType = "USES_TLS_FROM"
+	EdgeTypePermittedBy   EdgeType = "PERMITTED_BY"
+	EdgeTypeAllowsRouteTo EdgeType = "ALLOWS_ROUTE_TO"
 
 	// Storage
 	EdgeTypeMounts        EdgeType = "MOUNTS"
