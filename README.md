@@ -226,6 +226,15 @@ OPTIONAL MATCH (d:Deployment)-[:MANAGES]->()-[:MANAGES]->(p)
 RETURN n, p, s, d
 ```
 
+**Find all node types and relationships currently found:**
+```cypher
+MATCH (a)-[r]->(b)
+WITH labels(a)[0] as FromNode, type(r) as Relationship, labels(b)[0] as ToNode, count(*) as Count
+RETURN FromNode + ' -[' + Relationship + ']-> ' + ToNode as Pattern, Count
+ORDER BY Count DESC
+LIMIT 50
+```
+
 ## Development
 
 ### Project Structure
