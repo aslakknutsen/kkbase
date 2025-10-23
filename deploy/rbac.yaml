@@ -46,6 +46,24 @@ rules:
     resources:
       - storageclasses
     verbs: ["get", "list", "watch"]
+  
+  # Istio networking resources
+  - apiGroups: ["networking.istio.io"]
+    resources:
+      - gateways
+      - virtualservices
+      - destinationrules
+      - serviceentries
+      - sidecars
+    verbs: ["get", "list", "watch"]
+  
+  # Istio security resources
+  - apiGroups: ["security.istio.io"]
+    resources:
+      - authorizationpolicies
+      - peerauthentications
+      - requestauthentications
+    verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

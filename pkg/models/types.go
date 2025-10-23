@@ -33,6 +33,18 @@ const (
 	NodeTypeTLSRoute       NodeType = "TLSRoute"
 	NodeTypeReferenceGrant NodeType = "ReferenceGrant"
 
+	// Istio - Traffic Management
+	NodeTypeIstioGateway    NodeType = "IstioGateway"
+	NodeTypeVirtualService  NodeType = "VirtualService"
+	NodeTypeDestinationRule NodeType = "DestinationRule"
+	NodeTypeServiceEntry    NodeType = "ServiceEntry"
+	NodeTypeSidecar         NodeType = "Sidecar"
+
+	// Istio - Security
+	NodeTypeAuthorizationPolicy   NodeType = "AuthorizationPolicy"
+	NodeTypePeerAuthentication    NodeType = "PeerAuthentication"
+	NodeTypeRequestAuthentication NodeType = "RequestAuthentication"
+
 	// Storage
 	NodeTypePersistentVolume      NodeType = "PersistentVolume"
 	NodeTypePersistentVolumeClaim NodeType = "PersistentVolumeClaim"
@@ -95,6 +107,14 @@ const (
 	// Dynamic relationships
 	EdgeTypeCommunicatesWith EdgeType = "COMMUNICATES_WITH"
 	EdgeTypeDependsOn        EdgeType = "DEPENDS_ON"
+
+	// Istio relationships
+	EdgeTypeSelectsProxy      EdgeType = "SELECTS_PROXY"
+	EdgeTypeRoutesTrafficFor  EdgeType = "ROUTES_TRAFFIC_FOR"
+	EdgeTypeRoutesToSubset    EdgeType = "ROUTES_TO_SUBSET"
+	EdgeTypeDefinesPolicyFor  EdgeType = "DEFINES_POLICY_FOR"
+	EdgeTypeSelectsSubsetPods EdgeType = "SELECTS_SUBSET_PODS"
+	EdgeTypeAppliesTo         EdgeType = "APPLIES_TO"
 )
 
 // GraphNode represents a node in the knowledge graph
