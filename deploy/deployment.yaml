@@ -1,0 +1,48 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kkbase-watcher
+  namespace: default
+  labels:
+    app: kkbase-watcher
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kkbase-watcher
+  template:
+    metadata:
+      labels:
+        app: kkbase-watcher
+    spec:
+      serviceAccountName: kkbase-watcher
+      containers:
+        - name: watcher
+          image: quay.io/aslakknutsen/kkbase-watcher:latest
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: kkbase-watcher-config
+            - secretRef:
+                name: kkbase-watcher-secret
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
