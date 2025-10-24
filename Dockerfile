@@ -18,10 +18,20 @@ FROM alpine:latest
 
 RUN apk --no-cache add ca-certificates
 
-WORKDIR /root/
+# Create a non-root user and group
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup
 
-# Copy the binary from builder
+# Use /app as working directory (accessible to non-root users)
+WORKDIR /app
+
+# Copy the binary from builder and set permissions
 COPY --from=builder /watcher .
+RUN chmod +x /app/watcher && \
+    chown -R appuser:appgroup /app
+
+# OpenShift runs as arbitrary UID, but we set a default user for non-OpenShift environments
+USER 1001
 
 EXPOSE 8080
 
