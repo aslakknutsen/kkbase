@@ -3,7 +3,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kkbase-watcher
-  namespace: default
   labels:
     app: kkbase-watcher
 spec:
