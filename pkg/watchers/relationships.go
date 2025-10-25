@@ -32,26 +32,15 @@ func NewRelationshipBuilder(clientset *kubernetes.Clientset, graphStore graph.Gr
 
 // CreateOwnerEdge creates an edge based on owner reference
 func (rb *RelationshipBuilder) CreateOwnerEdge(ctx context.Context, childType models.NodeType, childID string, ownerRef metav1.OwnerReference, namespace string) error {
-	var parentType models.NodeType
-	var edgeType models.EdgeType
-
-	switch ownerRef.Kind {
-	case "Deployment":
-		parentType = models.NodeTypeDeployment
-		edgeType = models.EdgeTypeManages
-	case "ReplicaSet":
-		parentType = models.NodeTypeReplicaSet
-		edgeType = models.EdgeTypeManages
-	case "StatefulSet":
-		parentType = models.NodeTypeStatefulSet
-		edgeType = models.EdgeTypeManages
-	case "DaemonSet":
-		parentType = models.NodeTypeDaemonSet
-		edgeType = models.EdgeTypeManages
-	default:
+	// Convert the owner kind to a node type
+	parentType, ok := models.KindToNodeType(ownerRef.Kind)
+	if !ok {
 		rb.logger.Debug("unknown owner kind", zap.String("kind", ownerRef.Kind))
 		return nil
 	}
+
+	// Use MANAGES edge type for owner relationships
+	edgeType := models.EdgeTypeManages
 
 	parentID := models.GetNodeID(ownerRef.Kind, namespace, ownerRef.Name)
 	return rb.graphStore.UpsertEdge(
