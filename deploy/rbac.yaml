@@ -59,6 +59,7 @@ rules:
       - gateways
       - httproutes
       - grpcroutes
+      - backendtlspolicies
     verbs: ["get", "list", "watch"]
   
   # Gateway API resources (v1alpha2)

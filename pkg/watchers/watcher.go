@@ -25,6 +25,10 @@ type ResourceWatcher interface {
 
 	// HandleDelete processes a deleted resource
 	HandleDelete(obj interface{})
+
+	// Start starts the informer for this watcher
+	// Returns true if the informer was started, false if already running or not applicable
+	Start(ctx context.Context) bool
 }
 
 // Config holds configuration for watchers
@@ -49,7 +53,11 @@ type Manager struct {
 	handlers   map[string]ResourceWatcher
 	handlersMu sync.RWMutex
 
+	// Track handlers registered before Start() - these have informers started by factory
+	coreHandlers map[string]bool
+
 	started bool
+	ctx     context.Context // Store the context for starting dynamic informers
 }
 
 // NewManager creates a new watcher manager with dynamic client support
@@ -88,6 +96,7 @@ func NewManager(config Config, restConfig *rest.Config) (*Manager, error) {
 		crdWatcher:    crdWatcher,
 		logger:        config.Logger,
 		handlers:      make(map[string]ResourceWatcher),
+		coreHandlers:  make(map[string]bool),
 		started:       false,
 	}, nil
 }
@@ -98,6 +107,12 @@ func (m *Manager) RegisterHandler(name string, handler ResourceWatcher) {
 	defer m.handlersMu.Unlock()
 
 	m.handlers[name] = handler
+
+	// Track if this is a core handler (registered before Start())
+	if !m.started {
+		m.coreHandlers[name] = true
+	}
+
 	m.logger.Info("registered handler", zap.String("name", name))
 }
 
@@ -118,6 +133,20 @@ func (m *Manager) RegisterHandlerFactory(
 	factory func() ResourceWatcher,
 ) {
 	m.crdWatcher.WatchCRD(group, kind, func(crd *CRDInfo) {
+		// Check if handler is already registered (prevent duplicates)
+		m.handlersMu.RLock()
+		_, exists := m.handlers[name]
+		m.handlersMu.RUnlock()
+
+		if exists {
+			m.logger.Debug("handler already registered, skipping",
+				zap.String("handler", name),
+				zap.String("group", crd.Group),
+				zap.String("kind", crd.Kind),
+			)
+			return
+		}
+
 		m.logger.Info("creating handler for CRD",
 			zap.String("handler", name),
 			zap.String("group", crd.Group),
@@ -130,10 +159,23 @@ func (m *Manager) RegisterHandlerFactory(
 		// Register it
 		m.RegisterHandler(name, handler)
 
-		// If manager is already started, the handler's informer is already running
-		// because it was added to the factory during construction
+		// If manager is already started, we need to manually start the informer
+		// because the factory.Start() has already been called
 		if m.started {
-			m.logger.Info("handler registered dynamically (runtime)", zap.String("handler", name))
+			m.logger.Info("handler registered dynamically (runtime), starting informer",
+				zap.String("handler", name),
+			)
+
+			// Start the handler's informer
+			if started := handler.Start(m.ctx); started {
+				m.logger.Info("dynamic handler informer started and synced",
+					zap.String("handler", name),
+				)
+			} else {
+				m.logger.Warn("failed to start dynamic handler informer",
+					zap.String("handler", name),
+				)
+			}
 		}
 	}, nil)
 }
@@ -143,6 +185,9 @@ func (m *Manager) Start(ctx context.Context) error {
 	m.handlersMu.RLock()
 	handlerCount := len(m.handlers)
 	m.handlersMu.RUnlock()
+
+	// Store context for dynamic handler registration
+	m.ctx = ctx
 
 	m.logger.Info("starting dynamic watcher manager", zap.Int("handler_count", handlerCount))
 
@@ -175,6 +220,42 @@ func (m *Manager) Start(ctx context.Context) error {
 
 	m.started = true
 
+	// Start informers for any handlers that were registered during cache sync
+	// These are extension handlers (not core) that got registered while waiting for sync
+	m.handlersMu.RLock()
+	currentHandlerCount := len(m.handlers)
+	extensionHandlers := make(map[string]ResourceWatcher)
+	for name, handler := range m.handlers {
+		if !m.coreHandlers[name] {
+			extensionHandlers[name] = handler
+		}
+	}
+	m.handlersMu.RUnlock()
+
+	if len(extensionHandlers) > 0 {
+		m.logger.Info("starting informers for extension handlers registered during sync",
+			zap.Int("core_handlers", len(m.coreHandlers)),
+			zap.Int("total_handlers", currentHandlerCount),
+			zap.Int("extension_handlers", len(extensionHandlers)),
+		)
+
+		for name, handler := range extensionHandlers {
+			m.logger.Info("starting informer for extension handler",
+				zap.String("handler", name),
+			)
+
+			if started := handler.Start(m.ctx); started {
+				m.logger.Info("extension handler informer started and synced",
+					zap.String("handler", name),
+				)
+			} else {
+				m.logger.Warn("failed to start extension handler informer",
+					zap.String("handler", name),
+				)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -198,6 +279,9 @@ type BaseWatcher struct {
 	GraphStore graph.GraphStore
 	Logger     *zap.Logger
 	Informer   cache.SharedIndexInformer
+
+	started bool
+	mu      sync.Mutex
 }
 
 // NewBaseWatcher creates a new base watcher
@@ -207,6 +291,33 @@ func NewBaseWatcher(graphStore graph.GraphStore, logger *zap.Logger, informer ca
 		Logger:     logger,
 		Informer:   informer,
 	}
+}
+
+// Start starts the informer for this watcher
+func (b *BaseWatcher) Start(ctx context.Context) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	// Already started
+	if b.started {
+		return false
+	}
+
+	// No informer to start
+	if b.Informer == nil {
+		return false
+	}
+
+	// Start the informer in a goroutine
+	go b.Informer.Run(ctx.Done())
+
+	// Wait for cache to sync
+	if !cache.WaitForCacheSync(ctx.Done(), b.Informer.HasSynced) {
+		return false
+	}
+
+	b.started = true
+	return true
 }
 
 // SafeGetObject safely extracts an object from the informer
