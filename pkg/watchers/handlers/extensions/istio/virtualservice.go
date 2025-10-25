@@ -2,15 +2,12 @@ package istio
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"
@@ -33,16 +30,15 @@ func NewVirtualServiceHandler(
 	dynamicClient dynamic.Interface,
 	graphStore graph.GraphStore,
 	logger *zap.Logger,
-	dynamicInformerFactory dynamicinformer.DynamicSharedInformerFactory,
+	factory dynamicinformer.DynamicSharedInformerFactory,
 ) *VirtualServiceHandler {
 	gvr := istiov1.SchemeGroupVersion.WithResource("virtualservices")
-	informer := dynamicInformerFactory.ForResource(gvr).Informer()
+	informer := factory.ForResource(gvr).Informer()
 
 	handler := &VirtualServiceHandler{
-		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
-		clientset:           clientset,
-		dynamicClient:       dynamicClient,
-		relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
+		clientset:     clientset,
+		dynamicClient: dynamicClient, relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -59,42 +55,40 @@ func NewVirtualServiceHandler(
 
 // HandleAdd processes a newly added VirtualService
 func (h *VirtualServiceHandler) HandleAdd(obj interface{}) {
-	unstructuredObj, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", obj)))
-		return
-	}
+	virtualService, err := watchers.ConvertToTyped[istiov1.VirtualService](obj)
 
-	vs := &istiov1.VirtualService{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, vs); err != nil {
+	if err != nil {
+
 		h.Logger.Error("failed to convert to VirtualService", zap.Error(err))
+
 		return
+
 	}
 
 	h.Logger.Debug("virtualservice added",
-		zap.String("namespace", vs.Namespace),
-		zap.String("name", vs.Name),
+		zap.String("namespace", virtualService.Namespace),
+		zap.String("name", virtualService.Name),
 	)
 
 	ctx := context.Background()
 
 	// Create VirtualService node
-	vsNode := models.VirtualServiceToGraphNode(vs)
+	vsNode := models.VirtualServiceToGraphNode(virtualService)
 	if err := h.GraphStore.UpsertNode(ctx, string(vsNode.Type), vsNode.ID, vsNode.Properties); err != nil {
-		h.Logger.Error("failed to create virtualservice node", zap.Error(err), zap.String("virtualservice", vs.Name))
+		h.Logger.Error("failed to create virtualservice node", zap.Error(err), zap.String("virtualservice", virtualService.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeVirtualService, vsNode.ID, vs.Namespace); err != nil {
+	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeVirtualService, vsNode.ID, virtualService.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
 	// Create ATTACHES_TO edges to Istio Gateways
-	for _, gateway := range vs.Spec.Gateways {
+	for _, gateway := range virtualService.Spec.Gateways {
 		// Parse gateway reference (format: namespace/name or just name)
-		gatewayNs, gatewayName := parseGatewayRef(gateway, vs.Namespace)
-		if err := h.relationshipBuilder.CreateVirtualServiceAttachesToEdge(ctx, vs.Namespace, vs.Name, gatewayNs, gatewayName); err != nil {
+		gatewayNs, gatewayName := parseGatewayRef(gateway, virtualService.Namespace)
+		if err := h.relationshipBuilder.CreateVirtualServiceAttachesToEdge(ctx, virtualService.Namespace, virtualService.Name, gatewayNs, gatewayName); err != nil {
 			h.Logger.Debug("failed to create ATTACHES_TO edge",
 				zap.Error(err),
 				zap.String("gateway", gateway),
@@ -103,11 +97,11 @@ func (h *VirtualServiceHandler) HandleAdd(obj interface{}) {
 	}
 
 	// Create ROUTES_TRAFFIC_FOR edges to Services based on hosts
-	for _, host := range vs.Spec.Hosts {
+	for _, host := range virtualService.Spec.Hosts {
 		// Parse service host (format: service.namespace.svc.cluster.local or just service)
-		svcNs, svcName := parseServiceHost(host, vs.Namespace)
+		svcNs, svcName := parseServiceHost(host, virtualService.Namespace)
 		if svcName != "" {
-			if err := h.relationshipBuilder.CreateVirtualServiceRoutesTrafficForEdge(ctx, vs.Namespace, vs.Name, svcNs, svcName, host); err != nil {
+			if err := h.relationshipBuilder.CreateVirtualServiceRoutesTrafficForEdge(ctx, virtualService.Namespace, virtualService.Name, svcNs, svcName, host); err != nil {
 				h.Logger.Debug("failed to create ROUTES_TRAFFIC_FOR edge",
 					zap.Error(err),
 					zap.String("host", host),
@@ -117,17 +111,17 @@ func (h *VirtualServiceHandler) HandleAdd(obj interface{}) {
 	}
 
 	// Create ROUTES_TO_SUBSET edges to DestinationRules for HTTP routes
-	for _, httpRoute := range vs.Spec.Http {
+	for _, httpRoute := range virtualService.Spec.Http {
 		for _, dest := range httpRoute.Route {
 			if dest.Destination != nil && dest.Destination.Subset != "" {
 				// The destination rule will be in the same namespace or the service's namespace
-				destNs, destService := parseServiceHost(dest.Destination.Host, vs.Namespace)
+				destNs, destService := parseServiceHost(dest.Destination.Host, virtualService.Namespace)
 				weight := int32(0)
 				if dest.Weight != 0 {
 					weight = dest.Weight
 				}
 				if err := h.relationshipBuilder.CreateVirtualServiceRoutesToSubsetEdge(
-					ctx, vs.Namespace, vs.Name, destNs, destService, dest.Destination.Subset, weight); err != nil {
+					ctx, virtualService.Namespace, virtualService.Name, destNs, destService, dest.Destination.Subset, weight); err != nil {
 					h.Logger.Debug("failed to create ROUTES_TO_SUBSET edge",
 						zap.Error(err),
 						zap.String("destination", dest.Destination.Host),
@@ -141,25 +135,23 @@ func (h *VirtualServiceHandler) HandleAdd(obj interface{}) {
 
 // HandleUpdate processes an updated VirtualService
 func (h *VirtualServiceHandler) HandleUpdate(oldObj, newObj interface{}) {
-	unstructuredObj, ok := newObj.(*unstructured.Unstructured)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", newObj)))
-		return
-	}
+	virtualService, err := watchers.ConvertToTyped[istiov1.VirtualService](newObj)
 
-	vs := &istiov1.VirtualService{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, vs); err != nil {
+	if err != nil {
+
 		h.Logger.Error("failed to convert to VirtualService", zap.Error(err))
+
 		return
+
 	}
 
 	h.Logger.Debug("virtualservice updated",
-		zap.String("namespace", vs.Namespace),
-		zap.String("name", vs.Name),
+		zap.String("namespace", virtualService.Namespace),
+		zap.String("name", virtualService.Name),
 	)
 
 	ctx := context.Background()
-	vsID := models.GetNodeID("VirtualService", vs.Namespace, vs.Name)
+	vsID := models.GetNodeID("VirtualService", virtualService.Namespace, virtualService.Name)
 
 	// Delete old edges
 	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(models.NodeTypeVirtualService), vsID); err != nil {
@@ -172,36 +164,26 @@ func (h *VirtualServiceHandler) HandleUpdate(oldObj, newObj interface{}) {
 
 // HandleDelete processes a deleted VirtualService
 func (h *VirtualServiceHandler) HandleDelete(obj interface{}) {
-	unstructuredObj, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		extracted, err := watchers.SafeGetObject(obj)
-		if err != nil {
-			h.Logger.Error("failed to extract object", zap.Error(err))
-			return
-		}
-		unstructuredObj, ok = extracted.(*unstructured.Unstructured)
-		if !ok {
-			h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", extracted)))
-			return
-		}
-	}
+	virtualService, err := watchers.ConvertToTyped[istiov1.VirtualService](obj)
 
-	vs := &istiov1.VirtualService{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, vs); err != nil {
+	if err != nil {
+
 		h.Logger.Error("failed to convert to VirtualService", zap.Error(err))
+
 		return
+
 	}
 
 	h.Logger.Debug("virtualservice deleted",
-		zap.String("namespace", vs.Namespace),
-		zap.String("name", vs.Name),
+		zap.String("namespace", virtualService.Namespace),
+		zap.String("name", virtualService.Name),
 	)
 
 	ctx := context.Background()
 
-	vsID := models.GetNodeID("VirtualService", vs.Namespace, vs.Name)
+	vsID := models.GetNodeID("VirtualService", virtualService.Namespace, virtualService.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeVirtualService), vsID); err != nil {
-		h.Logger.Error("failed to delete virtualservice node", zap.Error(err), zap.String("virtualservice", vs.Name))
+		h.Logger.Error("failed to delete virtualservice node", zap.Error(err), zap.String("virtualservice", virtualService.Name))
 	}
 }
 

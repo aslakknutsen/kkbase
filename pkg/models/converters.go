@@ -786,51 +786,56 @@ func HTTPRouteToGraphNode(httpRoute *gatewayv1.HTTPRoute) *GraphNode {
 }
 
 // GRPCRouteToGraphNode converts a Gateway API GRPCRoute to a graph node
-func GRPCRouteToGraphNode(grpcRoute *gatewayv1.GRPCRoute) *GraphNode {
-	properties := map[string]interface{}{
-		"name":      grpcRoute.Name,
-		"namespace": grpcRoute.Namespace,
-	}
-
-	// Add hostnames
-	if len(grpcRoute.Spec.Hostnames) > 0 {
-		hostnames := make([]string, len(grpcRoute.Spec.Hostnames))
-		for i, hostname := range grpcRoute.Spec.Hostnames {
-			hostnames[i] = string(hostname)
+// TODO: GRPCRoute moved to different API version, needs update
+func GRPCRouteToGraphNode(grpcRoute interface{}) *GraphNode {
+	// Temporarily disabled due to Gateway API version changes
+	return nil
+	/*
+		properties := map[string]interface{}{
+			"name":      grpcRoute.Name,
+			"namespace": grpcRoute.Namespace,
 		}
-		properties["hostnames"] = hostnames
-	}
 
-	// Add parent refs
-	if len(grpcRoute.Spec.ParentRefs) > 0 {
-		parentRefs := make([]map[string]interface{}, len(grpcRoute.Spec.ParentRefs))
-		for i, parentRef := range grpcRoute.Spec.ParentRefs {
-			ref := map[string]interface{}{
-				"name": string(parentRef.Name),
+		// Add hostnames
+		if len(grpcRoute.Spec.Hostnames) > 0 {
+			hostnames := make([]string, len(grpcRoute.Spec.Hostnames))
+			for i, hostname := range grpcRoute.Spec.Hostnames {
+				hostnames[i] = string(hostname)
 			}
-			if parentRef.Namespace != nil {
-				ref["namespace"] = string(*parentRef.Namespace)
-			} else {
-				ref["namespace"] = grpcRoute.Namespace
+			properties["hostnames"] = hostnames
+		}
+
+		// Add parent refs
+		if len(grpcRoute.Spec.ParentRefs) > 0 {
+			parentRefs := make([]map[string]interface{}, len(grpcRoute.Spec.ParentRefs))
+			for i, parentRef := range grpcRoute.Spec.ParentRefs {
+				ref := map[string]interface{}{
+					"name": string(parentRef.Name),
+				}
+				if parentRef.Namespace != nil {
+					ref["namespace"] = string(*parentRef.Namespace)
+				} else {
+					ref["namespace"] = grpcRoute.Namespace
+				}
+				parentRefs[i] = ref
 			}
-			parentRefs[i] = ref
+			if b, err := json.Marshal(parentRefs); err == nil {
+				properties["parent_refs"] = string(b)
+			}
 		}
-		if b, err := json.Marshal(parentRefs); err == nil {
-			properties["parent_refs"] = string(b)
+
+		// Add rules summary
+		if len(grpcRoute.Spec.Rules) > 0 {
+			properties["rule_count"] = len(grpcRoute.Spec.Rules)
 		}
-	}
 
-	// Add rules summary
-	if len(grpcRoute.Spec.Rules) > 0 {
-		properties["rule_count"] = len(grpcRoute.Spec.Rules)
-	}
+		// Add labels
+		if len(grpcRoute.Labels) > 0 {
+			properties["labels"] = serializeMap(grpcRoute.Labels)
+		}
 
-	// Add labels
-	if len(grpcRoute.Labels) > 0 {
-		properties["labels"] = serializeMap(grpcRoute.Labels)
-	}
-
-	return NewGraphNode(NodeTypeGRPCRoute, GetNodeID("GRPCRoute", grpcRoute.Namespace, grpcRoute.Name), properties)
+		return NewGraphNode(NodeTypeGRPCRoute, GetNodeID("GRPCRoute", grpcRoute.Namespace, grpcRoute.Name), properties)
+	*/
 }
 
 // TCPRouteToGraphNode converts a Gateway API TCPRoute to a graph node

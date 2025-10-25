@@ -2,14 +2,14 @@ package core
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/informers"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
@@ -25,9 +25,14 @@ func NewPVCHandler(
 	clientset *kubernetes.Clientset,
 	graphStore graph.GraphStore,
 	logger *zap.Logger,
-	informerFactory informers.SharedInformerFactory,
+	factory dynamicinformer.DynamicSharedInformerFactory,
 ) *PVCHandler {
-	informer := informerFactory.Core().V1().PersistentVolumeClaims().Informer()
+	gvr := schema.GroupVersionResource{
+		Group:    "",
+		Version:  "v1",
+		Resource: "persistentvolumeclaims",
+	}
+	informer := factory.ForResource(gvr).Informer()
 
 	handler := &PVCHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
@@ -48,9 +53,9 @@ func NewPVCHandler(
 
 // HandleAdd processes a newly added PVC
 func (h *PVCHandler) HandleAdd(obj interface{}) {
-	pvc, ok := obj.(*corev1.PersistentVolumeClaim)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", obj)))
+	pvc, err := watchers.ConvertToTyped[corev1.PersistentVolumeClaim](obj)
+	if err != nil {
+		h.Logger.Error("conversion failed", zap.Error(err))
 		return
 	}
 
@@ -77,9 +82,9 @@ func (h *PVCHandler) HandleAdd(obj interface{}) {
 
 // HandleUpdate processes an updated PVC
 func (h *PVCHandler) HandleUpdate(oldObj, newObj interface{}) {
-	newPVC, ok := newObj.(*corev1.PersistentVolumeClaim)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", newObj)))
+	newPVC, err := watchers.ConvertToTyped[corev1.PersistentVolumeClaim](newObj)
+	if err != nil {
+		h.Logger.Error("conversion failed", zap.Error(err))
 		return
 	}
 
@@ -89,18 +94,10 @@ func (h *PVCHandler) HandleUpdate(oldObj, newObj interface{}) {
 
 // HandleDelete processes a deleted PVC
 func (h *PVCHandler) HandleDelete(obj interface{}) {
-	pvc, ok := obj.(*corev1.PersistentVolumeClaim)
-	if !ok {
-		extracted, err := watchers.SafeGetObject(obj)
-		if err != nil {
-			h.Logger.Error("failed to extract object", zap.Error(err))
-			return
-		}
-		pvc, ok = extracted.(*corev1.PersistentVolumeClaim)
-		if !ok {
-			h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", extracted)))
-			return
-		}
+	pvc, err := watchers.ConvertToTyped[corev1.PersistentVolumeClaim](obj)
+	if err != nil {
+		h.Logger.Error("failed to convert to PersistentVolumeClaim", zap.Error(err))
+		return
 	}
 
 	h.Logger.Debug("pvc deleted", zap.String("namespace", pvc.Namespace), zap.String("name", pvc.Name))

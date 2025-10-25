@@ -9,7 +9,8 @@ import (
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/informers"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
@@ -26,9 +27,14 @@ func NewPodHandler(
 	clientset *kubernetes.Clientset,
 	graphStore graph.GraphStore,
 	logger *zap.Logger,
-	informerFactory informers.SharedInformerFactory,
+	factory dynamicinformer.DynamicSharedInformerFactory,
 ) *PodHandler {
-	informer := informerFactory.Core().V1().Pods().Informer()
+	gvr := schema.GroupVersionResource{
+		Group:    "",
+		Version:  "v1",
+		Resource: "pods",
+	}
+	informer := factory.ForResource(gvr).Informer()
 
 	handler := &PodHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
@@ -50,9 +56,9 @@ func NewPodHandler(
 
 // HandleAdd processes a newly added Pod
 func (h *PodHandler) HandleAdd(obj interface{}) {
-	pod, ok := obj.(*corev1.Pod)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", obj)))
+	pod, err := watchers.ConvertToTyped[corev1.Pod](obj)
+	if err != nil {
+		h.Logger.Error("failed to convert to Pod", zap.Error(err))
 		return
 	}
 
@@ -104,9 +110,9 @@ func (h *PodHandler) HandleAdd(obj interface{}) {
 
 // HandleUpdate processes an updated Pod
 func (h *PodHandler) HandleUpdate(oldObj, newObj interface{}) {
-	newPod, ok := newObj.(*corev1.Pod)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", newObj)))
+	newPod, err := watchers.ConvertToTyped[corev1.Pod](newObj)
+	if err != nil {
+		h.Logger.Error("failed to convert to Pod", zap.Error(err))
 		return
 	}
 
@@ -118,19 +124,10 @@ func (h *PodHandler) HandleUpdate(oldObj, newObj interface{}) {
 
 // HandleDelete processes a deleted Pod
 func (h *PodHandler) HandleDelete(obj interface{}) {
-	pod, ok := obj.(*corev1.Pod)
-	if !ok {
-		// Try to extract from tombstone
-		extracted, err := watchers.SafeGetObject(obj)
-		if err != nil {
-			h.Logger.Error("failed to extract object", zap.Error(err))
-			return
-		}
-		pod, ok = extracted.(*corev1.Pod)
-		if !ok {
-			h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", extracted)))
-			return
-		}
+	pod, err := watchers.ConvertToTyped[corev1.Pod](obj)
+	if err != nil {
+		h.Logger.Error("failed to convert to Pod", zap.Error(err))
+		return
 	}
 
 	h.Logger.Debug("pod deleted", zap.String("namespace", pod.Namespace), zap.String("name", pod.Name))

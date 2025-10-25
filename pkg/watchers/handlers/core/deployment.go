@@ -2,14 +2,14 @@ package core
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/client-go/informers"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
@@ -26,9 +26,14 @@ func NewDeploymentHandler(
 	clientset *kubernetes.Clientset,
 	graphStore graph.GraphStore,
 	logger *zap.Logger,
-	informerFactory informers.SharedInformerFactory,
+	factory dynamicinformer.DynamicSharedInformerFactory,
 ) *DeploymentHandler {
-	informer := informerFactory.Apps().V1().Deployments().Informer()
+	gvr := schema.GroupVersionResource{
+		Group:    "apps",
+		Version:  "v1",
+		Resource: "deployments",
+	}
+	informer := factory.ForResource(gvr).Informer()
 
 	handler := &DeploymentHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
@@ -50,9 +55,9 @@ func NewDeploymentHandler(
 
 // HandleAdd processes a newly added Deployment
 func (h *DeploymentHandler) HandleAdd(obj interface{}) {
-	deployment, ok := obj.(*appsv1.Deployment)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", obj)))
+	deployment, err := watchers.ConvertToTyped[appsv1.Deployment](obj)
+	if err != nil {
+		h.Logger.Error("failed to convert to Deployment", zap.Error(err))
 		return
 	}
 
@@ -75,9 +80,9 @@ func (h *DeploymentHandler) HandleAdd(obj interface{}) {
 
 // HandleUpdate processes an updated Deployment
 func (h *DeploymentHandler) HandleUpdate(oldObj, newObj interface{}) {
-	newDeployment, ok := newObj.(*appsv1.Deployment)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", newObj)))
+	newDeployment, err := watchers.ConvertToTyped[appsv1.Deployment](newObj)
+	if err != nil {
+		h.Logger.Error("failed to convert to Deployment", zap.Error(err))
 		return
 	}
 
@@ -88,18 +93,10 @@ func (h *DeploymentHandler) HandleUpdate(oldObj, newObj interface{}) {
 
 // HandleDelete processes a deleted Deployment
 func (h *DeploymentHandler) HandleDelete(obj interface{}) {
-	deployment, ok := obj.(*appsv1.Deployment)
-	if !ok {
-		extracted, err := watchers.SafeGetObject(obj)
-		if err != nil {
-			h.Logger.Error("failed to extract object", zap.Error(err))
-			return
-		}
-		deployment, ok = extracted.(*appsv1.Deployment)
-		if !ok {
-			h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", extracted)))
-			return
-		}
+	deployment, err := watchers.ConvertToTyped[appsv1.Deployment](obj)
+	if err != nil {
+		h.Logger.Error("failed to convert to Deployment", zap.Error(err))
+		return
 	}
 
 	h.Logger.Debug("deployment deleted", zap.String("namespace", deployment.Namespace), zap.String("name", deployment.Name))

@@ -2,14 +2,11 @@ package gateway
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/tools/cache"
@@ -28,15 +25,15 @@ func NewGatewayHandler(
 	dynamicClient dynamic.Interface,
 	graphStore graph.GraphStore,
 	logger *zap.Logger,
-	dynamicInformerFactory dynamicinformer.DynamicSharedInformerFactory,
+
+	factory dynamicinformer.DynamicSharedInformerFactory,
 ) *GatewayHandler {
 	gvr := gatewayv1.SchemeGroupVersion.WithResource("gateways")
-	informer := dynamicInformerFactory.ForResource(gvr).Informer()
+	informer := factory.ForResource(gvr).Informer()
 
 	handler := &GatewayHandler{
-		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
-		dynamicClient:       dynamicClient,
-		relationshipBuilder: watchers.NewRelationshipBuilder(nil, graphStore, logger),
+		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
+		dynamicClient: dynamicClient, relationshipBuilder: watchers.NewRelationshipBuilder(nil, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -53,14 +50,8 @@ func NewGatewayHandler(
 
 // HandleAdd processes a newly added Gateway
 func (h *GatewayHandler) HandleAdd(obj interface{}) {
-	unstructuredObj, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", obj)))
-		return
-	}
-
-	gateway := &gatewayv1.Gateway{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, gateway); err != nil {
+	gateway, err := watchers.ConvertToTyped[gatewayv1.Gateway](obj)
+	if err != nil {
 		h.Logger.Error("failed to convert to Gateway", zap.Error(err))
 		return
 	}
@@ -121,16 +112,14 @@ func (h *GatewayHandler) HandleAdd(obj interface{}) {
 
 // HandleUpdate processes an updated Gateway
 func (h *GatewayHandler) HandleUpdate(oldObj, newObj interface{}) {
-	unstructuredObj, ok := newObj.(*unstructured.Unstructured)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", newObj)))
-		return
-	}
+	gateway, err := watchers.ConvertToTyped[gatewayv1.Gateway](newObj)
 
-	gateway := &gatewayv1.Gateway{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, gateway); err != nil {
+	if err != nil {
+
 		h.Logger.Error("failed to convert to Gateway", zap.Error(err))
+
 		return
+
 	}
 
 	h.Logger.Debug("gateway updated",
@@ -152,24 +141,14 @@ func (h *GatewayHandler) HandleUpdate(oldObj, newObj interface{}) {
 
 // HandleDelete processes a deleted Gateway
 func (h *GatewayHandler) HandleDelete(obj interface{}) {
-	unstructuredObj, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		extracted, err := watchers.SafeGetObject(obj)
-		if err != nil {
-			h.Logger.Error("failed to extract object", zap.Error(err))
-			return
-		}
-		unstructuredObj, ok = extracted.(*unstructured.Unstructured)
-		if !ok {
-			h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", extracted)))
-			return
-		}
-	}
+	gateway, err := watchers.ConvertToTyped[gatewayv1.Gateway](obj)
 
-	gateway := &gatewayv1.Gateway{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, gateway); err != nil {
+	if err != nil {
+
 		h.Logger.Error("failed to convert to Gateway", zap.Error(err))
+
 		return
+
 	}
 
 	h.Logger.Debug("gateway deleted",

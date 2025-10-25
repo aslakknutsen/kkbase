@@ -2,14 +2,11 @@ package gateway
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/tools/cache"
@@ -28,15 +25,15 @@ func NewReferenceGrantHandler(
 	dynamicClient dynamic.Interface,
 	graphStore graph.GraphStore,
 	logger *zap.Logger,
-	dynamicInformerFactory dynamicinformer.DynamicSharedInformerFactory,
+
+	factory dynamicinformer.DynamicSharedInformerFactory,
 ) *ReferenceGrantHandler {
 	gvr := gatewayv1beta1.SchemeGroupVersion.WithResource("referencegrants")
-	informer := dynamicInformerFactory.ForResource(gvr).Informer()
+	informer := factory.ForResource(gvr).Informer()
 
 	handler := &ReferenceGrantHandler{
-		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
-		dynamicClient:       dynamicClient,
-		relationshipBuilder: watchers.NewRelationshipBuilder(nil, graphStore, logger),
+		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
+		dynamicClient: dynamicClient, relationshipBuilder: watchers.NewRelationshipBuilder(nil, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -53,16 +50,14 @@ func NewReferenceGrantHandler(
 
 // HandleAdd processes a newly added ReferenceGrant
 func (h *ReferenceGrantHandler) HandleAdd(obj interface{}) {
-	unstructuredObj, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", obj)))
-		return
-	}
+	referenceGrant, err := watchers.ConvertToTyped[gatewayv1beta1.ReferenceGrant](obj)
 
-	referenceGrant := &gatewayv1beta1.ReferenceGrant{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, referenceGrant); err != nil {
+	if err != nil {
+
 		h.Logger.Error("failed to convert to ReferenceGrant", zap.Error(err))
+
 		return
+
 	}
 
 	h.Logger.Debug("referencegrant added",
@@ -114,16 +109,14 @@ func (h *ReferenceGrantHandler) HandleAdd(obj interface{}) {
 
 // HandleUpdate processes an updated ReferenceGrant
 func (h *ReferenceGrantHandler) HandleUpdate(oldObj, newObj interface{}) {
-	unstructuredObj, ok := newObj.(*unstructured.Unstructured)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", newObj)))
-		return
-	}
+	referenceGrant, err := watchers.ConvertToTyped[gatewayv1beta1.ReferenceGrant](newObj)
 
-	referenceGrant := &gatewayv1beta1.ReferenceGrant{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, referenceGrant); err != nil {
+	if err != nil {
+
 		h.Logger.Error("failed to convert to ReferenceGrant", zap.Error(err))
+
 		return
+
 	}
 
 	h.Logger.Debug("referencegrant updated",
@@ -145,24 +138,14 @@ func (h *ReferenceGrantHandler) HandleUpdate(oldObj, newObj interface{}) {
 
 // HandleDelete processes a deleted ReferenceGrant
 func (h *ReferenceGrantHandler) HandleDelete(obj interface{}) {
-	unstructuredObj, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		extracted, err := watchers.SafeGetObject(obj)
-		if err != nil {
-			h.Logger.Error("failed to extract object", zap.Error(err))
-			return
-		}
-		unstructuredObj, ok = extracted.(*unstructured.Unstructured)
-		if !ok {
-			h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", extracted)))
-			return
-		}
-	}
+	referenceGrant, err := watchers.ConvertToTyped[gatewayv1beta1.ReferenceGrant](obj)
 
-	referenceGrant := &gatewayv1beta1.ReferenceGrant{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, referenceGrant); err != nil {
+	if err != nil {
+
 		h.Logger.Error("failed to convert to ReferenceGrant", zap.Error(err))
+
 		return
+
 	}
 
 	h.Logger.Debug("referencegrant deleted",

@@ -2,14 +2,11 @@ package gateway
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/tools/cache"
@@ -28,15 +25,15 @@ func NewUDPRouteHandler(
 	dynamicClient dynamic.Interface,
 	graphStore graph.GraphStore,
 	logger *zap.Logger,
-	dynamicInformerFactory dynamicinformer.DynamicSharedInformerFactory,
+
+	factory dynamicinformer.DynamicSharedInformerFactory,
 ) *UDPRouteHandler {
 	gvr := gatewayv1alpha2.SchemeGroupVersion.WithResource("udproutes")
-	informer := dynamicInformerFactory.ForResource(gvr).Informer()
+	informer := factory.ForResource(gvr).Informer()
 
 	handler := &UDPRouteHandler{
-		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
-		dynamicClient:       dynamicClient,
-		relationshipBuilder: watchers.NewRelationshipBuilder(nil, graphStore, logger),
+		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
+		dynamicClient: dynamicClient, relationshipBuilder: watchers.NewRelationshipBuilder(nil, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -53,16 +50,14 @@ func NewUDPRouteHandler(
 
 // HandleAdd processes a newly added UDPRoute
 func (h *UDPRouteHandler) HandleAdd(obj interface{}) {
-	unstructuredObj, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", obj)))
-		return
-	}
+	udpRoute, err := watchers.ConvertToTyped[gatewayv1alpha2.UDPRoute](obj)
 
-	udpRoute := &gatewayv1alpha2.UDPRoute{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, udpRoute); err != nil {
+	if err != nil {
+
 		h.Logger.Error("failed to convert to UDPRoute", zap.Error(err))
+
 		return
+
 	}
 
 	h.Logger.Debug("udproute added",
@@ -147,16 +142,14 @@ func (h *UDPRouteHandler) HandleAdd(obj interface{}) {
 
 // HandleUpdate processes an updated UDPRoute
 func (h *UDPRouteHandler) HandleUpdate(oldObj, newObj interface{}) {
-	unstructuredObj, ok := newObj.(*unstructured.Unstructured)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", newObj)))
-		return
-	}
+	udpRoute, err := watchers.ConvertToTyped[gatewayv1alpha2.UDPRoute](newObj)
 
-	udpRoute := &gatewayv1alpha2.UDPRoute{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, udpRoute); err != nil {
+	if err != nil {
+
 		h.Logger.Error("failed to convert to UDPRoute", zap.Error(err))
+
 		return
+
 	}
 
 	h.Logger.Debug("udproute updated",
@@ -178,24 +171,14 @@ func (h *UDPRouteHandler) HandleUpdate(oldObj, newObj interface{}) {
 
 // HandleDelete processes a deleted UDPRoute
 func (h *UDPRouteHandler) HandleDelete(obj interface{}) {
-	unstructuredObj, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		extracted, err := watchers.SafeGetObject(obj)
-		if err != nil {
-			h.Logger.Error("failed to extract object", zap.Error(err))
-			return
-		}
-		unstructuredObj, ok = extracted.(*unstructured.Unstructured)
-		if !ok {
-			h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", extracted)))
-			return
-		}
-	}
+	udpRoute, err := watchers.ConvertToTyped[gatewayv1alpha2.UDPRoute](obj)
 
-	udpRoute := &gatewayv1alpha2.UDPRoute{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, udpRoute); err != nil {
+	if err != nil {
+
 		h.Logger.Error("failed to convert to UDPRoute", zap.Error(err))
+
 		return
+
 	}
 
 	h.Logger.Debug("udproute deleted",

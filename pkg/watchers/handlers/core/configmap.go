@@ -2,14 +2,14 @@ package core
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/informers"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
@@ -25,9 +25,14 @@ func NewConfigMapHandler(
 	clientset *kubernetes.Clientset,
 	graphStore graph.GraphStore,
 	logger *zap.Logger,
-	informerFactory informers.SharedInformerFactory,
+	factory dynamicinformer.DynamicSharedInformerFactory,
 ) *ConfigMapHandler {
-	informer := informerFactory.Core().V1().ConfigMaps().Informer()
+	gvr := schema.GroupVersionResource{
+		Group:    "",
+		Version:  "v1",
+		Resource: "configmaps",
+	}
+	informer := factory.ForResource(gvr).Informer()
 
 	handler := &ConfigMapHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
@@ -48,9 +53,9 @@ func NewConfigMapHandler(
 
 // HandleAdd processes a newly added ConfigMap
 func (h *ConfigMapHandler) HandleAdd(obj interface{}) {
-	configMap, ok := obj.(*corev1.ConfigMap)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", obj)))
+	configMap, err := watchers.ConvertToTyped[corev1.ConfigMap](obj)
+	if err != nil {
+		h.Logger.Error("conversion failed", zap.Error(err))
 		return
 	}
 
@@ -72,9 +77,9 @@ func (h *ConfigMapHandler) HandleAdd(obj interface{}) {
 
 // HandleUpdate processes an updated ConfigMap
 func (h *ConfigMapHandler) HandleUpdate(oldObj, newObj interface{}) {
-	newConfigMap, ok := newObj.(*corev1.ConfigMap)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", newObj)))
+	newConfigMap, err := watchers.ConvertToTyped[corev1.ConfigMap](newObj)
+	if err != nil {
+		h.Logger.Error("conversion failed", zap.Error(err))
 		return
 	}
 
@@ -84,18 +89,10 @@ func (h *ConfigMapHandler) HandleUpdate(oldObj, newObj interface{}) {
 
 // HandleDelete processes a deleted ConfigMap
 func (h *ConfigMapHandler) HandleDelete(obj interface{}) {
-	configMap, ok := obj.(*corev1.ConfigMap)
-	if !ok {
-		extracted, err := watchers.SafeGetObject(obj)
-		if err != nil {
-			h.Logger.Error("failed to extract object", zap.Error(err))
-			return
-		}
-		configMap, ok = extracted.(*corev1.ConfigMap)
-		if !ok {
-			h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", extracted)))
-			return
-		}
+	configMap, err := watchers.ConvertToTyped[corev1.ConfigMap](obj)
+	if err != nil {
+		h.Logger.Error("failed to convert to ConfigMap", zap.Error(err))
+		return
 	}
 
 	h.Logger.Debug("configmap deleted", zap.String("namespace", configMap.Namespace), zap.String("name", configMap.Name))

@@ -2,14 +2,14 @@ package core
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/informers"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
@@ -26,9 +26,14 @@ func NewServiceHandler(
 	clientset *kubernetes.Clientset,
 	graphStore graph.GraphStore,
 	logger *zap.Logger,
-	informerFactory informers.SharedInformerFactory,
+	factory dynamicinformer.DynamicSharedInformerFactory,
 ) *ServiceHandler {
-	informer := informerFactory.Core().V1().Services().Informer()
+	gvr := schema.GroupVersionResource{
+		Group:    "",
+		Version:  "v1",
+		Resource: "services",
+	}
+	informer := factory.ForResource(gvr).Informer()
 
 	handler := &ServiceHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
@@ -50,9 +55,9 @@ func NewServiceHandler(
 
 // HandleAdd processes a newly added Service
 func (h *ServiceHandler) HandleAdd(obj interface{}) {
-	service, ok := obj.(*corev1.Service)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", obj)))
+	service, err := watchers.ConvertToTyped[corev1.Service](obj)
+	if err != nil {
+		h.Logger.Error("failed to convert to Service", zap.Error(err))
 		return
 	}
 
@@ -80,9 +85,9 @@ func (h *ServiceHandler) HandleAdd(obj interface{}) {
 
 // HandleUpdate processes an updated Service
 func (h *ServiceHandler) HandleUpdate(oldObj, newObj interface{}) {
-	newService, ok := newObj.(*corev1.Service)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", newObj)))
+	newService, err := watchers.ConvertToTyped[corev1.Service](newObj)
+	if err != nil {
+		h.Logger.Error("failed to convert to Service", zap.Error(err))
 		return
 	}
 
@@ -103,18 +108,10 @@ func (h *ServiceHandler) HandleUpdate(oldObj, newObj interface{}) {
 
 // HandleDelete processes a deleted Service
 func (h *ServiceHandler) HandleDelete(obj interface{}) {
-	service, ok := obj.(*corev1.Service)
-	if !ok {
-		extracted, err := watchers.SafeGetObject(obj)
-		if err != nil {
-			h.Logger.Error("failed to extract object", zap.Error(err))
-			return
-		}
-		service, ok = extracted.(*corev1.Service)
-		if !ok {
-			h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", extracted)))
-			return
-		}
+	service, err := watchers.ConvertToTyped[corev1.Service](obj)
+	if err != nil {
+		h.Logger.Error("failed to convert to Service", zap.Error(err))
+		return
 	}
 
 	h.Logger.Debug("service deleted", zap.String("namespace", service.Namespace), zap.String("name", service.Name))

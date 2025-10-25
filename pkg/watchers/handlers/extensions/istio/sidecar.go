@@ -2,14 +2,11 @@ package istio
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"
@@ -32,16 +29,15 @@ func NewSidecarHandler(
 	dynamicClient dynamic.Interface,
 	graphStore graph.GraphStore,
 	logger *zap.Logger,
-	dynamicInformerFactory dynamicinformer.DynamicSharedInformerFactory,
+	factory dynamicinformer.DynamicSharedInformerFactory,
 ) *SidecarHandler {
 	gvr := istiov1.SchemeGroupVersion.WithResource("sidecars")
-	informer := dynamicInformerFactory.ForResource(gvr).Informer()
+	informer := factory.ForResource(gvr).Informer()
 
 	handler := &SidecarHandler{
-		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
-		clientset:           clientset,
-		dynamicClient:       dynamicClient,
-		relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
+		clientset:     clientset,
+		dynamicClient: dynamicClient, relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -58,16 +54,14 @@ func NewSidecarHandler(
 
 // HandleAdd processes a newly added Sidecar
 func (h *SidecarHandler) HandleAdd(obj interface{}) {
-	unstructuredObj, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", obj)))
-		return
-	}
+	sidecar, err := watchers.ConvertToTyped[istiov1.Sidecar](obj)
 
-	sidecar := &istiov1.Sidecar{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, sidecar); err != nil {
+	if err != nil {
+
 		h.Logger.Error("failed to convert to Sidecar", zap.Error(err))
+
 		return
+
 	}
 
 	h.Logger.Debug("sidecar added",
@@ -92,16 +86,14 @@ func (h *SidecarHandler) HandleAdd(obj interface{}) {
 
 // HandleUpdate processes an updated Sidecar
 func (h *SidecarHandler) HandleUpdate(oldObj, newObj interface{}) {
-	unstructuredObj, ok := newObj.(*unstructured.Unstructured)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", newObj)))
-		return
-	}
+	sidecar, err := watchers.ConvertToTyped[istiov1.Sidecar](newObj)
 
-	sidecar := &istiov1.Sidecar{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, sidecar); err != nil {
+	if err != nil {
+
 		h.Logger.Error("failed to convert to Sidecar", zap.Error(err))
+
 		return
+
 	}
 
 	h.Logger.Debug("sidecar updated",
@@ -123,24 +115,14 @@ func (h *SidecarHandler) HandleUpdate(oldObj, newObj interface{}) {
 
 // HandleDelete processes a deleted Sidecar
 func (h *SidecarHandler) HandleDelete(obj interface{}) {
-	unstructuredObj, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		extracted, err := watchers.SafeGetObject(obj)
-		if err != nil {
-			h.Logger.Error("failed to extract object", zap.Error(err))
-			return
-		}
-		unstructuredObj, ok = extracted.(*unstructured.Unstructured)
-		if !ok {
-			h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", extracted)))
-			return
-		}
-	}
+	sidecar, err := watchers.ConvertToTyped[istiov1.Sidecar](obj)
 
-	sidecar := &istiov1.Sidecar{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, sidecar); err != nil {
+	if err != nil {
+
 		h.Logger.Error("failed to convert to Sidecar", zap.Error(err))
+
 		return
+
 	}
 
 	h.Logger.Debug("sidecar deleted",

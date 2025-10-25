@@ -2,14 +2,11 @@ package istio
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"
@@ -32,16 +29,15 @@ func NewDestinationRuleHandler(
 	dynamicClient dynamic.Interface,
 	graphStore graph.GraphStore,
 	logger *zap.Logger,
-	dynamicInformerFactory dynamicinformer.DynamicSharedInformerFactory,
+	factory dynamicinformer.DynamicSharedInformerFactory,
 ) *DestinationRuleHandler {
 	gvr := istiov1.SchemeGroupVersion.WithResource("destinationrules")
-	informer := dynamicInformerFactory.ForResource(gvr).Informer()
+	informer := factory.ForResource(gvr).Informer()
 
 	handler := &DestinationRuleHandler{
-		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
-		clientset:           clientset,
-		dynamicClient:       dynamicClient,
-		relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
+		clientset:     clientset,
+		dynamicClient: dynamicClient, relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -58,58 +54,56 @@ func NewDestinationRuleHandler(
 
 // HandleAdd processes a newly added DestinationRule
 func (h *DestinationRuleHandler) HandleAdd(obj interface{}) {
-	unstructuredObj, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", obj)))
-		return
-	}
+	destinationRule, err := watchers.ConvertToTyped[istiov1.DestinationRule](obj)
 
-	dr := &istiov1.DestinationRule{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, dr); err != nil {
+	if err != nil {
+
 		h.Logger.Error("failed to convert to DestinationRule", zap.Error(err))
+
 		return
+
 	}
 
 	h.Logger.Debug("destinationrule added",
-		zap.String("namespace", dr.Namespace),
-		zap.String("name", dr.Name),
-		zap.String("host", dr.Spec.Host),
+		zap.String("namespace", destinationRule.Namespace),
+		zap.String("name", destinationRule.Name),
+		zap.String("host", destinationRule.Spec.Host),
 	)
 
 	ctx := context.Background()
 
 	// Create DestinationRule node
-	drNode := models.DestinationRuleToGraphNode(dr)
+	drNode := models.DestinationRuleToGraphNode(destinationRule)
 	if err := h.GraphStore.UpsertNode(ctx, string(drNode.Type), drNode.ID, drNode.Properties); err != nil {
-		h.Logger.Error("failed to create destinationrule node", zap.Error(err), zap.String("destinationrule", dr.Name))
+		h.Logger.Error("failed to create destinationrule node", zap.Error(err), zap.String("destinationrule", destinationRule.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeDestinationRule, drNode.ID, dr.Namespace); err != nil {
+	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeDestinationRule, drNode.ID, destinationRule.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
 	// Create DEFINES_POLICY_FOR edge to Service
-	if dr.Spec.Host != "" {
-		svcNs, svcName := parseServiceHost(dr.Spec.Host, dr.Namespace)
+	if destinationRule.Spec.Host != "" {
+		svcNs, svcName := parseServiceHost(destinationRule.Spec.Host, destinationRule.Namespace)
 		if svcName != "" {
-			if err := h.relationshipBuilder.CreateDestinationRuleDefinesPolicyForEdge(ctx, dr.Namespace, dr.Name, svcNs, svcName, dr.Spec.Host); err != nil {
+			if err := h.relationshipBuilder.CreateDestinationRuleDefinesPolicyForEdge(ctx, destinationRule.Namespace, destinationRule.Name, svcNs, svcName, destinationRule.Spec.Host); err != nil {
 				h.Logger.Debug("failed to create DEFINES_POLICY_FOR edge",
 					zap.Error(err),
-					zap.String("host", dr.Spec.Host),
+					zap.String("host", destinationRule.Spec.Host),
 				)
 			}
 		}
 	}
 
 	// Create SELECTS_SUBSET_PODS edges for each subset
-	for _, subset := range dr.Spec.Subsets {
+	for _, subset := range destinationRule.Spec.Subsets {
 		if len(subset.Labels) > 0 {
 			// Determine target namespace from host
-			targetNs, _ := parseServiceHost(dr.Spec.Host, dr.Namespace)
+			targetNs, _ := parseServiceHost(destinationRule.Spec.Host, destinationRule.Namespace)
 			if err := h.relationshipBuilder.CreateDestinationRuleSelectsSubsetPodsEdge(
-				ctx, dr.Namespace, dr.Name, subset.Name, subset.Labels, targetNs); err != nil {
+				ctx, destinationRule.Namespace, destinationRule.Name, subset.Name, subset.Labels, targetNs); err != nil {
 				h.Logger.Error("failed to create SELECTS_SUBSET_PODS edges",
 					zap.Error(err),
 					zap.String("subset", subset.Name),
@@ -121,25 +115,23 @@ func (h *DestinationRuleHandler) HandleAdd(obj interface{}) {
 
 // HandleUpdate processes an updated DestinationRule
 func (h *DestinationRuleHandler) HandleUpdate(oldObj, newObj interface{}) {
-	unstructuredObj, ok := newObj.(*unstructured.Unstructured)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", newObj)))
-		return
-	}
+	destinationRule, err := watchers.ConvertToTyped[istiov1.DestinationRule](newObj)
 
-	dr := &istiov1.DestinationRule{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, dr); err != nil {
+	if err != nil {
+
 		h.Logger.Error("failed to convert to DestinationRule", zap.Error(err))
+
 		return
+
 	}
 
 	h.Logger.Debug("destinationrule updated",
-		zap.String("namespace", dr.Namespace),
-		zap.String("name", dr.Name),
+		zap.String("namespace", destinationRule.Namespace),
+		zap.String("name", destinationRule.Name),
 	)
 
 	ctx := context.Background()
-	drID := models.GetNodeID("DestinationRule", dr.Namespace, dr.Name)
+	drID := models.GetNodeID("DestinationRule", destinationRule.Namespace, destinationRule.Name)
 
 	// Delete old edges
 	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(models.NodeTypeDestinationRule), drID); err != nil {
@@ -152,35 +144,25 @@ func (h *DestinationRuleHandler) HandleUpdate(oldObj, newObj interface{}) {
 
 // HandleDelete processes a deleted DestinationRule
 func (h *DestinationRuleHandler) HandleDelete(obj interface{}) {
-	unstructuredObj, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		extracted, err := watchers.SafeGetObject(obj)
-		if err != nil {
-			h.Logger.Error("failed to extract object", zap.Error(err))
-			return
-		}
-		unstructuredObj, ok = extracted.(*unstructured.Unstructured)
-		if !ok {
-			h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", extracted)))
-			return
-		}
-	}
+	destinationRule, err := watchers.ConvertToTyped[istiov1.DestinationRule](obj)
 
-	dr := &istiov1.DestinationRule{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, dr); err != nil {
+	if err != nil {
+
 		h.Logger.Error("failed to convert to DestinationRule", zap.Error(err))
+
 		return
+
 	}
 
 	h.Logger.Debug("destinationrule deleted",
-		zap.String("namespace", dr.Namespace),
-		zap.String("name", dr.Name),
+		zap.String("namespace", destinationRule.Namespace),
+		zap.String("name", destinationRule.Name),
 	)
 
 	ctx := context.Background()
 
-	drID := models.GetNodeID("DestinationRule", dr.Namespace, dr.Name)
+	drID := models.GetNodeID("DestinationRule", destinationRule.Namespace, destinationRule.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeDestinationRule), drID); err != nil {
-		h.Logger.Error("failed to delete destinationrule node", zap.Error(err), zap.String("destinationrule", dr.Name))
+		h.Logger.Error("failed to delete destinationrule node", zap.Error(err), zap.String("destinationrule", destinationRule.Name))
 	}
 }

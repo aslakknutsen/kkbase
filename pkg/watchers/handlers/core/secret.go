@@ -2,14 +2,14 @@ package core
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/informers"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
@@ -26,9 +26,14 @@ func NewSecretHandler(
 	clientset *kubernetes.Clientset,
 	graphStore graph.GraphStore,
 	logger *zap.Logger,
-	informerFactory informers.SharedInformerFactory,
+	factory dynamicinformer.DynamicSharedInformerFactory,
 ) *SecretHandler {
-	informer := informerFactory.Core().V1().Secrets().Informer()
+	gvr := schema.GroupVersionResource{
+		Group:    "",
+		Version:  "v1",
+		Resource: "secrets",
+	}
+	informer := factory.ForResource(gvr).Informer()
 
 	handler := &SecretHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
@@ -50,9 +55,9 @@ func NewSecretHandler(
 
 // HandleAdd processes a newly added Secret
 func (h *SecretHandler) HandleAdd(obj interface{}) {
-	secret, ok := obj.(*corev1.Secret)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", obj)))
+	secret, err := watchers.ConvertToTyped[corev1.Secret](obj)
+	if err != nil {
+		h.Logger.Error("conversion failed", zap.Error(err))
 		return
 	}
 
@@ -79,9 +84,9 @@ func (h *SecretHandler) HandleAdd(obj interface{}) {
 
 // HandleUpdate processes an updated Secret
 func (h *SecretHandler) HandleUpdate(oldObj, newObj interface{}) {
-	newSecret, ok := newObj.(*corev1.Secret)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", newObj)))
+	newSecret, err := watchers.ConvertToTyped[corev1.Secret](newObj)
+	if err != nil {
+		h.Logger.Error("conversion failed", zap.Error(err))
 		return
 	}
 
@@ -104,18 +109,10 @@ func (h *SecretHandler) HandleUpdate(oldObj, newObj interface{}) {
 
 // HandleDelete processes a deleted Secret
 func (h *SecretHandler) HandleDelete(obj interface{}) {
-	secret, ok := obj.(*corev1.Secret)
-	if !ok {
-		extracted, err := watchers.SafeGetObject(obj)
-		if err != nil {
-			h.Logger.Error("failed to extract object", zap.Error(err))
-			return
-		}
-		secret, ok = extracted.(*corev1.Secret)
-		if !ok {
-			h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", extracted)))
-			return
-		}
+	secret, err := watchers.ConvertToTyped[corev1.Secret](obj)
+	if err != nil {
+		h.Logger.Error("failed to convert to Secret", zap.Error(err))
+		return
 	}
 
 	h.Logger.Debug("secret deleted",

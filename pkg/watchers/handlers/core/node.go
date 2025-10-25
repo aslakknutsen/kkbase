@@ -2,14 +2,14 @@ package core
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/informers"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -22,9 +22,14 @@ type NodeHandler struct {
 func NewNodeHandler(
 	graphStore graph.GraphStore,
 	logger *zap.Logger,
-	informerFactory informers.SharedInformerFactory,
+	factory dynamicinformer.DynamicSharedInformerFactory,
 ) *NodeHandler {
-	informer := informerFactory.Core().V1().Nodes().Informer()
+	gvr := schema.GroupVersionResource{
+		Group:    "",
+		Version:  "v1",
+		Resource: "nodes",
+	}
+	informer := factory.ForResource(gvr).Informer()
 
 	handler := &NodeHandler{
 		BaseWatcher: watchers.NewBaseWatcher(graphStore, logger, informer),
@@ -44,9 +49,9 @@ func NewNodeHandler(
 
 // HandleAdd processes a newly added Node
 func (h *NodeHandler) HandleAdd(obj interface{}) {
-	node, ok := obj.(*corev1.Node)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", obj)))
+	node, err := watchers.ConvertToTyped[corev1.Node](obj)
+	if err != nil {
+		h.Logger.Error("failed to convert to Node", zap.Error(err))
 		return
 	}
 
@@ -64,9 +69,9 @@ func (h *NodeHandler) HandleAdd(obj interface{}) {
 
 // HandleUpdate processes an updated Node
 func (h *NodeHandler) HandleUpdate(oldObj, newObj interface{}) {
-	newNode, ok := newObj.(*corev1.Node)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", newObj)))
+	newNode, err := watchers.ConvertToTyped[corev1.Node](newObj)
+	if err != nil {
+		h.Logger.Error("failed to convert to Node", zap.Error(err))
 		return
 	}
 
@@ -78,18 +83,10 @@ func (h *NodeHandler) HandleUpdate(oldObj, newObj interface{}) {
 
 // HandleDelete processes a deleted Node
 func (h *NodeHandler) HandleDelete(obj interface{}) {
-	node, ok := obj.(*corev1.Node)
-	if !ok {
-		extracted, err := watchers.SafeGetObject(obj)
-		if err != nil {
-			h.Logger.Error("failed to extract object", zap.Error(err))
-			return
-		}
-		node, ok = extracted.(*corev1.Node)
-		if !ok {
-			h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", extracted)))
-			return
-		}
+	node, err := watchers.ConvertToTyped[corev1.Node](obj)
+	if err != nil {
+		h.Logger.Error("failed to convert to Node", zap.Error(err))
+		return
 	}
 
 	h.Logger.Debug("node deleted", zap.String("name", node.Name))

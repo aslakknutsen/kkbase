@@ -3,134 +3,45 @@ package core
 import (
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/watchers"
-	"github.com/kagenti/kkbase/pkg/watchers/handlers"
 	"go.uber.org/zap"
-	"k8s.io/client-go/informers"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"
 )
 
 // RegisterCoreHandlers registers all core Kubernetes resource handlers
-func RegisterCoreHandlers(registry *handlers.Registry) {
+func RegisterCoreHandlers(
+	manager *watchers.Manager,
+	clientset *kubernetes.Clientset,
+	factory dynamicinformer.DynamicSharedInformerFactory,
+	graphStore graph.GraphStore,
+	logger *zap.Logger,
+) {
 	// Namespace must be registered first as other resources depend on it
-	registry.Register(&handlers.HandlerRegistration{
-		Name:        "namespace",
-		Description: "Watches Kubernetes Namespaces",
-		Category:    "core",
-		Required:    true,
-		Factory: func(clientset *kubernetes.Clientset, graphStore graph.GraphStore, logger *zap.Logger, informerFactory informers.SharedInformerFactory) watchers.ResourceWatcher {
-			return NewNamespaceHandler(graphStore, logger, informerFactory)
-		},
-	})
+	manager.RegisterHandler("namespace", NewNamespaceHandler(graphStore, logger, factory))
 
 	// Nodes
-	registry.Register(&handlers.HandlerRegistration{
-		Name:        "node",
-		Description: "Watches Kubernetes Nodes",
-		Category:    "core",
-		Required:    true,
-		Factory: func(clientset *kubernetes.Clientset, graphStore graph.GraphStore, logger *zap.Logger, informerFactory informers.SharedInformerFactory) watchers.ResourceWatcher {
-			return NewNodeHandler(graphStore, logger, informerFactory)
-		},
-	})
+	manager.RegisterHandler("node", NewNodeHandler(graphStore, logger, factory))
 
 	// Workload resources
-	registry.Register(&handlers.HandlerRegistration{
-		Name:        "deployment",
-		Description: "Watches Kubernetes Deployments",
-		Category:    "workloads",
-		Required:    false,
-		Factory: func(clientset *kubernetes.Clientset, graphStore graph.GraphStore, logger *zap.Logger, informerFactory informers.SharedInformerFactory) watchers.ResourceWatcher {
-			return NewDeploymentHandler(clientset, graphStore, logger, informerFactory)
-		},
-	})
-
-	registry.Register(&handlers.HandlerRegistration{
-		Name:        "replicaset",
-		Description: "Watches Kubernetes ReplicaSets",
-		Category:    "workloads",
-		Required:    false,
-		Factory: func(clientset *kubernetes.Clientset, graphStore graph.GraphStore, logger *zap.Logger, informerFactory informers.SharedInformerFactory) watchers.ResourceWatcher {
-			return NewReplicaSetHandler(clientset, graphStore, logger, informerFactory)
-		},
-	})
-
-	registry.Register(&handlers.HandlerRegistration{
-		Name:        "pod",
-		Description: "Watches Kubernetes Pods",
-		Category:    "workloads",
-		Required:    true,
-		Factory: func(clientset *kubernetes.Clientset, graphStore graph.GraphStore, logger *zap.Logger, informerFactory informers.SharedInformerFactory) watchers.ResourceWatcher {
-			return NewPodHandler(clientset, graphStore, logger, informerFactory)
-		},
-	})
+	manager.RegisterHandler("deployment", NewDeploymentHandler(clientset, graphStore, logger, factory))
+	manager.RegisterHandler("replicaset", NewReplicaSetHandler(clientset, graphStore, logger, factory))
+	manager.RegisterHandler("pod", NewPodHandler(clientset, graphStore, logger, factory))
 
 	// Networking resources
-	registry.Register(&handlers.HandlerRegistration{
-		Name:        "service",
-		Description: "Watches Kubernetes Services",
-		Category:    "networking",
-		Required:    false,
-		Factory: func(clientset *kubernetes.Clientset, graphStore graph.GraphStore, logger *zap.Logger, informerFactory informers.SharedInformerFactory) watchers.ResourceWatcher {
-			return NewServiceHandler(clientset, graphStore, logger, informerFactory)
-		},
-	})
+	manager.RegisterHandler("service", NewServiceHandler(clientset, graphStore, logger, factory))
 
 	// Storage resources
-	registry.Register(&handlers.HandlerRegistration{
-		Name:        "persistentvolume",
-		Description: "Watches Kubernetes PersistentVolumes",
-		Category:    "storage",
-		Required:    false,
-		Factory: func(clientset *kubernetes.Clientset, graphStore graph.GraphStore, logger *zap.Logger, informerFactory informers.SharedInformerFactory) watchers.ResourceWatcher {
-			return NewPVHandler(clientset, graphStore, logger, informerFactory)
-		},
-	})
-
-	registry.Register(&handlers.HandlerRegistration{
-		Name:        "persistentvolumeclaim",
-		Description: "Watches Kubernetes PersistentVolumeClaims",
-		Category:    "storage",
-		Required:    false,
-		Factory: func(clientset *kubernetes.Clientset, graphStore graph.GraphStore, logger *zap.Logger, informerFactory informers.SharedInformerFactory) watchers.ResourceWatcher {
-			return NewPVCHandler(clientset, graphStore, logger, informerFactory)
-		},
-	})
+	manager.RegisterHandler("persistentvolume", NewPVHandler(clientset, graphStore, logger, factory))
+	manager.RegisterHandler("persistentvolumeclaim", NewPVCHandler(clientset, graphStore, logger, factory))
 
 	// Configuration resources
-	registry.Register(&handlers.HandlerRegistration{
-		Name:        "configmap",
-		Description: "Watches Kubernetes ConfigMaps",
-		Category:    "configuration",
-		Required:    false,
-		Factory: func(clientset *kubernetes.Clientset, graphStore graph.GraphStore, logger *zap.Logger, informerFactory informers.SharedInformerFactory) watchers.ResourceWatcher {
-			return NewConfigMapHandler(clientset, graphStore, logger, informerFactory)
-		},
-	})
-
-	registry.Register(&handlers.HandlerRegistration{
-		Name:        "secret",
-		Description: "Watches Kubernetes Secrets",
-		Category:    "configuration",
-		Required:    false,
-		Factory: func(clientset *kubernetes.Clientset, graphStore graph.GraphStore, logger *zap.Logger, informerFactory informers.SharedInformerFactory) watchers.ResourceWatcher {
-			return NewSecretHandler(clientset, graphStore, logger, informerFactory)
-		},
-	})
+	manager.RegisterHandler("configmap", NewConfigMapHandler(clientset, graphStore, logger, factory))
+	manager.RegisterHandler("secret", NewSecretHandler(clientset, graphStore, logger, factory))
 
 	// Observability resources
-	registry.Register(&handlers.HandlerRegistration{
-		Name:        "event",
-		Description: "Watches Kubernetes Events",
-		Category:    "observability",
-		Required:    false,
-		Factory: func(clientset *kubernetes.Clientset, graphStore graph.GraphStore, logger *zap.Logger, informerFactory informers.SharedInformerFactory) watchers.ResourceWatcher {
-			return NewEventHandler(clientset, graphStore, logger, informerFactory)
-		},
-	})
-}
+	manager.RegisterHandler("event", NewEventHandler(clientset, graphStore, logger, factory))
 
-// DefaultLogger returns a logger for when one isn't provided
-func defaultLogger() *zap.Logger {
-	logger, _ := zap.NewProduction()
-	return logger
+	logger.Info("registered core handlers",
+		zap.Int("count", 11),
+	)
 }

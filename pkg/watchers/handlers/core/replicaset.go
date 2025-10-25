@@ -2,14 +2,14 @@ package core
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/client-go/informers"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
@@ -26,9 +26,14 @@ func NewReplicaSetHandler(
 	clientset *kubernetes.Clientset,
 	graphStore graph.GraphStore,
 	logger *zap.Logger,
-	informerFactory informers.SharedInformerFactory,
+	factory dynamicinformer.DynamicSharedInformerFactory,
 ) *ReplicaSetHandler {
-	informer := informerFactory.Apps().V1().ReplicaSets().Informer()
+	gvr := schema.GroupVersionResource{
+		Group:    "apps",
+		Version:  "v1",
+		Resource: "replicasets",
+	}
+	informer := factory.ForResource(gvr).Informer()
 
 	handler := &ReplicaSetHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
@@ -50,9 +55,9 @@ func NewReplicaSetHandler(
 
 // HandleAdd processes a newly added ReplicaSet
 func (h *ReplicaSetHandler) HandleAdd(obj interface{}) {
-	replicaSet, ok := obj.(*appsv1.ReplicaSet)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", obj)))
+	replicaSet, err := watchers.ConvertToTyped[appsv1.ReplicaSet](obj)
+	if err != nil {
+		h.Logger.Error("conversion failed", zap.Error(err))
 		return
 	}
 
@@ -82,9 +87,9 @@ func (h *ReplicaSetHandler) HandleAdd(obj interface{}) {
 
 // HandleUpdate processes an updated ReplicaSet
 func (h *ReplicaSetHandler) HandleUpdate(oldObj, newObj interface{}) {
-	newReplicaSet, ok := newObj.(*appsv1.ReplicaSet)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", newObj)))
+	newReplicaSet, err := watchers.ConvertToTyped[appsv1.ReplicaSet](newObj)
+	if err != nil {
+		h.Logger.Error("conversion failed", zap.Error(err))
 		return
 	}
 
@@ -95,18 +100,10 @@ func (h *ReplicaSetHandler) HandleUpdate(oldObj, newObj interface{}) {
 
 // HandleDelete processes a deleted ReplicaSet
 func (h *ReplicaSetHandler) HandleDelete(obj interface{}) {
-	replicaSet, ok := obj.(*appsv1.ReplicaSet)
-	if !ok {
-		extracted, err := watchers.SafeGetObject(obj)
-		if err != nil {
-			h.Logger.Error("failed to extract object", zap.Error(err))
-			return
-		}
-		replicaSet, ok = extracted.(*appsv1.ReplicaSet)
-		if !ok {
-			h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", extracted)))
-			return
-		}
+	replicaSet, err := watchers.ConvertToTyped[appsv1.ReplicaSet](obj)
+	if err != nil {
+		h.Logger.Error("failed to convert to ReplicaSet", zap.Error(err))
+		return
 	}
 
 	h.Logger.Debug("replicaset deleted", zap.String("namespace", replicaSet.Namespace), zap.String("name", replicaSet.Name))

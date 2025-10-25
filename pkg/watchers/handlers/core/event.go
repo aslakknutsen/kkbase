@@ -9,7 +9,8 @@ import (
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/informers"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
@@ -25,9 +26,14 @@ func NewEventHandler(
 	clientset *kubernetes.Clientset,
 	graphStore graph.GraphStore,
 	logger *zap.Logger,
-	informerFactory informers.SharedInformerFactory,
+	factory dynamicinformer.DynamicSharedInformerFactory,
 ) *EventHandler {
-	informer := informerFactory.Core().V1().Events().Informer()
+	gvr := schema.GroupVersionResource{
+		Group:    "",
+		Version:  "v1",
+		Resource: "events",
+	}
+	informer := factory.ForResource(gvr).Informer()
 
 	handler := &EventHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
@@ -48,9 +54,9 @@ func NewEventHandler(
 
 // HandleAdd processes a newly added Event
 func (h *EventHandler) HandleAdd(obj interface{}) {
-	event, ok := obj.(*corev1.Event)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", obj)))
+	event, err := watchers.ConvertToTyped[corev1.Event](obj)
+	if err != nil {
+		h.Logger.Error("conversion failed", zap.Error(err))
 		return
 	}
 
@@ -75,9 +81,9 @@ func (h *EventHandler) HandleAdd(obj interface{}) {
 
 // HandleUpdate processes an updated Event
 func (h *EventHandler) HandleUpdate(oldObj, newObj interface{}) {
-	newEvent, ok := newObj.(*corev1.Event)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", newObj)))
+	newEvent, err := watchers.ConvertToTyped[corev1.Event](newObj)
+	if err != nil {
+		h.Logger.Error("conversion failed", zap.Error(err))
 		return
 	}
 
@@ -91,18 +97,10 @@ func (h *EventHandler) HandleUpdate(oldObj, newObj interface{}) {
 
 // HandleDelete processes a deleted Event
 func (h *EventHandler) HandleDelete(obj interface{}) {
-	event, ok := obj.(*corev1.Event)
-	if !ok {
-		extracted, err := watchers.SafeGetObject(obj)
-		if err != nil {
-			h.Logger.Error("failed to extract object", zap.Error(err))
-			return
-		}
-		event, ok = extracted.(*corev1.Event)
-		if !ok {
-			h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", extracted)))
-			return
-		}
+	event, err := watchers.ConvertToTyped[corev1.Event](obj)
+	if err != nil {
+		h.Logger.Error("failed to convert to Event", zap.Error(err))
+		return
 	}
 
 	h.Logger.Debug("event deleted",

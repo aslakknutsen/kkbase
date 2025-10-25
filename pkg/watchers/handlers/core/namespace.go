@@ -2,14 +2,14 @@ package core
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/informers"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -22,9 +22,14 @@ type NamespaceHandler struct {
 func NewNamespaceHandler(
 	graphStore graph.GraphStore,
 	logger *zap.Logger,
-	informerFactory informers.SharedInformerFactory,
+	factory dynamicinformer.DynamicSharedInformerFactory,
 ) *NamespaceHandler {
-	informer := informerFactory.Core().V1().Namespaces().Informer()
+	gvr := schema.GroupVersionResource{
+		Group:    "",
+		Version:  "v1",
+		Resource: "namespaces",
+	}
+	informer := factory.ForResource(gvr).Informer()
 
 	handler := &NamespaceHandler{
 		BaseWatcher: watchers.NewBaseWatcher(graphStore, logger, informer),
@@ -44,9 +49,9 @@ func NewNamespaceHandler(
 
 // HandleAdd processes a newly added Namespace
 func (h *NamespaceHandler) HandleAdd(obj interface{}) {
-	namespace, ok := obj.(*corev1.Namespace)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", obj)))
+	namespace, err := watchers.ConvertToTyped[corev1.Namespace](obj)
+	if err != nil {
+		h.Logger.Error("failed to convert to Namespace", zap.Error(err))
 		return
 	}
 
@@ -63,9 +68,9 @@ func (h *NamespaceHandler) HandleAdd(obj interface{}) {
 
 // HandleUpdate processes an updated Namespace
 func (h *NamespaceHandler) HandleUpdate(oldObj, newObj interface{}) {
-	newNamespace, ok := newObj.(*corev1.Namespace)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", newObj)))
+	newNamespace, err := watchers.ConvertToTyped[corev1.Namespace](newObj)
+	if err != nil {
+		h.Logger.Error("failed to convert to Namespace", zap.Error(err))
 		return
 	}
 
@@ -75,18 +80,10 @@ func (h *NamespaceHandler) HandleUpdate(oldObj, newObj interface{}) {
 
 // HandleDelete processes a deleted Namespace
 func (h *NamespaceHandler) HandleDelete(obj interface{}) {
-	namespace, ok := obj.(*corev1.Namespace)
-	if !ok {
-		extracted, err := watchers.SafeGetObject(obj)
-		if err != nil {
-			h.Logger.Error("failed to extract object", zap.Error(err))
-			return
-		}
-		namespace, ok = extracted.(*corev1.Namespace)
-		if !ok {
-			h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", extracted)))
-			return
-		}
+	namespace, err := watchers.ConvertToTyped[corev1.Namespace](obj)
+	if err != nil {
+		h.Logger.Error("failed to convert to Namespace", zap.Error(err))
+		return
 	}
 
 	h.Logger.Debug("namespace deleted", zap.String("name", namespace.Name))
