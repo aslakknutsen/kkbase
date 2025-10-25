@@ -260,8 +260,8 @@ helm uninstall neo4j
 
 - **Neo4j Cypher Manual**: https://neo4j.com/docs/cypher-manual/
 - **Kubernetes API**: https://kubernetes.io/docs/reference/kubernetes-api/
-- **Project README**: See README.md for detailed documentation
-- **Implementation Details**: See IMPLEMENTATION_SUMMARY.md
+- **Documentation**: See [Documentation Index](../README.md)
+- **Query Reference**: See [Cypher Queries](../reference/cypher-queries.md)
 
 ## Support
 

@@ -270,7 +270,7 @@ if len(mockStore.DeletedNodes) != 1 {
 
 ## Example: Complete Test
 
-See `pkg/watchers/handlers/extensions/gateway/httproute_test.go` for a complete example with:
+See `../../pkg/watchers/handlers/extensions/gateway/httproute_test.go` for a complete example with:
 - Simple resource with one relationship
 - Resource with multiple backends
 - Complex resource with weights and properties
