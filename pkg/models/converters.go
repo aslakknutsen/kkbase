@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
+	gatewayv1alpha3 "sigs.k8s.io/gateway-api/apis/v1alpha3"
 	gatewayv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	istiov1 "istio.io/client-go/pkg/apis/networking/v1"
@@ -786,56 +787,108 @@ func HTTPRouteToGraphNode(httpRoute *gatewayv1.HTTPRoute) *GraphNode {
 }
 
 // GRPCRouteToGraphNode converts a Gateway API GRPCRoute to a graph node
-// TODO: GRPCRoute moved to different API version, needs update
-func GRPCRouteToGraphNode(grpcRoute interface{}) *GraphNode {
-	// Temporarily disabled due to Gateway API version changes
-	return nil
-	/*
-		properties := map[string]interface{}{
-			"name":      grpcRoute.Name,
-			"namespace": grpcRoute.Namespace,
-		}
+func GRPCRouteToGraphNode(grpcRoute *gatewayv1.GRPCRoute) *GraphNode {
+	properties := map[string]interface{}{
+		"name":      grpcRoute.Name,
+		"namespace": grpcRoute.Namespace,
+	}
 
-		// Add hostnames
-		if len(grpcRoute.Spec.Hostnames) > 0 {
-			hostnames := make([]string, len(grpcRoute.Spec.Hostnames))
-			for i, hostname := range grpcRoute.Spec.Hostnames {
-				hostnames[i] = string(hostname)
+	// Add hostnames
+	if len(grpcRoute.Spec.Hostnames) > 0 {
+		hostnames := make([]string, len(grpcRoute.Spec.Hostnames))
+		for i, hostname := range grpcRoute.Spec.Hostnames {
+			hostnames[i] = string(hostname)
+		}
+		properties["hostnames"] = hostnames
+	}
+
+	// Add parent refs (gateways this route attaches to)
+	if len(grpcRoute.Spec.ParentRefs) > 0 {
+		parentRefs := make([]map[string]interface{}, len(grpcRoute.Spec.ParentRefs))
+		for i, parentRef := range grpcRoute.Spec.ParentRefs {
+			ref := map[string]interface{}{
+				"name": string(parentRef.Name),
 			}
-			properties["hostnames"] = hostnames
+			if parentRef.Namespace != nil {
+				ref["namespace"] = string(*parentRef.Namespace)
+			} else {
+				ref["namespace"] = grpcRoute.Namespace
+			}
+			if parentRef.SectionName != nil {
+				ref["section_name"] = string(*parentRef.SectionName)
+			}
+			parentRefs[i] = ref
 		}
+		if b, err := json.Marshal(parentRefs); err == nil {
+			properties["parent_refs"] = string(b)
+		}
+	}
 
-		// Add parent refs
-		if len(grpcRoute.Spec.ParentRefs) > 0 {
-			parentRefs := make([]map[string]interface{}, len(grpcRoute.Spec.ParentRefs))
-			for i, parentRef := range grpcRoute.Spec.ParentRefs {
-				ref := map[string]interface{}{
-					"name": string(parentRef.Name),
+	// Add rules summary
+	if len(grpcRoute.Spec.Rules) > 0 {
+		properties["rule_count"] = len(grpcRoute.Spec.Rules)
+
+		// Serialize rules
+		rules := make([]map[string]interface{}, len(grpcRoute.Spec.Rules))
+		for i, rule := range grpcRoute.Spec.Rules {
+			ruleInfo := map[string]interface{}{}
+
+			// Add matches
+			if len(rule.Matches) > 0 {
+				matches := make([]map[string]interface{}, len(rule.Matches))
+				for j, match := range rule.Matches {
+					matchInfo := map[string]interface{}{}
+					if match.Method != nil {
+						if match.Method.Service != nil {
+							matchInfo["service"] = *match.Method.Service
+						}
+						if match.Method.Method != nil {
+							matchInfo["method"] = *match.Method.Method
+						}
+					}
+					matches[j] = matchInfo
 				}
-				if parentRef.Namespace != nil {
-					ref["namespace"] = string(*parentRef.Namespace)
-				} else {
-					ref["namespace"] = grpcRoute.Namespace
+				ruleInfo["matches"] = matches
+			}
+
+			// Add backend refs
+			if len(rule.BackendRefs) > 0 {
+				backends := make([]string, len(rule.BackendRefs))
+				for j, backend := range rule.BackendRefs {
+					namespace := grpcRoute.Namespace
+					if backend.Namespace != nil {
+						namespace = string(*backend.Namespace)
+					}
+					backends[j] = fmt.Sprintf("%s/%s", namespace, string(backend.Name))
 				}
-				parentRefs[i] = ref
+				ruleInfo["backends"] = backends
 			}
-			if b, err := json.Marshal(parentRefs); err == nil {
-				properties["parent_refs"] = string(b)
+
+			rules[i] = ruleInfo
+		}
+		if b, err := json.Marshal(rules); err == nil {
+			properties["rules"] = string(b)
+		}
+	}
+
+	// Add status
+	if len(grpcRoute.Status.Parents) > 0 {
+		for _, parent := range grpcRoute.Status.Parents {
+			for _, condition := range parent.Conditions {
+				if condition.Type == string(gatewayv1.RouteConditionAccepted) {
+					properties["accepted"] = string(condition.Status)
+					break
+				}
 			}
 		}
+	}
 
-		// Add rules summary
-		if len(grpcRoute.Spec.Rules) > 0 {
-			properties["rule_count"] = len(grpcRoute.Spec.Rules)
-		}
+	// Add labels
+	if len(grpcRoute.Labels) > 0 {
+		properties["labels"] = serializeMap(grpcRoute.Labels)
+	}
 
-		// Add labels
-		if len(grpcRoute.Labels) > 0 {
-			properties["labels"] = serializeMap(grpcRoute.Labels)
-		}
-
-		return NewGraphNode(NodeTypeGRPCRoute, GetNodeID("GRPCRoute", grpcRoute.Namespace, grpcRoute.Name), properties)
-	*/
+	return NewGraphNode(NodeTypeGRPCRoute, GetNodeID("GRPCRoute", grpcRoute.Namespace, grpcRoute.Name), properties)
 }
 
 // TCPRouteToGraphNode converts a Gateway API TCPRoute to a graph node
@@ -1011,6 +1064,61 @@ func ReferenceGrantToGraphNode(referenceGrant *gatewayv1beta1.ReferenceGrant) *G
 	}
 
 	return NewGraphNode(NodeTypeReferenceGrant, GetNodeID("ReferenceGrant", referenceGrant.Namespace, referenceGrant.Name), properties)
+}
+
+// BackendTLSPolicyToGraphNode converts a Gateway API BackendTLSPolicy to a graph node
+func BackendTLSPolicyToGraphNode(backendTLSPolicy *gatewayv1alpha3.BackendTLSPolicy) *GraphNode {
+	properties := map[string]interface{}{
+		"name":      backendTLSPolicy.Name,
+		"namespace": backendTLSPolicy.Namespace,
+	}
+
+	// Add target refs (what backends this policy applies to)
+	if len(backendTLSPolicy.Spec.TargetRefs) > 0 {
+		targetRefs := make([]map[string]interface{}, len(backendTLSPolicy.Spec.TargetRefs))
+		for i, targetRef := range backendTLSPolicy.Spec.TargetRefs {
+			ref := map[string]interface{}{
+				"group":     string(targetRef.Group),
+				"kind":      string(targetRef.Kind),
+				"name":      string(targetRef.Name),
+				"namespace": backendTLSPolicy.Namespace, // LocalPolicyTargetReference is always in the same namespace
+			}
+			if targetRef.SectionName != nil {
+				ref["section_name"] = string(*targetRef.SectionName)
+			}
+			targetRefs[i] = ref
+		}
+		if b, err := json.Marshal(targetRefs); err == nil {
+			properties["target_refs"] = string(b)
+		}
+	}
+
+	// Add validation info
+	if backendTLSPolicy.Spec.Validation.Hostname != "" {
+		properties["hostname"] = string(backendTLSPolicy.Spec.Validation.Hostname)
+	}
+
+	// Add CA certificate refs
+	if len(backendTLSPolicy.Spec.Validation.CACertificateRefs) > 0 {
+		caCertRefs := make([]string, len(backendTLSPolicy.Spec.Validation.CACertificateRefs))
+		for i, certRef := range backendTLSPolicy.Spec.Validation.CACertificateRefs {
+			// LocalObjectReference is always in the same namespace as the policy
+			caCertRefs[i] = fmt.Sprintf("%s/%s/%s", certRef.Group, backendTLSPolicy.Namespace, certRef.Name)
+		}
+		properties["ca_certificate_refs"] = caCertRefs
+	}
+
+	// Add well-known CA certificates if present
+	if backendTLSPolicy.Spec.Validation.WellKnownCACertificates != nil {
+		properties["well_known_ca_certificates"] = string(*backendTLSPolicy.Spec.Validation.WellKnownCACertificates)
+	}
+
+	// Add labels
+	if len(backendTLSPolicy.Labels) > 0 {
+		properties["labels"] = serializeMap(backendTLSPolicy.Labels)
+	}
+
+	return NewGraphNode(NodeTypeBackendTLSPolicy, GetNodeID("BackendTLSPolicy", backendTLSPolicy.Namespace, backendTLSPolicy.Name), properties)
 }
 
 // =============== Istio Converters ===============

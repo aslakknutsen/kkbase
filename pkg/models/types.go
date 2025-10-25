@@ -24,14 +24,15 @@ const (
 	NodeTypeNetworkPolicy NodeType = "NetworkPolicy"
 
 	// Gateway API
-	NodeTypeGatewayClass   NodeType = "GatewayClass"
-	NodeTypeGateway        NodeType = "Gateway"
-	NodeTypeHTTPRoute      NodeType = "HTTPRoute"
-	NodeTypeGRPCRoute      NodeType = "GRPCRoute"
-	NodeTypeTCPRoute       NodeType = "TCPRoute"
-	NodeTypeUDPRoute       NodeType = "UDPRoute"
-	NodeTypeTLSRoute       NodeType = "TLSRoute"
-	NodeTypeReferenceGrant NodeType = "ReferenceGrant"
+	NodeTypeGatewayClass     NodeType = "GatewayClass"
+	NodeTypeGateway          NodeType = "Gateway"
+	NodeTypeHTTPRoute        NodeType = "HTTPRoute"
+	NodeTypeGRPCRoute        NodeType = "GRPCRoute"
+	NodeTypeTCPRoute         NodeType = "TCPRoute"
+	NodeTypeUDPRoute         NodeType = "UDPRoute"
+	NodeTypeTLSRoute         NodeType = "TLSRoute"
+	NodeTypeReferenceGrant   NodeType = "ReferenceGrant"
+	NodeTypeBackendTLSPolicy NodeType = "BackendTLSPolicy"
 
 	// Istio - Traffic Management
 	NodeTypeIstioGateway    NodeType = "IstioGateway"

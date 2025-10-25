@@ -48,16 +48,15 @@ func RegisterGatewayAPIHandlers(
 		},
 	)
 
-	// TODO: GRPCRoute handler disabled - GRPCRoute moved to different API version in Gateway API v1.0.0
 	// Register GRPCRoute handler
-	// manager.RegisterHandlerFactory(
-	// 	"grpcroute",
-	// 	"gateway.networking.k8s.io",
-	// 	"GRPCRoute",
-	// 	func() watchers.ResourceWatcher {
-	// 		return NewGRPCRouteHandler(dynamicClient, graphStore, logger, factory)
-	// 	},
-	// )
+	manager.RegisterHandlerFactory(
+		"grpcroute",
+		"gateway.networking.k8s.io",
+		"GRPCRoute",
+		func() watchers.ResourceWatcher {
+			return NewGRPCRouteHandler(dynamicClient, graphStore, logger, factory)
+		},
+	)
 
 	// Register TCPRoute handler
 	manager.RegisterHandlerFactory(
@@ -96,6 +95,16 @@ func RegisterGatewayAPIHandlers(
 		"ReferenceGrant",
 		func() watchers.ResourceWatcher {
 			return NewReferenceGrantHandler(dynamicClient, graphStore, logger, factory)
+		},
+	)
+
+	// Register BackendTLSPolicy handler
+	manager.RegisterHandlerFactory(
+		"backendtlspolicy",
+		"gateway.networking.k8s.io",
+		"BackendTLSPolicy",
+		func() watchers.ResourceWatcher {
+			return NewBackendTLSPolicyHandler(dynamicClient, graphStore, logger, factory)
 		},
 	)
 

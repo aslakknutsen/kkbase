@@ -1,21 +1,12 @@
-//go:build ignore
-// +build ignore
-
-// TODO: GRPCRoute handler disabled - GRPCRoute moved to different API version in Gateway API v1.0.0
-// This file needs to be updated to use the correct API version (likely gatewayv1alpha2 or similar)
-
 package gateway
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/tools/cache"
@@ -59,14 +50,8 @@ func NewGRPCRouteHandler(
 
 // HandleAdd processes a newly added GRPCRoute
 func (h *GRPCRouteHandler) HandleAdd(obj interface{}) {
-	unstructuredObj, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", obj)))
-		return
-	}
-
-	grpcRoute := &gatewayv1.GRPCRoute{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, grpcRoute); err != nil {
+	grpcRoute, err := watchers.ConvertToTyped[gatewayv1.GRPCRoute](obj)
+	if err != nil {
 		h.Logger.Error("failed to convert to GRPCRoute", zap.Error(err))
 		return
 	}
@@ -155,14 +140,8 @@ func (h *GRPCRouteHandler) HandleAdd(obj interface{}) {
 
 // HandleUpdate processes an updated GRPCRoute
 func (h *GRPCRouteHandler) HandleUpdate(oldObj, newObj interface{}) {
-	unstructuredObj, ok := newObj.(*unstructured.Unstructured)
-	if !ok {
-		h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", newObj)))
-		return
-	}
-
-	grpcRoute := &gatewayv1.GRPCRoute{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, grpcRoute); err != nil {
+	grpcRoute, err := watchers.ConvertToTyped[gatewayv1.GRPCRoute](newObj)
+	if err != nil {
 		h.Logger.Error("failed to convert to GRPCRoute", zap.Error(err))
 		return
 	}
@@ -186,22 +165,8 @@ func (h *GRPCRouteHandler) HandleUpdate(oldObj, newObj interface{}) {
 
 // HandleDelete processes a deleted GRPCRoute
 func (h *GRPCRouteHandler) HandleDelete(obj interface{}) {
-	unstructuredObj, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		extracted, err := watchers.SafeGetObject(obj)
-		if err != nil {
-			h.Logger.Error("failed to extract object", zap.Error(err))
-			return
-		}
-		unstructuredObj, ok = extracted.(*unstructured.Unstructured)
-		if !ok {
-			h.Logger.Error("unexpected object type", zap.String("type", fmt.Sprintf("%T", extracted)))
-			return
-		}
-	}
-
-	grpcRoute := &gatewayv1.GRPCRoute{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, grpcRoute); err != nil {
+	grpcRoute, err := watchers.ConvertToTyped[gatewayv1.GRPCRoute](obj)
+	if err != nil {
 		h.Logger.Error("failed to convert to GRPCRoute", zap.Error(err))
 		return
 	}
