@@ -78,7 +78,7 @@ func (tp *TraceProcessor) ProcessTrace(ctx context.Context, trace observability.
 func (tp *TraceProcessor) processSpan(ctx context.Context, traceID string, span observability.TraceSpan) error {
 	spanID := fmt.Sprintf("Span/%s/%s", traceID, span.SpanID)
 
-	// Create Span node
+	// Create Span node with OpenTelemetry 1.21+ attributes
 	spanProps := map[string]interface{}{
 		"span_id":           span.SpanID,
 		"trace_id":          span.TraceID,
@@ -95,22 +95,74 @@ func (tp *TraceProcessor) processSpan(ctx context.Context, traceID string, span 
 		"protocol":          span.Protocol,
 	}
 
-	// Add optional fields
-	if span.HTTPMethod != "" {
-		spanProps["http_method"] = span.HTTPMethod
-		spanProps["http_path"] = span.HTTPPath
-		spanProps["http_status_code"] = span.HTTPStatus
+	// Add HTTP/URL attributes
+	if span.HTTPRequestMethod != "" {
+		spanProps["http_request_method"] = span.HTTPRequestMethod
+		spanProps["http_response_status_code"] = span.HTTPResponseStatusCode
+		spanProps["url_path"] = span.URLPath
+		spanProps["url_scheme"] = span.URLScheme
+		if span.URLFull != "" {
+			spanProps["url_full"] = span.URLFull
+		}
 	}
+
+	// Add network attributes
+	if span.NetworkProtocolName != "" {
+		spanProps["network_protocol_name"] = span.NetworkProtocolName
+		if span.NetworkProtocolVersion != "" {
+			spanProps["network_protocol_version"] = span.NetworkProtocolVersion
+		}
+		if span.NetworkTransport != "" {
+			spanProps["network_transport"] = span.NetworkTransport
+		}
+	}
+
+	// Add server/client addressing
+	if span.ServerAddress != "" {
+		spanProps["server_address"] = span.ServerAddress
+		if span.ServerPort > 0 {
+			spanProps["server_port"] = span.ServerPort
+		}
+	}
+	if span.ClientAddress != "" {
+		spanProps["client_address"] = span.ClientAddress
+	}
+
+	// Add RPC attributes
 	if span.RPCService != "" {
+		spanProps["rpc_system"] = span.RPCSystem
 		spanProps["rpc_service"] = span.RPCService
 		spanProps["rpc_method"] = span.RPCMethod
+		if span.RPCGRPCStatusCode > 0 {
+			spanProps["rpc_grpc_status_code"] = span.RPCGRPCStatusCode
+		}
 	}
-	if span.UpstreamName != "" {
-		spanProps["upstream_name"] = span.UpstreamName
-		spanProps["upstream_url"] = span.UpstreamURL
-	}
+
+	// Add error attributes
 	if span.ErrorMessage != "" {
 		spanProps["error_message"] = span.ErrorMessage
+	}
+	if span.ErrorType != "" {
+		spanProps["error_type"] = span.ErrorType
+	}
+
+	// Add user agent
+	if span.UserAgent != "" {
+		spanProps["user_agent"] = span.UserAgent
+	}
+
+	// Add Kubernetes metadata
+	if span.K8sPodName != "" {
+		spanProps["k8s_pod_name"] = span.K8sPodName
+	}
+	if span.K8sNodeName != "" {
+		spanProps["k8s_node_name"] = span.K8sNodeName
+	}
+	if span.ServiceInstanceID != "" {
+		spanProps["service_instance_id"] = span.ServiceInstanceID
+	}
+	if span.ServiceVersion != "" {
+		spanProps["service_version"] = span.ServiceVersion
 	}
 
 	if err := tp.graphStore.UpsertNode(ctx, "Span", spanID, spanProps); err != nil {
@@ -154,7 +206,8 @@ func (tp *TraceProcessor) processSpan(ctx context.Context, traceID string, span 
 	}
 
 	// Create runtime service call edge (CALLS or FAILED_CALL_TO)
-	if span.UpstreamName != "" {
+	// Check if this span represents a client call to another service
+	if span.ServerAddress != "" || span.URLFull != "" {
 		if err := tp.createServiceCallEdge(ctx, span); err != nil {
 			tp.logger.Debug("failed to create service call edge", zap.Error(err))
 		}
@@ -165,8 +218,19 @@ func (tp *TraceProcessor) processSpan(ctx context.Context, traceID string, span 
 
 // createServiceCallEdge creates runtime CALLS or FAILED_CALL_TO edges between services
 func (tp *TraceProcessor) createServiceCallEdge(ctx context.Context, span observability.TraceSpan) error {
-	// Parse upstream URL to extract target service/namespace
-	targetService, targetNamespace := tp.parseUpstreamURL(span.UpstreamURL)
+	// Determine target from ServerAddress or URLFull
+	targetAddress := span.ServerAddress
+	if targetAddress == "" && span.URLFull != "" {
+		// Extract server address from full URL if ServerAddress is missing
+		targetAddress = tp.extractHostFromURL(span.URLFull)
+	}
+
+	if targetAddress == "" {
+		return nil
+	}
+
+	// Parse server address to extract target service/namespace
+	targetService, targetNamespace := tp.parseServerAddress(targetAddress)
 	if targetService == "" {
 		return nil
 	}
@@ -180,7 +244,7 @@ func (tp *TraceProcessor) createServiceCallEdge(ctx context.Context, span observ
 		"protocol":      span.Protocol,
 		"last_observed": span.StartTime.Format(time.RFC3339),
 		"duration_ms":   span.Duration.Seconds() * 1000,
-		"status_code":   span.HTTPStatus,
+		"status_code":   span.HTTPResponseStatusCode,
 		"error":         span.Error,
 	}
 
@@ -188,25 +252,20 @@ func (tp *TraceProcessor) createServiceCallEdge(ctx context.Context, span observ
 	if span.Error {
 		edgeType = "FAILED_CALL_TO"
 		edgeProps["error_message"] = span.ErrorMessage
+		if span.ErrorType != "" {
+			edgeProps["error_type"] = span.ErrorType
+		}
 	}
 
 	return tp.graphStore.UpsertEdge(ctx, "Service", fromServiceID, edgeType, "Service", toServiceID, edgeProps)
 }
 
-// parseUpstreamURL extracts service name and namespace from URL
-// e.g., "grpc://payment.sf-payments.svc.cluster.local:9090" -> ("payment", "sf-payments")
-func (tp *TraceProcessor) parseUpstreamURL(upstreamURL string) (service, namespace string) {
-	// Remove protocol
-	url := strings.TrimPrefix(upstreamURL, "http://")
-	url = strings.TrimPrefix(url, "https://")
-	url = strings.TrimPrefix(url, "grpc://")
-
-	// Split host:port and path
-	parts := strings.Split(url, "/")
-	hostPort := parts[0]
-
+// parseServerAddress extracts service name and namespace from server address
+// e.g., "payment.sf-payments.svc.cluster.local:9090" -> ("payment", "sf-payments")
+// e.g., "payment.sf-payments.svc.cluster.local" -> ("payment", "sf-payments")
+func (tp *TraceProcessor) parseServerAddress(serverAddress string) (service, namespace string) {
 	// Split host:port
-	host := strings.Split(hostPort, ":")[0]
+	host := strings.Split(serverAddress, ":")[0]
 
 	// Parse K8s DNS format: service.namespace.svc.cluster.local
 	hostParts := strings.Split(host, ".")
@@ -215,6 +274,23 @@ func (tp *TraceProcessor) parseUpstreamURL(upstreamURL string) (service, namespa
 	}
 
 	return "", ""
+}
+
+// extractHostFromURL extracts the host portion from a full URL
+// e.g., "http://payment.sf-payments.svc.cluster.local:9090/api/v1" -> "payment.sf-payments.svc.cluster.local:9090"
+func (tp *TraceProcessor) extractHostFromURL(fullURL string) string {
+	// Remove protocol
+	url := strings.TrimPrefix(fullURL, "http://")
+	url = strings.TrimPrefix(url, "https://")
+	url = strings.TrimPrefix(url, "grpc://")
+
+	// Split host:port and path
+	parts := strings.Split(url, "/")
+	if len(parts) > 0 {
+		return parts[0]
+	}
+
+	return ""
 }
 
 // cleanupOldSpans deletes Span nodes older than retention period

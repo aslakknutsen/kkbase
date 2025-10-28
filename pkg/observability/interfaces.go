@@ -23,7 +23,7 @@ type LogEntry struct {
 	Labels    map[string]string
 }
 
-// TraceSpan represents a single trace span with full Jaeger compatibility
+// TraceSpan represents a single trace span with OpenTelemetry 1.21+ semantic conventions
 type TraceSpan struct {
 	// Core identifiers
 	TraceID  string
@@ -44,19 +44,42 @@ type TraceSpan struct {
 	Status       string // OK, ERROR
 	Error        bool
 	ErrorMessage string
+	ErrorType    string // Explicit error type (e.g., "404")
 
-	// Protocol/endpoint information
-	Protocol   string // http, grpc, kafka, etc.
-	HTTPMethod string
-	HTTPPath   string
-	HTTPStatus int
-	RPCService string
-	RPCMethod  string
+	// Protocol/endpoint information (derived for convenience)
+	Protocol string // http, grpc, kafka, etc. (derived from NetworkProtocolName or RPCSystem)
 
-	// Upstream call details (if this span calls another service)
-	UpstreamName     string
-	UpstreamURL      string
-	UpstreamProtocol string
+	// HTTP/URL attributes (OpenTelemetry 1.21+ conventions)
+	HTTPRequestMethod      string // from http.request.method_original or http.request.method
+	HTTPResponseStatusCode int    // from http.response.status_code
+	URLPath                string // from url.path
+	URLScheme              string // from url.scheme
+	URLFull                string // from url.full
+
+	// Network attributes
+	NetworkProtocolName    string // from network.protocol.name (http, grpc, etc.)
+	NetworkProtocolVersion string // from network.protocol.version (1.1, 2.0, etc.)
+	NetworkTransport       string // from network.transport (tcp, udp, etc.)
+
+	// Server/Client addressing
+	ServerAddress string // from server.address
+	ServerPort    int    // from server.port
+	ClientAddress string // from client.address
+
+	// RPC attributes
+	RPCSystem         string // from rpc.system (grpc, etc.)
+	RPCService        string // from rpc.service
+	RPCMethod         string // from rpc.method
+	RPCGRPCStatusCode int    // from rpc.grpc.status_code
+
+	// User agent
+	UserAgent string // from user_agent.original
+
+	// Kubernetes metadata (from process tags)
+	K8sPodName        string // from k8s.pod.name
+	K8sNodeName       string // from k8s.node.name
+	ServiceInstanceID string // from service.instance.id
+	ServiceVersion    string // from service.version
 
 	// Tags (all attributes as key-value)
 	Tags map[string]string

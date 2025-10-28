@@ -252,7 +252,7 @@ func (p *Provider) convertTrace(jTrace JaegerTrace) observability.Trace {
 	}
 }
 
-// convertSpan converts a Jaeger span to our model
+// convertSpan converts a Jaeger span to our model using OpenTelemetry 1.21+ conventions
 func (p *Provider) convertSpan(jSpan JaegerSpan, processes map[string]JaegerProcess) observability.TraceSpan {
 	span := observability.TraceSpan{
 		TraceID:       jSpan.TraceID,
@@ -264,7 +264,7 @@ func (p *Provider) convertSpan(jSpan JaegerSpan, processes map[string]JaegerProc
 		ProcessID:     jSpan.ProcessID,
 	}
 
-	// Get process info (service name, namespace)
+	// Get process info (service name, namespace, K8s metadata)
 	if proc, ok := processes[jSpan.ProcessID]; ok {
 		span.Service = proc.ServiceName
 		for _, tag := range proc.Tags {
@@ -273,6 +273,14 @@ func (p *Provider) convertSpan(jSpan JaegerSpan, processes map[string]JaegerProc
 				span.Namespace = tag.ValueString()
 			case "otel.library.name":
 				span.LibraryName = tag.ValueString()
+			case "k8s.pod.name":
+				span.K8sPodName = tag.ValueString()
+			case "k8s.node.name":
+				span.K8sNodeName = tag.ValueString()
+			case "service.instance.id":
+				span.ServiceInstanceID = tag.ValueString()
+			case "service.version":
+				span.ServiceVersion = tag.ValueString()
 			}
 		}
 	}
@@ -289,55 +297,96 @@ func (p *Provider) convertSpan(jSpan JaegerSpan, processes map[string]JaegerProc
 		})
 	}
 
-	// Parse tags
+	// Parse tags using OpenTelemetry 1.21+ semantic conventions
 	for _, tag := range jSpan.Tags {
 		tagValue := tag.ValueString()
 		span.Tags[tag.Key] = tagValue
 
-		// Extract common fields
+		// Extract fields based on OTel conventions
 		switch tag.Key {
+		// Span metadata
 		case "span.kind":
 			span.SpanKind = tagValue
 		case "otel.status_code":
 			span.Status = tagValue
 		case "error":
 			span.Error = (tagValue == "true")
+		case "error.type":
+			span.ErrorType = tagValue
+			if tagValue != "" {
+				span.Error = true
+			}
 		case "otel.status_description":
 			span.ErrorMessage = tagValue
+
+		// Namespace fallback
 		case "service.namespace", "k8s.namespace.name", "namespace":
-			// Fallback: extract namespace from span tags if not in process tags
 			if span.Namespace == "" {
 				span.Namespace = tagValue
 			}
-		case "http.method":
-			span.HTTPMethod = tagValue
-		case "http.path":
-			span.HTTPPath = tagValue
-		case "http.status_code":
+
+		// HTTP attributes (OpenTelemetry 1.21+ conventions)
+		case "http.request.method_original", "http.request.method":
+			span.HTTPRequestMethod = tagValue
+		case "http.response.status_code":
 			if tag.Type == "int64" {
 				if statusCode, ok := tag.Value.(float64); ok {
-					span.HTTPStatus = int(statusCode)
+					span.HTTPResponseStatusCode = int(statusCode)
 				}
 			}
+		case "url.path":
+			span.URLPath = tagValue
+		case "url.scheme":
+			span.URLScheme = tagValue
+		case "url.full":
+			span.URLFull = tagValue
+
+		// Network attributes
+		case "network.protocol.name":
+			span.NetworkProtocolName = tagValue
+		case "network.protocol.version":
+			span.NetworkProtocolVersion = tagValue
+		case "network.transport":
+			span.NetworkTransport = tagValue
+
+		// Server/Client addressing
+		case "server.address":
+			span.ServerAddress = tagValue
+		case "server.port":
+			if tag.Type == "int64" {
+				if port, ok := tag.Value.(float64); ok {
+					span.ServerPort = int(port)
+				}
+			}
+		case "client.address":
+			span.ClientAddress = tagValue
+
+		// RPC attributes
+		case "rpc.system":
+			span.RPCSystem = tagValue
 		case "rpc.service":
 			span.RPCService = tagValue
 		case "rpc.method":
 			span.RPCMethod = tagValue
-		case "upstream.name":
-			span.UpstreamName = tagValue
-		case "upstream.protocol":
-			span.UpstreamProtocol = tagValue
-		case "upstream.url":
-			span.UpstreamURL = tagValue
+		case "rpc.grpc.status_code":
+			if tag.Type == "int64" {
+				if statusCode, ok := tag.Value.(float64); ok {
+					span.RPCGRPCStatusCode = int(statusCode)
+				}
+			}
+
+		// User agent
+		case "user_agent.original":
+			span.UserAgent = tagValue
 		}
 	}
 
-	// Determine protocol
-	if span.UpstreamProtocol != "" {
-		span.Protocol = span.UpstreamProtocol
-	} else if span.RPCService != "" {
-		span.Protocol = "grpc"
-	} else if span.HTTPMethod != "" {
+	// Derive Protocol field for backward compatibility
+	if span.NetworkProtocolName != "" {
+		span.Protocol = span.NetworkProtocolName
+	} else if span.RPCSystem != "" {
+		span.Protocol = span.RPCSystem
+	} else if span.HTTPRequestMethod != "" {
 		span.Protocol = "http"
 	}
 
