@@ -297,6 +297,25 @@ func (rb *RelationshipBuilder) CreatePVStorageClassEdge(ctx context.Context, pv 
 	)
 }
 
+// CreatePVCStorageClassEdge creates PROVISIONED_BY edge from PVC to StorageClass
+func (rb *RelationshipBuilder) CreatePVCStorageClassEdge(ctx context.Context, pvc *corev1.PersistentVolumeClaim) error {
+	if pvc.Spec.StorageClassName == nil || *pvc.Spec.StorageClassName == "" {
+		return nil
+	}
+
+	pvcID := models.GetNodeID("PersistentVolumeClaim", pvc.Namespace, pvc.Name)
+
+	return rb.graphStore.UpsertEdge(
+		ctx,
+		string(models.NodeTypePersistentVolumeClaim),
+		pvcID,
+		string(models.EdgeTypeProvisionedBy),
+		string(models.NodeTypeStorageClass),
+		*pvc.Spec.StorageClassName,
+		nil,
+	)
+}
+
 // CreateIngressServiceEdges creates ROUTES_TO edges from Ingress to Services
 func (rb *RelationshipBuilder) CreateIngressServiceEdges(ctx context.Context, namespace, ingressName string, serviceName string) error {
 	ingressID := models.GetNodeID("Ingress", namespace, ingressName)
@@ -328,12 +347,18 @@ func (rb *RelationshipBuilder) CreateEventInvolvedObjectEdge(ctx context.Context
 		objectType = models.NodeTypeDeployment
 	case "ReplicaSet":
 		objectType = models.NodeTypeReplicaSet
+	case "StatefulSet":
+		objectType = models.NodeTypeStatefulSet
+	case "DaemonSet":
+		objectType = models.NodeTypeDaemonSet
 	case "Service":
 		objectType = models.NodeTypeService
 	case "PersistentVolumeClaim":
 		objectType = models.NodeTypePersistentVolumeClaim
 	case "PersistentVolume":
 		objectType = models.NodeTypePersistentVolume
+	case "StorageClass":
+		objectType = models.NodeTypeStorageClass
 	default:
 		rb.logger.Debug("unknown involved object kind", zap.String("kind", event.InvolvedObject.Kind))
 		return nil

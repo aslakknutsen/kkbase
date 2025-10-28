@@ -25,6 +25,8 @@ func RegisterCoreHandlers(
 	// Workload resources
 	manager.RegisterHandler("deployment", NewDeploymentHandler(clientset, graphStore, logger, factory))
 	manager.RegisterHandler("replicaset", NewReplicaSetHandler(clientset, graphStore, logger, factory))
+	manager.RegisterHandler("statefulset", NewStatefulSetHandler(clientset, graphStore, logger, factory))
+	manager.RegisterHandler("daemonset", NewDaemonSetHandler(clientset, graphStore, logger, factory))
 	manager.RegisterHandler("pod", NewPodHandler(clientset, graphStore, logger, factory))
 
 	// Networking resources
@@ -33,6 +35,7 @@ func RegisterCoreHandlers(
 	// Storage resources
 	manager.RegisterHandler("persistentvolume", NewPVHandler(clientset, graphStore, logger, factory))
 	manager.RegisterHandler("persistentvolumeclaim", NewPVCHandler(clientset, graphStore, logger, factory))
+	manager.RegisterHandler("storageclass", NewStorageClassHandler(clientset, graphStore, logger, factory))
 
 	// Configuration resources
 	manager.RegisterHandler("configmap", NewConfigMapHandler(clientset, graphStore, logger, factory))
@@ -41,7 +44,4 @@ func RegisterCoreHandlers(
 	// Observability resources
 	manager.RegisterHandler("event", NewEventHandler(clientset, graphStore, logger, factory))
 
-	logger.Info("registered core handlers",
-		zap.Int("count", 11),
-	)
 }

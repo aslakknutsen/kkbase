@@ -78,6 +78,11 @@ func (h *PVCHandler) HandleAdd(obj interface{}) {
 	if err := h.relationshipBuilder.CreatePVCPVEdge(ctx, pvc); err != nil {
 		h.Logger.Error("failed to create pvc-pv edge", zap.Error(err))
 	}
+
+	// Create PROVISIONED_BY edge to StorageClass
+	if err := h.relationshipBuilder.CreatePVCStorageClassEdge(ctx, pvc); err != nil {
+		h.Logger.Error("failed to create pvc-storageclass edge", zap.Error(err))
+	}
 }
 
 // HandleUpdate processes an updated PVC
