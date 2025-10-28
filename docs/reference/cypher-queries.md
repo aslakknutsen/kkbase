@@ -13,6 +13,7 @@ This document contains all major Neo4j Cypher queries of interest for the Kubern
 - [Configuration Queries](#configuration-queries)
 - [Gateway API Queries](#gateway-api-queries)
 - [Istio Queries](#istio-queries)
+- [Distributed Tracing Queries](#distributed-tracing-queries)
 - [Troubleshooting & Debugging](#troubleshooting--debugging)
 - [Performance & Analytics](#performance--analytics)
 - [Data Cleanup](#data-cleanup)
@@ -961,6 +962,166 @@ RETURN p.namespace AS Namespace, p.name AS Pod,
        ConfigMaps, Secrets, PVCs,
        ConfigMaps + Secrets + PVCs AS TotalDependencies
 ORDER BY TotalDependencies DESC
+```
+
+---
+
+## Distributed Tracing Queries
+
+### Find all traces for a service
+```cypher
+MATCH (t:Trace)
+WHERE t.root_service = 'checkout' OR t.services_involved CONTAINS 'checkout'
+RETURN t.trace_id AS TraceID, t.start_time AS StartTime,
+       t.duration_ms AS DurationMs, t.has_errors AS HasErrors,
+       t.span_count AS SpanCount
+ORDER BY t.start_time DESC
+LIMIT 10
+```
+
+### Find slowest spans in recent traces
+```cypher
+MATCH (s:Span)
+WHERE datetime(s.start_time) > datetime() - duration('PT1H')
+RETURN s.service_name AS Service, s.operation_name AS Operation,
+       s.duration_ms AS DurationMs, s.trace_id AS TraceID,
+       s.error AS HasError, s.start_time AS StartTime
+ORDER BY s.duration_ms DESC
+LIMIT 20
+```
+
+### Find all error spans
+```cypher
+MATCH (s:Span)
+WHERE s.error = true
+  AND datetime(s.start_time) > datetime() - duration('PT1H')
+RETURN s.service_name AS Service, s.service_namespace AS Namespace,
+       s.operation_name AS Operation, s.error_message AS ErrorMessage,
+       s.http_status_code AS StatusCode, s.trace_id AS TraceID
+ORDER BY s.start_time DESC
+LIMIT 50
+```
+
+### Trace a specific request by trace ID
+```cypher
+MATCH (t:Trace {trace_id: 'e7a3198ca98778aa2f9460e8a9e58c1b'})-[:CONTAINS_SPAN]->(s:Span)
+OPTIONAL MATCH (s)-[:PARENT_OF]->(child:Span)
+RETURN s.operation_name AS Operation, s.service_name AS Service,
+       s.duration_ms AS DurationMs, s.error AS Error,
+       collect(child.operation_name) AS ChildOperations
+ORDER BY s.start_time
+```
+
+### Visualize span hierarchy for a trace
+```cypher
+MATCH path = (t:Trace {trace_id: 'e7a3198ca98778aa2f9460e8a9e58c1b'})-[:CONTAINS_SPAN]->(root:Span)
+WHERE root.parent_span_id = ''
+MATCH hierarchy = (root)-[:PARENT_OF*0..]->(descendant:Span)
+RETURN hierarchy
+```
+
+### Compare static vs runtime service dependencies
+```cypher
+// Configured dependencies (static)
+MATCH (s1:Service {name: 'checkout'})-[:FORWARDS_TO]->(s2:Service)
+WITH collect(s2.name) AS ConfiguredBackends
+
+// Runtime dependencies (observed)
+MATCH (s1:Service {name: 'checkout'})-[:CALLS]->(s2:Service)
+WITH ConfiguredBackends, collect(s2.name) AS ActualBackends
+
+RETURN ConfiguredBackends, ActualBackends,
+       [backend IN ActualBackends WHERE NOT backend IN ConfiguredBackends] AS UndocumentedBackends,
+       [backend IN ConfiguredBackends WHERE NOT backend IN ActualBackends] AS UnusedBackends
+```
+
+### Find services with high error rates
+```cypher
+MATCH (s:Service)-[c:CALLS|FAILED_CALL_TO]->(target:Service)
+WITH s, target, 
+     count(CASE WHEN type(c) = 'FAILED_CALL_TO' THEN 1 END) AS Failures,
+     count(c) AS Total
+WHERE Failures > 0
+RETURN s.name AS SourceService, s.namespace AS SourceNamespace,
+       target.name AS TargetService, target.namespace AS TargetNamespace,
+       Failures, Total,
+       round(toFloat(Failures) / Total * 100, 2) AS ErrorRate
+ORDER BY ErrorRate DESC, Failures DESC
+LIMIT 20
+```
+
+### Find error propagation paths
+```cypher
+MATCH path = (failing:Service)-[:CALLS|FAILED_CALL_TO*1..3]->(downstream:Service)
+WHERE EXISTS((failing)-[:FAILED_CALL_TO]->())
+RETURN failing.name AS FailingService, failing.namespace AS Namespace,
+       [node IN nodes(path) | node.name] AS PropagationPath,
+       length(path) AS HopsAway
+ORDER BY length(path)
+LIMIT 20
+```
+
+### Link trace spans to Kubernetes resources
+```cypher
+MATCH (s:Span {service_name: 'checkout'})-[:ORIGINATED_FROM]->(svc:Service)
+MATCH (svc)-[:SELECTS_PODS]->(pod:Pod)
+RETURN s.trace_id AS TraceID, s.operation_name AS Operation,
+       svc.name AS Service, svc.namespace AS Namespace,
+       pod.name AS Pod, pod.node_name AS Node, pod.status AS PodStatus
+LIMIT 20
+```
+
+### Find services calling across namespaces
+```cypher
+MATCH (s1:Service)-[c:CALLS]->(s2:Service)
+WHERE s1.namespace <> s2.namespace
+  AND c.source = 'trace_observed'
+RETURN s1.namespace AS SourceNamespace, s1.name AS SourceService,
+       s2.namespace AS TargetNamespace, s2.name AS TargetService,
+       c.protocol AS Protocol, c.last_observed AS LastObserved,
+       c.error AS HasErrors
+ORDER BY c.last_observed DESC
+```
+
+### Identify slow service calls
+```cypher
+MATCH (s1:Service)-[c:CALLS]->(s2:Service)
+WHERE c.duration_ms > 100
+  AND datetime(c.last_observed) > datetime() - duration('PT1H')
+RETURN s1.name AS Caller, s2.name AS Callee,
+       c.duration_ms AS LatencyMs, c.protocol AS Protocol,
+       c.last_observed AS LastObserved
+ORDER BY c.duration_ms DESC
+LIMIT 20
+```
+
+### Find services with failed downstream calls
+```cypher
+MATCH (s:Service)-[:FAILED_CALL_TO]->(failed:Service)
+RETURN s.name AS Service, s.namespace AS Namespace,
+       collect(failed.name) AS FailedDownstreams,
+       count(failed) AS FailureCount
+ORDER BY FailureCount DESC
+```
+
+### Trace impact: what's affected when a service fails
+```cypher
+MATCH (failing:Service {name: 'shipping', namespace: 'sf-orders'})
+OPTIONAL MATCH (upstream:Service)-[:CALLS*1..3]->(failing)
+OPTIONAL MATCH (failing)<-[:SELECTS_PODS]-(pod:Pod)
+OPTIONAL MATCH (route:HTTPRoute)-[:FORWARDS_TO]->(failing)
+RETURN upstream.name AS UpstreamService,
+       upstream.namespace AS UpstreamNamespace,
+       pod.name AS AffectedPod,
+       route.name AS AffectedRoute
+```
+
+### Cleanup old spans (maintenance query)
+```cypher
+MATCH (s:Span)
+WHERE datetime(s.start_time) < datetime() - duration('PT1H')
+DETACH DELETE s
+RETURN count(s) AS DeletedSpans
 ```
 
 ---

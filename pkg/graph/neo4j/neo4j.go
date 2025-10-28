@@ -82,6 +82,7 @@ func (s *Store) createIndexes(ctx context.Context) error {
 		"StatefulSet", "DaemonSet", "Service", "Ingress", "Endpoint",
 		"NetworkPolicy", "PersistentVolume", "PersistentVolumeClaim",
 		"StorageClass", "ConfigMap", "Secret", "K8sEvent", "Namespace",
+		"Trace", "Span", "ServiceCall",
 	}
 
 	for _, nodeType := range nodeTypes {
@@ -153,6 +154,7 @@ func (s *Store) UpsertEdge(ctx context.Context, fromType, fromID, edgeType, toTy
 			MATCH (to:%s {id: $toID})
 			MERGE (from)-[r:%s]->(to)
 			SET r += $properties
+			RETURN r
 		`, fromType, toType, edgeType)
 
 		params := map[string]interface{}{
@@ -161,8 +163,19 @@ func (s *Store) UpsertEdge(ctx context.Context, fromType, fromID, edgeType, toTy
 			"properties": props,
 		}
 
-		_, err := session.Run(ctx, query, params)
-		return err
+		result, err := session.Run(ctx, query, params)
+		if err != nil {
+			return err
+		}
+
+		// Check if any relationship was created/updated
+		if result.Next(ctx) {
+			return nil
+		}
+
+		// If no relationship was returned, one or both nodes don't exist
+		return fmt.Errorf("failed to create edge: one or both nodes not found (from:%s id:%s, to:%s id:%s)",
+			fromType, fromID, toType, toID)
 	})
 }
 

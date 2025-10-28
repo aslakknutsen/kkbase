@@ -56,10 +56,12 @@ const (
 	NodeTypeSecret    NodeType = "Secret"
 
 	// Observability
-	NodeTypeMetric   NodeType = "Metric"
-	NodeTypeLogEntry NodeType = "LogEntry"
-	NodeTypeTrace    NodeType = "Trace"
-	NodeTypeK8sEvent NodeType = "K8sEvent"
+	NodeTypeMetric      NodeType = "Metric"
+	NodeTypeLogEntry    NodeType = "LogEntry"
+	NodeTypeTrace       NodeType = "Trace"
+	NodeTypeSpan        NodeType = "Span"
+	NodeTypeServiceCall NodeType = "ServiceCall"
+	NodeTypeK8sEvent    NodeType = "K8sEvent"
 
 	// Other
 	NodeTypeNamespace NodeType = "Namespace"
@@ -104,6 +106,14 @@ const (
 	EdgeTypeEmits     EdgeType = "EMITS"
 	EdgeTypeGenerates EdgeType = "GENERATES"
 	EdgeTypeInvolves  EdgeType = "INVOLVES"
+
+	// Trace relationships
+	EdgeTypeContainsSpan   EdgeType = "CONTAINS_SPAN"
+	EdgeTypeParentOf       EdgeType = "PARENT_OF"
+	EdgeTypeOriginatedFrom EdgeType = "ORIGINATED_FROM"
+	EdgeTypeObservedCallTo EdgeType = "OBSERVED_CALL_TO"
+	EdgeTypeCalls          EdgeType = "CALLS"
+	EdgeTypeFailedCallTo   EdgeType = "FAILED_CALL_TO"
 
 	// Dynamic relationships
 	EdgeTypeCommunicatesWith EdgeType = "COMMUNICATES_WITH"

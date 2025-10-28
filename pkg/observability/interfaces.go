@@ -23,17 +23,72 @@ type LogEntry struct {
 	Labels    map[string]string
 }
 
-// TraceSpan represents a single trace span
+// TraceSpan represents a single trace span with full Jaeger compatibility
 type TraceSpan struct {
-	TraceID   string
-	SpanID    string
-	ParentID  string
-	Name      string
+	// Core identifiers
+	TraceID  string
+	SpanID   string
+	ParentID string // Primary parent span ID
+
+	// Operation details
+	OperationName string
+	Service       string
+	Namespace     string // Kubernetes namespace
+
+	// Timing
 	StartTime time.Time
-	EndTime   time.Time
 	Duration  time.Duration
-	Service   string
-	Tags      map[string]string
+
+	// Status
+	SpanKind     string // internal, client, server, producer, consumer
+	Status       string // OK, ERROR
+	Error        bool
+	ErrorMessage string
+
+	// Protocol/endpoint information
+	Protocol   string // http, grpc, kafka, etc.
+	HTTPMethod string
+	HTTPPath   string
+	HTTPStatus int
+	RPCService string
+	RPCMethod  string
+
+	// Upstream call details (if this span calls another service)
+	UpstreamName     string
+	UpstreamURL      string
+	UpstreamProtocol string
+
+	// Tags (all attributes as key-value)
+	Tags map[string]string
+
+	// References (for complex span relationships)
+	References []SpanReference
+
+	// Process metadata
+	ProcessID   string
+	LibraryName string
+}
+
+// SpanReference represents a relationship to another span
+type SpanReference struct {
+	RefType string // CHILD_OF, FOLLOWS_FROM
+	TraceID string
+	SpanID  string
+}
+
+// Trace represents a complete distributed trace
+type Trace struct {
+	TraceID       string
+	Spans         []TraceSpan
+	StartTime     time.Time
+	Duration      time.Duration
+	RootService   string
+	RootOperation string
+	SpanCount     int
+	ErrorCount    int
+	HasErrors     bool
+	Services      []string // Unique services involved
+	Namespaces    []string // Unique namespaces involved
 }
 
 // MetricsProvider defines the interface for metrics collection
@@ -65,11 +120,14 @@ type LogsProvider interface {
 
 // TracesProvider defines the interface for distributed tracing
 type TracesProvider interface {
-	// GetTraces retrieves traces for a specific service or operation
-	GetTraces(ctx context.Context, service string, startTime, endTime time.Time) ([]TraceSpan, error)
+	// GetTraces retrieves traces for specific services in a time range
+	GetTraces(ctx context.Context, services []string, startTime, endTime time.Time) ([]Trace, error)
 
 	// GetTraceByID retrieves a specific trace by ID
-	GetTraceByID(ctx context.Context, traceID string) ([]TraceSpan, error)
+	GetTraceByID(ctx context.Context, traceID string) (*Trace, error)
+
+	// StreamTraces streams traces as they're discovered (polling or real-time)
+	StreamTraces(ctx context.Context, services []string, pollInterval time.Duration) (<-chan Trace, error)
 
 	// Close closes the traces provider connection
 	Close() error

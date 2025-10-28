@@ -126,6 +126,18 @@ Example:
 - Kubernetes API events
 - Properties: `name`, `namespace`, `uid`, `type`, `reason`, `message`, `involved_object_kind`, `involved_object_name`, `first_timestamp`, `last_timestamp`, `count`, `source`, `created`
 
+**Trace**
+- Distributed trace aggregation (one per trace)
+- Properties: `trace_id`, `start_time`, `duration_ms`, `root_operation`, `root_service`, `span_count`, `error_count`, `has_errors`, `services_involved`
+
+**Span**
+- Individual trace span (retained for recent time window, e.g., 1 hour)
+- Properties: `span_id`, `trace_id`, `parent_span_id`, `operation_name`, `service_name`, `service_namespace`, `start_time`, `duration_ms`, `duration_us`, `span_kind`, `status`, `error`, `error_message`, `protocol`, `http_method`, `http_path`, `http_status_code`, `rpc_service`, `rpc_method`, `upstream_name`, `upstream_url`
+
+**ServiceCall** (optional aggregation node)
+- Aggregated service-to-service call metrics
+- Properties: `from_service`, `from_namespace`, `to_service`, `to_namespace`, `protocol`, `call_count`, `error_count`, `error_rate`, `avg_latency_ms`, `p95_latency_ms`, `window`, `last_seen`, `first_seen`
+
 ### Gateway API Resources
 
 **GatewayClass**
@@ -269,6 +281,44 @@ Example:
 - To: Any resource
 - Description: Event involves a specific resource
 - Properties: None
+
+### Trace Relationships
+
+**CONTAINS_SPAN**
+- From: `Trace`
+- To: `Span`
+- Description: Trace contains this span
+- Properties: None
+
+**PARENT_OF**
+- From: `Span`
+- To: `Span`
+- Description: Parent-child span relationship within a trace
+- Properties: None
+
+**ORIGINATED_FROM**
+- From: `Span`
+- To: `Service`, `Pod`
+- Description: Span originated from this Kubernetes resource
+- Properties: None
+
+**OBSERVED_CALL_TO**
+- From: `Span`
+- To: `Service`
+- Description: Span observed calling this service
+- Properties: `protocol`, `url`, `status_code`, `duration_ms`, `error`
+
+**CALLS** (runtime observed)
+- From: `Service`
+- To: `Service`
+- Description: Observed runtime service-to-service call from trace data
+- Properties: `source` (always "trace_observed"), `protocol`, `last_observed`, `duration_ms`, `status_code`, `error`
+
+**FAILED_CALL_TO**
+- From: `Service`
+- To: `Service`
+- Description: Failed service call observed in traces
+- Properties: `error_count`, `error_message`, `status_code`, `last_failure`
 
 ### Gateway API Relationships
 

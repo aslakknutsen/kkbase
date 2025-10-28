@@ -27,6 +27,12 @@ type Config struct {
 	EnableMetrics bool
 	EnableLogs    bool
 	EnableTraces  bool
+
+	// Jaeger configuration
+	JaegerQueryURL       string
+	JaegerPollInterval   time.Duration
+	JaegerLookbackWindow time.Duration
+	JaegerSpanRetention  time.Duration
 }
 
 // LoadFromEnv loads configuration from environment variables
@@ -44,6 +50,8 @@ func LoadFromEnv() (*Config, error) {
 		EnableMetrics: getBoolEnv("ENABLE_METRICS", false),
 		EnableLogs:    getBoolEnv("ENABLE_LOGS", false),
 		EnableTraces:  getBoolEnv("ENABLE_TRACES", false),
+
+		JaegerQueryURL: getEnv("JAEGER_QUERY_URL", "http://localhost:16686"),
 	}
 
 	// Parse resync period
@@ -53,6 +61,30 @@ func LoadFromEnv() (*Config, error) {
 		return nil, fmt.Errorf("invalid RESYNC_PERIOD: %w", err)
 	}
 	cfg.ResyncPeriod = resyncPeriod
+
+	// Parse Jaeger poll interval
+	pollIntervalStr := getEnv("JAEGER_POLL_INTERVAL", "30s")
+	pollInterval, err := time.ParseDuration(pollIntervalStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid JAEGER_POLL_INTERVAL: %w", err)
+	}
+	cfg.JaegerPollInterval = pollInterval
+
+	// Parse Jaeger lookback window
+	lookbackStr := getEnv("JAEGER_LOOKBACK_WINDOW", "5m")
+	lookback, err := time.ParseDuration(lookbackStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid JAEGER_LOOKBACK_WINDOW: %w", err)
+	}
+	cfg.JaegerLookbackWindow = lookback
+
+	// Parse Jaeger span retention
+	retentionStr := getEnv("JAEGER_SPAN_RETENTION", "1h")
+	retention, err := time.ParseDuration(retentionStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid JAEGER_SPAN_RETENTION: %w", err)
+	}
+	cfg.JaegerSpanRetention = retention
 
 	// Validate required fields
 	if cfg.Neo4jPassword == "" {

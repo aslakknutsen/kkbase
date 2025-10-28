@@ -19,5 +19,11 @@ data:
   # Feature flags
   ENABLE_METRICS: "false"
   ENABLE_LOGS: "false"
-  ENABLE_TRACES: "false"
+  ENABLE_TRACES: "true"
+  
+  # Jaeger tracing configuration
+  JAEGER_QUERY_URL: "http://jaeger-query.observability.svc.cluster.local:16686"
+  JAEGER_POLL_INTERVAL: "30s"
+  JAEGER_LOOKBACK_WINDOW: "5m"
+  JAEGER_SPAN_RETENTION: "1h"
 
