@@ -14,21 +14,23 @@ import (
 
 // TraceProcessor processes traces and updates the graph
 type TraceProcessor struct {
-	graphStore      graph.GraphStore
-	logger          *zap.Logger
-	spanRetention   time.Duration
-	lastCleanup     time.Time
-	cleanupInterval time.Duration
+	graphStore               graph.GraphStore
+	logger                   *zap.Logger
+	spanRetention            time.Duration
+	lastCleanup              time.Time
+	cleanupInterval          time.Duration
+	traceRelationshipBuilder *TraceRelationshipBuilder
 }
 
 // NewTraceProcessor creates a new trace processor
 func NewTraceProcessor(graphStore graph.GraphStore, logger *zap.Logger, spanRetention time.Duration) *TraceProcessor {
 	return &TraceProcessor{
-		graphStore:      graphStore,
-		logger:          logger,
-		spanRetention:   spanRetention,
-		lastCleanup:     time.Now(),
-		cleanupInterval: 10 * time.Minute,
+		graphStore:               graphStore,
+		logger:                   logger,
+		spanRetention:            spanRetention,
+		lastCleanup:              time.Now(),
+		cleanupInterval:          10 * time.Minute,
+		traceRelationshipBuilder: NewTraceRelationshipBuilder(graphStore, logger),
 	}
 }
 
@@ -37,7 +39,7 @@ func (tp *TraceProcessor) ProcessTrace(ctx context.Context, trace observability.
 	// Create Trace node (lightweight aggregation)
 	traceNode := models.NewGraphNode(
 		models.NodeTypeTrace,
-		fmt.Sprintf("Trace/%s", trace.TraceID),
+		models.GetNodeID("Trace", "", trace.TraceID),
 		map[string]interface{}{
 			"trace_id":          trace.TraceID,
 			"start_time":        trace.StartTime.Format(time.RFC3339),
@@ -76,7 +78,7 @@ func (tp *TraceProcessor) ProcessTrace(ctx context.Context, trace observability.
 
 // processSpan processes a single span
 func (tp *TraceProcessor) processSpan(ctx context.Context, traceID string, span observability.TraceSpan) error {
-	spanID := fmt.Sprintf("Span/%s/%s", traceID, span.SpanID)
+	spanID := models.GetNodeID("Span", traceID, span.SpanID)
 
 	// Create Span node with OpenTelemetry 1.21+ attributes
 	spanProps := map[string]interface{}{
@@ -170,128 +172,30 @@ func (tp *TraceProcessor) processSpan(ctx context.Context, traceID string, span 
 	}
 
 	// Create CONTAINS_SPAN edge from Trace to Span
-	traceNodeID := fmt.Sprintf("Trace/%s", traceID)
-	if err := tp.graphStore.UpsertEdge(ctx, "Trace", traceNodeID, "CONTAINS_SPAN", "Span", spanID, nil); err != nil {
+	if err := tp.traceRelationshipBuilder.CreateTraceContainsSpanEdge(ctx, traceID, spanID); err != nil {
 		return fmt.Errorf("failed to create CONTAINS_SPAN edge: %w", err)
 	}
 
 	// Create PARENT_OF edge if parent exists
 	if span.ParentID != "" {
-		parentSpanID := fmt.Sprintf("Span/%s/%s", traceID, span.ParentID)
-		if err := tp.graphStore.UpsertEdge(ctx, "Span", parentSpanID, "PARENT_OF", "Span", spanID, nil); err != nil {
+		if err := tp.traceRelationshipBuilder.CreateSpanParentEdge(ctx, traceID, span.ParentID, spanID); err != nil {
 			tp.logger.Debug("failed to create PARENT_OF edge", zap.Error(err))
 		}
 	}
 
 	// Link span to K8s Service (ORIGINATED_FROM)
-	if span.Service != "" && span.Namespace != "" {
-		serviceID := fmt.Sprintf("Service/%s/%s", span.Namespace, span.Service)
-		if err := tp.graphStore.UpsertEdge(ctx, "Span", spanID, "ORIGINATED_FROM", "Service", serviceID, nil); err != nil {
-			tp.logger.Warn("failed to create ORIGINATED_FROM edge - Service may not exist",
-				zap.String("span_service", span.Service),
-				zap.String("span_namespace", span.Namespace),
-				zap.String("expected_service_id", serviceID),
-				zap.String("span_id", spanID),
-				zap.Error(err))
-		} else {
-			tp.logger.Debug("successfully linked span to service",
-				zap.String("span_service", span.Service),
-				zap.String("service_id", serviceID))
-		}
-	} else {
-		tp.logger.Debug("span missing service or namespace info",
-			zap.String("service", span.Service),
-			zap.String("namespace", span.Namespace),
-			zap.String("span_id", span.SpanID))
-	}
+	tp.traceRelationshipBuilder.CreateSpanOriginatedFromServiceEdge(ctx, spanID, span.Service, span.Namespace)
 
 	// Create runtime service call edge (CALLS or FAILED_CALL_TO)
 	// Only create edges for CLIENT and PRODUCER spans (outgoing calls)
 	// SERVER and CONSUMER spans represent incoming requests and shouldn't create call edges
 	if (span.SpanKind == "client" || span.SpanKind == "producer") && (span.ServerAddress != "" || span.URLFull != "") {
-		if err := tp.createServiceCallEdge(ctx, span); err != nil {
+		if err := tp.traceRelationshipBuilder.CreateServiceCallEdge(ctx, span); err != nil {
 			tp.logger.Debug("failed to create service call edge", zap.Error(err))
 		}
 	}
 
 	return nil
-}
-
-// createServiceCallEdge creates runtime CALLS or FAILED_CALL_TO edges between services
-func (tp *TraceProcessor) createServiceCallEdge(ctx context.Context, span observability.TraceSpan) error {
-	// Determine target from ServerAddress or URLFull
-	targetAddress := span.ServerAddress
-	if targetAddress == "" && span.URLFull != "" {
-		// Extract server address from full URL if ServerAddress is missing
-		targetAddress = tp.extractHostFromURL(span.URLFull)
-	}
-
-	if targetAddress == "" {
-		return nil
-	}
-
-	// Parse server address to extract target service/namespace
-	targetService, targetNamespace := tp.parseServerAddress(targetAddress)
-	if targetService == "" {
-		return nil
-	}
-
-	fromServiceID := fmt.Sprintf("Service/%s/%s", span.Namespace, span.Service)
-	toServiceID := fmt.Sprintf("Service/%s/%s", targetNamespace, targetService)
-
-	// Create or update CALLS edge with runtime metrics
-	edgeProps := map[string]interface{}{
-		"source":        "trace_observed",
-		"protocol":      span.Protocol,
-		"last_observed": span.StartTime.Format(time.RFC3339),
-		"duration_ms":   span.Duration.Seconds() * 1000,
-		"status_code":   span.HTTPResponseStatusCode,
-		"error":         span.Error,
-	}
-
-	edgeType := "CALLS"
-	if span.Error {
-		edgeType = "FAILED_CALL_TO"
-		edgeProps["error_message"] = span.ErrorMessage
-		if span.ErrorType != "" {
-			edgeProps["error_type"] = span.ErrorType
-		}
-	}
-
-	return tp.graphStore.UpsertEdge(ctx, "Service", fromServiceID, edgeType, "Service", toServiceID, edgeProps)
-}
-
-// parseServerAddress extracts service name and namespace from server address
-// e.g., "payment.sf-payments.svc.cluster.local:9090" -> ("payment", "sf-payments")
-// e.g., "payment.sf-payments.svc.cluster.local" -> ("payment", "sf-payments")
-func (tp *TraceProcessor) parseServerAddress(serverAddress string) (service, namespace string) {
-	// Split host:port
-	host := strings.Split(serverAddress, ":")[0]
-
-	// Parse K8s DNS format: service.namespace.svc.cluster.local
-	hostParts := strings.Split(host, ".")
-	if len(hostParts) >= 2 {
-		return hostParts[0], hostParts[1]
-	}
-
-	return "", ""
-}
-
-// extractHostFromURL extracts the host portion from a full URL
-// e.g., "http://payment.sf-payments.svc.cluster.local:9090/api/v1" -> "payment.sf-payments.svc.cluster.local:9090"
-func (tp *TraceProcessor) extractHostFromURL(fullURL string) string {
-	// Remove protocol
-	url := strings.TrimPrefix(fullURL, "http://")
-	url = strings.TrimPrefix(url, "https://")
-	url = strings.TrimPrefix(url, "grpc://")
-
-	// Split host:port and path
-	parts := strings.Split(url, "/")
-	if len(parts) > 0 {
-		return parts[0]
-	}
-
-	return ""
 }
 
 // cleanupOldSpans deletes Span nodes older than retention period
