@@ -298,9 +298,16 @@ Example:
 
 **ORIGINATED_FROM**
 - From: `Span`
-- To: `Service`, `Pod`
-- Description: Span originated from this Kubernetes resource
+- To: `Service`
+- Description: Span originated from this Kubernetes Service
 - Properties: None
+
+**EXECUTED_IN**
+- From: `Span`
+- To: `Pod`
+- Description: Span was executed in this specific Pod instance
+- Properties: None
+- Note: Created when span has `k8s_pod_name` attribute
 
 **OBSERVED_CALL_TO**
 - From: `Span`

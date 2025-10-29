@@ -186,6 +186,11 @@ func (tp *TraceProcessor) processSpan(ctx context.Context, traceID string, span 
 	// Link span to K8s Service (ORIGINATED_FROM)
 	tp.traceRelationshipBuilder.CreateSpanOriginatedFromServiceEdge(ctx, spanID, span.Service, span.Namespace)
 
+	// Link span to K8s Pod (EXECUTED_IN)
+	if span.K8sPodName != "" {
+		tp.traceRelationshipBuilder.CreateSpanExecutedInPodEdge(ctx, spanID, span.K8sPodName, span.Namespace)
+	}
+
 	// Create runtime service call edge (CALLS or FAILED_CALL_TO)
 	// Only create edges for CLIENT and PRODUCER spans (outgoing calls)
 	// SERVER and CONSUMER spans represent incoming requests and shouldn't create call edges

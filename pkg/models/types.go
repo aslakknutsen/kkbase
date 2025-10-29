@@ -114,6 +114,7 @@ const (
 	EdgeTypeObservedCallTo EdgeType = "OBSERVED_CALL_TO"
 	EdgeTypeCalls          EdgeType = "CALLS"
 	EdgeTypeFailedCallTo   EdgeType = "FAILED_CALL_TO"
+	EdgeTypeExecutedIn     EdgeType = "EXECUTED_IN"
 
 	// Dynamic relationships
 	EdgeTypeCommunicatesWith EdgeType = "COMMUNICATES_WITH"

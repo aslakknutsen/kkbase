@@ -64,6 +64,33 @@ func (trb *TraceRelationshipBuilder) CreateSpanOriginatedFromServiceEdge(ctx con
 	return nil
 }
 
+// CreateSpanExecutedInPodEdge creates EXECUTED_IN edge from Span to Pod
+func (trb *TraceRelationshipBuilder) CreateSpanExecutedInPodEdge(ctx context.Context, spanID, podName, namespace string) error {
+	if podName == "" || namespace == "" {
+		trb.logger.Debug("span missing pod or namespace info",
+			zap.String("pod", podName),
+			zap.String("namespace", namespace),
+			zap.String("span_id", spanID))
+		return nil
+	}
+
+	podID := models.GetNodeID("Pod", namespace, podName)
+	if err := trb.graphStore.UpsertEdge(ctx, "Span", spanID, "EXECUTED_IN", "Pod", podID, nil); err != nil {
+		trb.logger.Warn("failed to create EXECUTED_IN edge - Pod may not exist",
+			zap.String("span_pod", podName),
+			zap.String("span_namespace", namespace),
+			zap.String("expected_pod_id", podID),
+			zap.String("span_id", spanID),
+			zap.Error(err))
+		return err
+	}
+
+	trb.logger.Debug("successfully linked span to pod",
+		zap.String("span_pod", podName),
+		zap.String("pod_id", podID))
+	return nil
+}
+
 // CreateServiceCallEdge creates runtime CALLS or FAILED_CALL_TO edges between services
 func (trb *TraceRelationshipBuilder) CreateServiceCallEdge(ctx context.Context, span observability.TraceSpan) error {
 	// Determine target from ServerAddress or URLFull

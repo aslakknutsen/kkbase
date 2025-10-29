@@ -1134,13 +1134,51 @@ RETURN s.span_id AS SpanID, s.service_name AS SpanService,
 LIMIT 20
 ```
 
-### Link trace spans to Kubernetes resources
+### Verify Span to Pod relationships exist
+```cypher
+MATCH (s:Span)-[r:EXECUTED_IN]->(pod:Pod)
+RETURN s.service_name AS SpanService, s.k8s_pod_name AS PodName,
+       s.service_namespace AS SpanNamespace,
+       type(r) AS Relationship,
+       pod.name AS PodName, pod.namespace AS PodNamespace
+LIMIT 20
+```
+
+### Count EXECUTED_IN relationships
+```cypher
+MATCH (s:Span)-[r:EXECUTED_IN]->(pod:Pod)
+RETURN count(r) AS TotalExecutedInLinks
+```
+
+### Find all spans executed in a specific pod
+```cypher
+MATCH (s:Span)-[:EXECUTED_IN]->(pod:Pod {name: 'checkout-7d9f8b9c-abc12', namespace: 'production'})
+RETURN s.trace_id AS TraceID, s.operation_name AS Operation,
+       s.service_name AS Service, s.start_time AS StartTime,
+       s.duration_ms AS DurationMs, s.error AS HasError
+ORDER BY s.start_time DESC
+LIMIT 50
+```
+
+### Link trace spans to Kubernetes resources (via Service)
 ```cypher
 MATCH (s:Span {service_name: 'checkout'})-[:ORIGINATED_FROM]->(svc:Service)
 MATCH (svc)-[:SELECTS_PODS]->(pod:Pod)
 RETURN s.trace_id AS TraceID, s.operation_name AS Operation,
        svc.name AS Service, svc.namespace AS Namespace,
        pod.name AS Pod, pod.node_name AS Node, pod.status AS PodStatus
+LIMIT 20
+```
+
+### Link trace spans to Kubernetes resources (direct via EXECUTED_IN)
+```cypher
+MATCH (s:Span {service_name: 'checkout'})-[:EXECUTED_IN]->(pod:Pod)
+OPTIONAL MATCH (pod)<-[:SELECTS_PODS]-(svc:Service)
+RETURN s.trace_id AS TraceID, s.operation_name AS Operation,
+       s.k8s_pod_name AS K8sPodName,
+       pod.name AS Pod, pod.namespace AS Namespace,
+       pod.node_name AS Node, pod.status AS PodStatus,
+       collect(svc.name) AS Services
 LIMIT 20
 ```
 
