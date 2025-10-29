@@ -162,7 +162,7 @@ func NodeToGraphNode(node *corev1.Node) *GraphNode {
 		properties["labels"] = serializeMap(node.Labels)
 	}
 
-	return NewGraphNode(NodeTypeNode, node.Name, properties)
+	return NewGraphNode(NodeTypeNode, GetNodeID("Node", "", node.Name), properties)
 }
 
 // PodToGraphNode converts a Kubernetes Pod to a graph node
@@ -488,7 +488,7 @@ func PersistentVolumeToGraphNode(pv *corev1.PersistentVolume) *GraphNode {
 		properties["labels"] = serializeMap(pv.Labels)
 	}
 
-	return NewGraphNode(NodeTypePersistentVolume, pv.Name, properties)
+	return NewGraphNode(NodeTypePersistentVolume, GetNodeID("PersistentVolume", "", pv.Name), properties)
 }
 
 // PersistentVolumeClaimToGraphNode converts a Kubernetes PersistentVolumeClaim to a graph node
@@ -550,7 +550,7 @@ func StorageClassToGraphNode(sc *storagev1.StorageClass) *GraphNode {
 		properties["labels"] = serializeMap(sc.Labels)
 	}
 
-	return NewGraphNode(NodeTypeStorageClass, sc.Name, properties)
+	return NewGraphNode(NodeTypeStorageClass, GetNodeID("StorageClass", "", sc.Name), properties)
 }
 
 // ConfigMapToGraphNode converts a Kubernetes ConfigMap to a graph node
@@ -642,7 +642,7 @@ func NamespaceToGraphNode(namespace *corev1.Namespace) *GraphNode {
 		properties["labels"] = serializeMap(namespace.Labels)
 	}
 
-	return NewGraphNode(NodeTypeNamespace, namespace.Name, properties)
+	return NewGraphNode(NodeTypeNamespace, GetNodeID("Namespace", "", namespace.Name), properties)
 }
 
 // Helper function to get node status
@@ -702,7 +702,7 @@ func GatewayClassToGraphNode(gatewayClass *gatewayv1.GatewayClass) *GraphNode {
 		properties["labels"] = serializeMap(gatewayClass.Labels)
 	}
 
-	return NewGraphNode(NodeTypeGatewayClass, gatewayClass.Name, properties)
+	return NewGraphNode(NodeTypeGatewayClass, GetNodeID("GatewayClass", "", gatewayClass.Name), properties)
 }
 
 // GatewayToGraphNode converts a Gateway API Gateway to a graph node

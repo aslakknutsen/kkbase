@@ -42,7 +42,15 @@ func (rb *RelationshipBuilder) CreateOwnerEdge(ctx context.Context, childType mo
 	// Use MANAGES edge type for owner relationships
 	edgeType := models.EdgeTypeManages
 
-	parentID := models.GetNodeID(ownerRef.Kind, namespace, ownerRef.Name)
+	// Determine if the owner is cluster-scoped (no namespace)
+	ownerNamespace := namespace
+	switch ownerRef.Kind {
+	case "Node", "PersistentVolume", "StorageClass", "Namespace", "GatewayClass":
+		// Cluster-scoped resources don't have a namespace
+		ownerNamespace = ""
+	}
+
+	parentID := models.GetNodeID(ownerRef.Kind, ownerNamespace, ownerRef.Name)
 	return rb.graphStore.UpsertEdge(
 		ctx,
 		string(parentType),
@@ -60,13 +68,14 @@ func (rb *RelationshipBuilder) CreatePodSchedulingEdges(ctx context.Context, pod
 
 	// Create SCHEDULED_ON edge to Node
 	if pod.Spec.NodeName != "" {
+		nodeID := models.GetNodeID("Node", "", pod.Spec.NodeName)
 		if err := rb.graphStore.UpsertEdge(
 			ctx,
 			string(models.NodeTypePod),
 			podID,
 			string(models.EdgeTypeScheduledOn),
 			string(models.NodeTypeNode),
-			pod.Spec.NodeName,
+			nodeID,
 			nil,
 		); err != nil {
 			return fmt.Errorf("failed to create SCHEDULED_ON edge: %w", err)
@@ -74,13 +83,14 @@ func (rb *RelationshipBuilder) CreatePodSchedulingEdges(ctx context.Context, pod
 	}
 
 	// Create IN_NAMESPACE edge
+	namespaceID := models.GetNodeID("Namespace", "", pod.Namespace)
 	if err := rb.graphStore.UpsertEdge(
 		ctx,
 		string(models.NodeTypePod),
 		podID,
 		string(models.EdgeTypeInNamespace),
 		string(models.NodeTypeNamespace),
-		pod.Namespace,
+		namespaceID,
 		nil,
 	); err != nil {
 		return fmt.Errorf("failed to create IN_NAMESPACE edge: %w", err)
@@ -268,6 +278,7 @@ func (rb *RelationshipBuilder) CreatePVCPVEdge(ctx context.Context, pvc *corev1.
 	}
 
 	pvcID := models.GetNodeID("PersistentVolumeClaim", pvc.Namespace, pvc.Name)
+	pvID := models.GetNodeID("PersistentVolume", "", pvc.Spec.VolumeName)
 
 	return rb.graphStore.UpsertEdge(
 		ctx,
@@ -275,7 +286,7 @@ func (rb *RelationshipBuilder) CreatePVCPVEdge(ctx context.Context, pvc *corev1.
 		pvcID,
 		string(models.EdgeTypeBoundTo),
 		string(models.NodeTypePersistentVolume),
-		pvc.Spec.VolumeName,
+		pvID,
 		nil,
 	)
 }
@@ -286,13 +297,16 @@ func (rb *RelationshipBuilder) CreatePVStorageClassEdge(ctx context.Context, pv 
 		return nil
 	}
 
+	pvID := models.GetNodeID("PersistentVolume", "", pv.Name)
+	storageClassID := models.GetNodeID("StorageClass", "", pv.Spec.StorageClassName)
+
 	return rb.graphStore.UpsertEdge(
 		ctx,
 		string(models.NodeTypePersistentVolume),
-		pv.Name,
+		pvID,
 		string(models.EdgeTypeProvisionedBy),
 		string(models.NodeTypeStorageClass),
-		pv.Spec.StorageClassName,
+		storageClassID,
 		nil,
 	)
 }
@@ -304,6 +318,7 @@ func (rb *RelationshipBuilder) CreatePVCStorageClassEdge(ctx context.Context, pv
 	}
 
 	pvcID := models.GetNodeID("PersistentVolumeClaim", pvc.Namespace, pvc.Name)
+	storageClassID := models.GetNodeID("StorageClass", "", *pvc.Spec.StorageClassName)
 
 	return rb.graphStore.UpsertEdge(
 		ctx,
@@ -311,7 +326,7 @@ func (rb *RelationshipBuilder) CreatePVCStorageClassEdge(ctx context.Context, pv
 		pvcID,
 		string(models.EdgeTypeProvisionedBy),
 		string(models.NodeTypeStorageClass),
-		*pvc.Spec.StorageClassName,
+		storageClassID,
 		nil,
 	)
 }
@@ -338,11 +353,13 @@ func (rb *RelationshipBuilder) CreateEventInvolvedObjectEdge(ctx context.Context
 	eventID := fmt.Sprintf("Event/%s/%s/%s", event.Namespace, event.InvolvedObject.Name, event.Name)
 
 	var objectType models.NodeType
+	var isClusterScoped bool
 	switch event.InvolvedObject.Kind {
 	case "Pod":
 		objectType = models.NodeTypePod
 	case "Node":
 		objectType = models.NodeTypeNode
+		isClusterScoped = true
 	case "Deployment":
 		objectType = models.NodeTypeDeployment
 	case "ReplicaSet":
@@ -357,16 +374,25 @@ func (rb *RelationshipBuilder) CreateEventInvolvedObjectEdge(ctx context.Context
 		objectType = models.NodeTypePersistentVolumeClaim
 	case "PersistentVolume":
 		objectType = models.NodeTypePersistentVolume
+		isClusterScoped = true
 	case "StorageClass":
 		objectType = models.NodeTypeStorageClass
+		isClusterScoped = true
+	case "Namespace":
+		objectType = models.NodeTypeNamespace
+		isClusterScoped = true
 	default:
 		rb.logger.Debug("unknown involved object kind", zap.String("kind", event.InvolvedObject.Kind))
 		return nil
 	}
 
-	objectNamespace := event.InvolvedObject.Namespace
-	if objectNamespace == "" {
-		objectNamespace = event.Namespace
+	// For cluster-scoped resources, don't use a namespace in the ID
+	objectNamespace := ""
+	if !isClusterScoped {
+		objectNamespace = event.InvolvedObject.Namespace
+		if objectNamespace == "" {
+			objectNamespace = event.Namespace
+		}
 	}
 
 	// Use the Kind from the event's involved object
@@ -385,13 +411,14 @@ func (rb *RelationshipBuilder) CreateEventInvolvedObjectEdge(ctx context.Context
 
 // CreateNamespaceEdge creates IN_NAMESPACE edge for namespaced resources
 func (rb *RelationshipBuilder) CreateNamespaceEdge(ctx context.Context, resourceType models.NodeType, resourceID, namespace string) error {
+	namespaceID := models.GetNodeID("Namespace", "", namespace)
 	return rb.graphStore.UpsertEdge(
 		ctx,
 		string(resourceType),
 		resourceID,
 		string(models.EdgeTypeInNamespace),
 		string(models.NodeTypeNamespace),
-		namespace,
+		namespaceID,
 		nil,
 	)
 }
@@ -401,6 +428,7 @@ func (rb *RelationshipBuilder) CreateNamespaceEdge(ctx context.Context, resource
 // CreateGatewayImplementedByEdge creates IMPLEMENTED_BY edge from Gateway to GatewayClass
 func (rb *RelationshipBuilder) CreateGatewayImplementedByEdge(ctx context.Context, gatewayNamespace, gatewayName, gatewayClassName string) error {
 	gatewayID := models.GetNodeID("Gateway", gatewayNamespace, gatewayName)
+	gatewayClassID := models.GetNodeID("GatewayClass", "", gatewayClassName)
 
 	return rb.graphStore.UpsertEdge(
 		ctx,
@@ -408,7 +436,7 @@ func (rb *RelationshipBuilder) CreateGatewayImplementedByEdge(ctx context.Contex
 		gatewayID,
 		string(models.EdgeTypeImplementedBy),
 		string(models.NodeTypeGatewayClass),
-		gatewayClassName,
+		gatewayClassID,
 		nil,
 	)
 }
