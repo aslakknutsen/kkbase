@@ -170,7 +170,16 @@ func (s *Store) UpsertEdge(ctx context.Context, fromType, fromID, edgeType, toTy
 
 		// Check if any relationship was created/updated
 		if result.Next(ctx) {
+			// Consume the result to ensure transaction commits
+			if _, err := result.Consume(ctx); err != nil {
+				return fmt.Errorf("failed to consume result: %w", err)
+			}
 			return nil
+		}
+
+		// Check for any errors during iteration
+		if err := result.Err(); err != nil {
+			return fmt.Errorf("error iterating result: %w", err)
 		}
 
 		// If no relationship was returned, one or both nodes don't exist
@@ -204,6 +213,33 @@ func (s *Store) DeleteEdgesByNode(ctx context.Context, nodeType, nodeID string) 
 			MATCH (n:%s {id: $nodeID})-[r]-()
 			DELETE r
 		`, nodeType)
+
+		params := map[string]interface{}{
+			"nodeID": nodeID,
+		}
+
+		_, err := session.Run(ctx, query, params)
+		return err
+	})
+}
+
+// DeleteEdgesByTypeAndNode removes specific edge types connected to a node
+func (s *Store) DeleteEdgesByTypeAndNode(ctx context.Context, nodeType, nodeID string, edgeTypes []string) error {
+	if len(edgeTypes) == 0 {
+		return nil
+	}
+
+	return s.executeWithRetry(ctx, func(session neo4j.SessionWithContext) error {
+		// Build the relationship type filter: r:TYPE1|TYPE2|TYPE3
+		typeFilter := edgeTypes[0]
+		for i := 1; i < len(edgeTypes); i++ {
+			typeFilter += "|" + edgeTypes[i]
+		}
+
+		query := fmt.Sprintf(`
+			MATCH (n:%s {id: $nodeID})-[r:%s]-()
+			DELETE r
+		`, nodeType, typeFilter)
 
 		params := map[string]interface{}{
 			"nodeID": nodeID,
@@ -274,6 +310,7 @@ func (s *Store) executeWithRetry(ctx context.Context, fn func(neo4j.SessionWithC
 
 		session := s.driver.NewSession(ctx, neo4j.SessionConfig{
 			DatabaseName: s.database,
+			AccessMode:   neo4j.AccessModeWrite,
 		})
 
 		lastErr = fn(session)

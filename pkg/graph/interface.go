@@ -19,6 +19,9 @@ type GraphStore interface {
 	// DeleteEdgesByNode removes all edges connected to a node
 	DeleteEdgesByNode(ctx context.Context, nodeType, nodeID string) error
 
+	// DeleteEdgesByTypeAndNode removes specific edge types connected to a node
+	DeleteEdgesByTypeAndNode(ctx context.Context, nodeType, nodeID string, edgeTypes []string) error
+
 	// Query executes a custom query against the graph database
 	Query(ctx context.Context, query string, params map[string]interface{}) ([]map[string]interface{}, error)
 

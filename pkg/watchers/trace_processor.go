@@ -206,8 +206,9 @@ func (tp *TraceProcessor) processSpan(ctx context.Context, traceID string, span 
 	}
 
 	// Create runtime service call edge (CALLS or FAILED_CALL_TO)
-	// Check if this span represents a client call to another service
-	if span.ServerAddress != "" || span.URLFull != "" {
+	// Only create edges for CLIENT and PRODUCER spans (outgoing calls)
+	// SERVER and CONSUMER spans represent incoming requests and shouldn't create call edges
+	if (span.SpanKind == "client" || span.SpanKind == "producer") && (span.ServerAddress != "" || span.URLFull != "") {
 		if err := tp.createServiceCallEdge(ctx, span); err != nil {
 			tp.logger.Debug("failed to create service call edge", zap.Error(err))
 		}

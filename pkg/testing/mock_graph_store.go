@@ -169,6 +169,24 @@ func (m *MockGraphStore) DeleteEdgesByNode(ctx context.Context, nodeType, nodeID
 	return nil
 }
 
+// DeleteEdgesByTypeAndNode records a deletion of specific edge types connected to a node
+func (m *MockGraphStore) DeleteEdgesByTypeAndNode(ctx context.Context, nodeType, nodeID string, edgeTypes []string) error {
+	if m.DeleteEdgeErr != nil {
+		return m.DeleteEdgeErr
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Record the deletion (same as DeleteEdgesByNode for mock purposes)
+	m.DeletedEdges = append(m.DeletedEdges, DeleteEdgeCall{
+		NodeType: nodeType,
+		NodeID:   nodeID,
+	})
+
+	return nil
+}
+
 // Query is a no-op for the mock
 func (m *MockGraphStore) Query(ctx context.Context, query string, params map[string]interface{}) ([]map[string]interface{}, error) {
 	if m.QueryErr != nil {

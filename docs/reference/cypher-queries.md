@@ -58,6 +58,24 @@ MATCH ()-[r]->()
 RETURN DISTINCT type(r) AS RelationshipType
 ```
 
+### List all Node types and their Relationship types
+```cypher
+MATCH (n)-[r]->(m)
+RETURN DISTINCT labels(n)[0] AS NodeType, 
+       type(r) AS RelationshipType, 
+       labels(m)[0] AS TargetNodeType,
+       count(r) AS Count
+ORDER BY NodeType, RelationshipType, TargetNodeType
+```
+
+### List Node types with their outgoing relationships
+```cypher
+MATCH (n)-[r]->()
+RETURN DISTINCT labels(n)[0] AS NodeType, 
+       collect(DISTINCT type(r)) AS OutgoingRelationships
+ORDER BY NodeType
+```
+
 ### Find nodes with most relationships
 ```cypher
 MATCH (n)-[r]-()
@@ -979,6 +997,34 @@ ORDER BY t.start_time DESC
 LIMIT 10
 ```
 
+### Analyze Span Kinds distribution
+```cypher
+MATCH (s:Span)
+RETURN s.span_kind AS SpanKind, count(s) AS Count
+ORDER BY Count DESC
+```
+
+### Find CLIENT spans (outgoing calls)
+```cypher
+MATCH (s:Span)
+WHERE s.span_kind = 'client'
+RETURN s.service_name AS Service, s.operation_name AS Operation,
+       s.server_address AS TargetAddress, s.duration_ms AS DurationMs
+ORDER BY s.start_time DESC
+LIMIT 20
+```
+
+### Find SERVER spans (incoming requests)
+```cypher
+MATCH (s:Span)
+WHERE s.span_kind = 'server'
+RETURN s.service_name AS Service, s.operation_name AS Operation,
+       s.http_request_method AS Method, s.url_path AS Path,
+       s.duration_ms AS DurationMs
+ORDER BY s.start_time DESC
+LIMIT 20
+```
+
 ### Find slowest spans in recent traces
 ```cypher
 MATCH (s:Span)
@@ -1061,6 +1107,32 @@ ORDER BY length(path)
 LIMIT 20
 ```
 
+### Verify Span to Service relationships exist
+```cypher
+MATCH (s:Span)-[r:ORIGINATED_FROM]->(svc:Service)
+RETURN s.service_name AS SpanService, s.service_namespace AS SpanNamespace,
+       type(r) AS Relationship, 
+       svc.name AS ServiceName, svc.namespace AS ServiceNamespace
+LIMIT 20
+```
+
+### Count ORIGINATED_FROM relationships
+```cypher
+MATCH (s:Span)-[r:ORIGINATED_FROM]->(svc:Service)
+RETURN count(r) AS TotalOriginatedFromLinks
+```
+
+### List all Spans and check which have ORIGINATED_FROM links
+```cypher
+MATCH (s:Span)
+OPTIONAL MATCH (s)-[r:ORIGINATED_FROM]->(svc:Service)
+RETURN s.span_id AS SpanID, s.service_name AS SpanService, 
+       s.service_namespace AS SpanNamespace,
+       CASE WHEN r IS NOT NULL THEN 'YES' ELSE 'NO' END AS HasLink,
+       svc.name AS LinkedServiceName
+LIMIT 20
+```
+
 ### Link trace spans to Kubernetes resources
 ```cypher
 MATCH (s:Span {service_name: 'checkout'})-[:ORIGINATED_FROM]->(svc:Service)
@@ -1071,7 +1143,7 @@ RETURN s.trace_id AS TraceID, s.operation_name AS Operation,
 LIMIT 20
 ```
 
-### Find services calling across namespaces
+### Find services calling across namespaces (from CLIENT spans)
 ```cypher
 MATCH (s1:Service)-[c:CALLS]->(s2:Service)
 WHERE s1.namespace <> s2.namespace
@@ -1081,6 +1153,16 @@ RETURN s1.namespace AS SourceNamespace, s1.name AS SourceService,
        c.protocol AS Protocol, c.last_observed AS LastObserved,
        c.error AS HasErrors
 ORDER BY c.last_observed DESC
+```
+
+### Verify CALLS edges are only from CLIENT spans
+```cypher
+MATCH (s1:Service)-[c:CALLS]->(s2:Service)
+WHERE c.source = 'trace_observed'
+RETURN s1.name AS FromService, s2.name AS ToService,
+       count(c) AS CallCount
+ORDER BY CallCount DESC
+LIMIT 10
 ```
 
 ### Identify slow service calls

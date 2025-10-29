@@ -78,15 +78,61 @@ RESYNC_PERIOD: "60s"  # Every 60 seconds
 LOG_LEVEL: "debug"
 ```
 
-### Observability Integration (Planned)
+### Observability Integration
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `ENABLE_METRICS` | Enable metrics integration | `false` | No |
-| `ENABLE_LOGS` | Enable logs integration | `false` | No |
-| `ENABLE_TRACES` | Enable traces integration | `false` | No |
+| `ENABLE_TRACES` | Enable distributed tracing (Jaeger) | `false` | No |
+| `JAEGER_QUERY_URL` | Jaeger Query API URL | `http://localhost:16686` | No |
+| `JAEGER_POLL_INTERVAL` | How often to poll for new traces | `30s` | No |
+| `JAEGER_LOOKBACK_WINDOW` | How far back to look for traces | `5m` | No |
+| `JAEGER_SPAN_RETENTION` | How long to keep spans in graph | `1h` | No |
+| `ENABLE_METRICS` | Enable metrics integration (planned) | `false` | No |
+| `ENABLE_LOGS` | Enable logs integration (planned) | `false` | No |
 
-*Note: These features are planned but not yet implemented.*
+#### Distributed Tracing (Jaeger)
+
+To enable distributed tracing integration with Jaeger:
+
+```yaml
+ENABLE_TRACES: "true"
+JAEGER_QUERY_URL: "http://jaeger-query:16686"
+JAEGER_POLL_INTERVAL: "30s"        # Poll every 30 seconds
+JAEGER_LOOKBACK_WINDOW: "5m"       # Look for traces in last 5 minutes
+JAEGER_SPAN_RETENTION: "24h"       # Keep spans for 24 hours
+```
+
+**Important Notes:**
+- The watcher automatically discovers services from the K8s graph and queries Jaeger for their traces
+- Spans older than `JAEGER_SPAN_RETENTION` are automatically cleaned up every 10 minutes
+- Increase retention for production environments: `JAEGER_SPAN_RETENTION: 24h` or `7d`
+- Only CLIENT and PRODUCER spans generate service call edges (CALLS/FAILED_CALL_TO)
+- All spans create ORIGINATED_FROM relationships to their K8s Services
+
+#### Example: Full Tracing Setup
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kkbase-watcher-config
+data:
+  # Neo4j
+  NEO4J_URI: "bolt://neo4j:7687"
+  NEO4J_USERNAME: "neo4j"
+  
+  # Kubernetes
+  NAMESPACE: ""
+  RESYNC_PERIOD: "30s"
+  LOG_LEVEL: "info"
+  
+  # Distributed Tracing
+  ENABLE_TRACES: "true"
+  JAEGER_QUERY_URL: "http://jaeger-query.observability:16686"
+  JAEGER_POLL_INTERVAL: "30s"
+  JAEGER_LOOKBACK_WINDOW: "5m"
+  JAEGER_SPAN_RETENTION: "24h"
+```
 
 ## Kubernetes Resources
 
@@ -107,9 +153,13 @@ data:
   NAMESPACE: ""
   RESYNC_PERIOD: "30s"
   LOG_LEVEL: "info"
+  ENABLE_TRACES: "true"
+  JAEGER_QUERY_URL: "http://jaeger-query:16686"
+  JAEGER_POLL_INTERVAL: "30s"
+  JAEGER_LOOKBACK_WINDOW: "5m"
+  JAEGER_SPAN_RETENTION: "24h"
   ENABLE_METRICS: "false"
   ENABLE_LOGS: "false"
-  ENABLE_TRACES: "false"
 ```
 
 ### Secret
@@ -220,14 +270,27 @@ data:
 For local development outside Kubernetes:
 
 ```bash
+# Neo4j
 export NEO4J_URI="bolt://localhost:7687"
 export NEO4J_USERNAME="neo4j"
 export NEO4J_PASSWORD="changeme"
+
+# Kubernetes
 export KUBECONFIG="$HOME/.kube/config"
-export LOG_LEVEL="debug"
 export NAMESPACE=""
 export RESYNC_PERIOD="30s"
 
+# Logging
+export LOG_LEVEL="debug"
+
+# Distributed Tracing (Optional)
+export ENABLE_TRACES="true"
+export JAEGER_QUERY_URL="http://localhost:16686"
+export JAEGER_POLL_INTERVAL="30s"
+export JAEGER_LOOKBACK_WINDOW="5m"
+export JAEGER_SPAN_RETENTION="24h"
+
+# Run
 go run ./cmd/watcher
 ```
 
@@ -295,6 +358,38 @@ Check:
 Check:
 1. RESYNC_PERIOD uses valid duration format: `30s`, `1m`, `1h`
 2. LOG_LEVEL is one of: debug, info, warn, error
+
+### Trace Processing Not Working
+
+**Symptom:** No spans appearing in Neo4j, no trace logs
+
+Check:
+1. `ENABLE_TRACES` is set to `"true"` (string, not boolean)
+   ```bash
+   kubectl get configmap kkbase-watcher-config -o yaml | grep ENABLE_TRACES
+   ```
+2. Jaeger Query URL is accessible from the pod
+   ```bash
+   kubectl exec deployment/kkbase-watcher -- curl -s http://jaeger-query:16686/api/services | head
+   ```
+3. Check logs for trace processing messages
+   ```bash
+   kubectl logs deployment/kkbase-watcher | grep -i trace
+   ```
+   Expected output:
+   ```
+   INFO  started Jaeger trace polling
+   INFO  starting trace stream  service_count=5
+   DEBUG processed trace  trace_id=xxx
+   ```
+4. Verify services are being discovered
+   ```bash
+   kubectl logs deployment/kkbase-watcher | grep "service list"
+   ```
+5. Check span retention settings - spans older than retention are deleted
+   ```bash
+   kubectl get configmap kkbase-watcher-config -o yaml | grep JAEGER_SPAN_RETENTION
+   ```
 
 ## Advanced Configuration
 
