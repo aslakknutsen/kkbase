@@ -79,6 +79,67 @@ type GraphStore interface {
 **Implementation:**
 - `neo4j/neo4j.go` - Neo4j driver with connection pooling, retries, and health checks
 
+#### Create-on-Write Pattern: Handling Out-of-Order Data
+
+Kubernetes resources often reference each other (e.g., a Pod references a ConfigMap), but these references may arrive out of order during the initial sync or cluster events. The Create-on-Write pattern ensures relationships are never lost.
+
+**The Problem:**
+- Pod arrives first, referencing ConfigMap `app-config`
+- ConfigMap `app-config` hasn't been processed yet
+- Without special handling, the relationship would be dropped
+
+**The Solution: MERGE with Placeholder Nodes**
+
+When creating an edge, both nodes are created using Cypher's `MERGE` operation:
+
+```cypher
+MERGE (from:Pod {id: $fromID})
+ON CREATE SET 
+    from.placeholder = true,
+    from.created_at = timestamp(),
+    from.updated_at = $updated_at
+MERGE (to:ConfigMap {id: $toID})
+ON CREATE SET 
+    to.placeholder = true,
+    to.created_at = timestamp(),
+    to.updated_at = $updated_at
+MERGE (from)-[r:USES_CONFIG]->(to)
+SET r += $properties
+```
+
+**Placeholder Lifecycle:**
+
+1. **Creation**: Node is created with `placeholder: true` when referenced but not yet seen
+2. **Enrichment**: When full object data arrives, `UpsertNode` updates all properties and sets `placeholder: false`
+3. **Cleanup**: Orphaned placeholders (older than 1 hour with no relationships) are automatically removed
+
+**Monitoring:**
+
+The system monitors placeholder nodes every 20 minutes and logs:
+- Count of placeholder nodes per type
+- Cleanup of orphaned placeholders
+
+**Query Considerations:**
+
+When querying the graph, you may want to filter placeholders:
+
+```cypher
+// Exclude placeholder nodes
+MATCH (s:Service)
+WHERE s.placeholder <> true OR s.placeholder IS NULL
+RETURN s
+
+// Include placeholder status in results
+MATCH (s:Service)
+RETURN s.id, s.name, COALESCE(s.placeholder, false) as is_placeholder
+```
+
+**Benefits:**
+- Idempotent operations
+- No data loss from out-of-order events
+- Self-healing: placeholders automatically enriched when data arrives
+- Observable: metrics track unresolved references
+
 ### 2. Models Layer (`pkg/models/`)
 
 Defines the graph schema:

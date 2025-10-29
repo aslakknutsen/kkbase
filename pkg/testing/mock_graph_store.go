@@ -3,6 +3,7 @@ package testing
 import (
 	"context"
 	"sync"
+	"time"
 )
 
 // NodeCall represents a recorded UpsertNode call
@@ -205,6 +206,21 @@ func (m *MockGraphStore) HealthCheck(ctx context.Context) error {
 	if m.HealthCheckErr != nil {
 		return m.HealthCheckErr
 	}
+	return nil
+}
+
+// GetPlaceholderNodes returns an empty list for the mock
+// In tests, this is typically not needed as we're focused on recording operations
+func (m *MockGraphStore) GetPlaceholderNodes(ctx context.Context, nodeType string) ([]map[string]interface{}, error) {
+	// For mock purposes, return empty list
+	// Tests can check recorded Nodes if needed
+	return []map[string]interface{}{}, nil
+}
+
+// CleanupOrphanedPlaceholders is a no-op for the mock
+// In tests, we don't need to simulate placeholder cleanup
+func (m *MockGraphStore) CleanupOrphanedPlaceholders(ctx context.Context, olderThan time.Duration) error {
+	// For mock purposes, do nothing
 	return nil
 }
 

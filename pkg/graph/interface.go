@@ -1,6 +1,9 @@
 package graph
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // GraphStore defines the interface for interacting with the knowledge graph database
 type GraphStore interface {
@@ -30,4 +33,10 @@ type GraphStore interface {
 
 	// HealthCheck verifies the database connection is healthy
 	HealthCheck(ctx context.Context) error
+
+	// GetPlaceholderNodes returns placeholder nodes for diagnostics
+	GetPlaceholderNodes(ctx context.Context, nodeType string) ([]map[string]interface{}, error)
+
+	// CleanupOrphanedPlaceholders removes old placeholder nodes with no relationships
+	CleanupOrphanedPlaceholders(ctx context.Context, olderThan time.Duration) error
 }

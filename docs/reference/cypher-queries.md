@@ -17,6 +17,7 @@ This document contains all major Neo4j Cypher queries of interest for the Kubern
 - [Troubleshooting & Debugging](#troubleshooting--debugging)
 - [Performance & Analytics](#performance--analytics)
 - [Data Cleanup](#data-cleanup)
+- [Placeholder Node Queries](#placeholder-node-queries)
 
 ---
 
@@ -1204,6 +1205,116 @@ MATCH (s:Span)
 WHERE datetime(s.start_time) < datetime() - duration('PT1H')
 DETACH DELETE s
 RETURN count(s) AS DeletedSpans
+```
+
+---
+
+## Placeholder Node Queries
+
+### Find all placeholder nodes
+```cypher
+MATCH (n)
+WHERE n.placeholder = true
+RETURN labels(n)[0] AS Type, n.id AS ID, n.updated_at AS UpdatedAt
+ORDER BY n.updated_at DESC
+LIMIT 100
+```
+
+### Count placeholder nodes by type
+```cypher
+MATCH (n)
+WHERE n.placeholder = true
+RETURN labels(n)[0] AS Type, count(n) AS Count
+ORDER BY Count DESC
+```
+
+### Find placeholder nodes older than 1 hour
+```cypher
+MATCH (n)
+WHERE n.placeholder = true 
+  AND n.updated_at < (timestamp() / 1000) - 3600
+RETURN labels(n)[0] AS Type, n.id AS ID, 
+       (timestamp() / 1000 - n.updated_at) / 60 AS AgeMinutes
+ORDER BY AgeMinutes DESC
+```
+
+### Find placeholder nodes with relationships
+```cypher
+MATCH (n)-[r]-(m)
+WHERE n.placeholder = true
+RETURN labels(n)[0] AS PlaceholderType, n.id AS PlaceholderID,
+       type(r) AS Relationship, labels(m)[0] AS ConnectedType, m.id AS ConnectedID
+LIMIT 50
+```
+
+### Find orphaned placeholders (no relationships)
+```cypher
+MATCH (n)
+WHERE n.placeholder = true AND NOT (n)-[]-()
+RETURN labels(n)[0] AS Type, n.id AS ID, n.updated_at AS UpdatedAt
+ORDER BY n.updated_at
+```
+
+### Exclude placeholder nodes from query results
+```cypher
+// Example: Get all services, excluding placeholders
+MATCH (s:Service)
+WHERE s.placeholder <> true OR s.placeholder IS NULL
+RETURN s.name AS Service, s.namespace AS Namespace
+ORDER BY s.namespace, s.name
+```
+
+### Include placeholder status in results
+```cypher
+// Example: Get all ConfigMaps with placeholder flag
+MATCH (cm:ConfigMap)
+RETURN cm.name AS ConfigMap, cm.namespace AS Namespace,
+       COALESCE(cm.placeholder, false) AS IsPlaceholder
+ORDER BY IsPlaceholder DESC, cm.namespace, cm.name
+```
+
+### Find nodes referencing placeholder nodes
+```cypher
+MATCH (n)-[r]->(p)
+WHERE p.placeholder = true
+RETURN labels(n)[0] AS Type, n.name AS Name, n.namespace AS Namespace,
+       type(r) AS Relationship,
+       labels(p)[0] AS PlaceholderType, p.id AS PlaceholderID
+ORDER BY PlaceholderType, p.id
+LIMIT 50
+```
+
+### Find pods referencing placeholder ConfigMaps or Secrets
+```cypher
+MATCH (p:Pod)-[r:USES_CONFIG|USES_SECRET]->(resource)
+WHERE resource.placeholder = true
+RETURN p.namespace AS Namespace, p.name AS Pod,
+       type(r) AS Relationship, labels(resource)[0] AS ResourceType,
+       resource.id AS MissingResource
+ORDER BY p.namespace, p.name
+```
+
+### Manually cleanup specific placeholder nodes
+```cypher
+// Remove placeholder nodes older than 2 hours with no relationships
+MATCH (n)
+WHERE n.placeholder = true 
+  AND n.updated_at < (timestamp() / 1000) - 7200
+  AND NOT (n)-[]-()
+DETACH DELETE n
+RETURN count(n) AS DeletedCount
+```
+
+### Track placeholder resolution rate
+```cypher
+// Count total nodes vs placeholder nodes
+MATCH (n)
+WITH count(n) AS TotalNodes
+MATCH (p)
+WHERE p.placeholder = true
+WITH TotalNodes, count(p) AS PlaceholderNodes
+RETURN TotalNodes, PlaceholderNodes,
+       round(toFloat(PlaceholderNodes) / TotalNodes * 100, 2) AS PlaceholderPercentage
 ```
 
 ---

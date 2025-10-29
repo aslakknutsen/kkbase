@@ -93,10 +93,20 @@ func (s *Store) createIndexes(ctx context.Context) error {
 		}
 	}
 
+	// Create index on placeholder field for each node type for efficient querying of placeholder nodes
+	for _, nodeType := range nodeTypes {
+		placeholderIndexQuery := fmt.Sprintf("CREATE INDEX IF NOT EXISTS FOR (n:%s) ON (n.placeholder)", nodeType)
+		_, err := session.Run(ctx, placeholderIndexQuery, nil)
+		if err != nil {
+			return fmt.Errorf("failed to create placeholder index for %s: %w", nodeType, err)
+		}
+	}
+
 	return nil
 }
 
 // UpsertNode creates or updates a node in the graph
+// When updating a placeholder node, it removes the placeholder flag
 func (s *Store) UpsertNode(ctx context.Context, nodeType, id string, properties map[string]interface{}) error {
 	return s.executeWithRetry(ctx, func(session neo4j.SessionWithContext) error {
 		// Prepare properties
@@ -106,10 +116,16 @@ func (s *Store) UpsertNode(ctx context.Context, nodeType, id string, properties 
 		}
 		props["id"] = id
 		props["updated_at"] = time.Now().Unix()
+		// When we have full data, mark as not a placeholder
+		props["placeholder"] = false
 
 		query := fmt.Sprintf(`
 			MERGE (n:%s {id: $id})
-			SET n += $properties
+			ON CREATE SET 
+				n = $properties,
+				n.created_at = timestamp()
+			ON MATCH SET 
+				n += $properties
 		`, nodeType)
 
 		params := map[string]interface{}{
@@ -140,6 +156,8 @@ func (s *Store) DeleteNode(ctx context.Context, nodeType, id string) error {
 }
 
 // UpsertEdge creates or updates an edge between two nodes
+// Uses MERGE to ensure both nodes exist before creating the relationship
+// If nodes don't exist, they are created as placeholders
 func (s *Store) UpsertEdge(ctx context.Context, fromType, fromID, edgeType, toType, toID string, properties map[string]interface{}) error {
 	return s.executeWithRetry(ctx, func(session neo4j.SessionWithContext) error {
 		// Prepare properties
@@ -149,9 +167,21 @@ func (s *Store) UpsertEdge(ctx context.Context, fromType, fromID, edgeType, toTy
 		}
 		props["updated_at"] = time.Now().Unix()
 
+		updatedAt := time.Now().Unix()
+
+		// Use MERGE for both nodes to create placeholders if they don't exist
+		// This handles out-of-order data arrival gracefully
 		query := fmt.Sprintf(`
-			MATCH (from:%s {id: $fromID})
-			MATCH (to:%s {id: $toID})
+			MERGE (from:%s {id: $fromID})
+			ON CREATE SET 
+				from.placeholder = true,
+				from.created_at = timestamp(),
+				from.updated_at = $updated_at
+			MERGE (to:%s {id: $toID})
+			ON CREATE SET 
+				to.placeholder = true,
+				to.created_at = timestamp(),
+				to.updated_at = $updated_at
 			MERGE (from)-[r:%s]->(to)
 			SET r += $properties
 			RETURN r
@@ -161,6 +191,7 @@ func (s *Store) UpsertEdge(ctx context.Context, fromType, fromID, edgeType, toTy
 			"fromID":     fromID,
 			"toID":       toID,
 			"properties": props,
+			"updated_at": updatedAt,
 		}
 
 		result, err := session.Run(ctx, query, params)
@@ -168,23 +199,12 @@ func (s *Store) UpsertEdge(ctx context.Context, fromType, fromID, edgeType, toTy
 			return err
 		}
 
-		// Check if any relationship was created/updated
-		if result.Next(ctx) {
-			// Consume the result to ensure transaction commits
-			if _, err := result.Consume(ctx); err != nil {
-				return fmt.Errorf("failed to consume result: %w", err)
-			}
-			return nil
+		// Consume the result to ensure transaction commits
+		if _, err := result.Consume(ctx); err != nil {
+			return fmt.Errorf("failed to consume result: %w", err)
 		}
 
-		// Check for any errors during iteration
-		if err := result.Err(); err != nil {
-			return fmt.Errorf("error iterating result: %w", err)
-		}
-
-		// If no relationship was returned, one or both nodes don't exist
-		return fmt.Errorf("failed to create edge: one or both nodes not found (from:%s id:%s, to:%s id:%s)",
-			fromType, fromID, toType, toID)
+		return nil
 	})
 }
 
@@ -339,4 +359,50 @@ func isRetryableError(err error) bool {
 	// Check for transient errors, connection issues, etc.
 	// For now, we'll retry on all errors except context cancellation
 	return err != context.Canceled && err != context.DeadlineExceeded
+}
+
+// GetPlaceholderNodes returns all placeholder nodes of a given type
+// Useful for diagnostics and monitoring
+func (s *Store) GetPlaceholderNodes(ctx context.Context, nodeType string) ([]map[string]interface{}, error) {
+	query := fmt.Sprintf(`
+		MATCH (n:%s)
+		WHERE n.placeholder = true
+		RETURN n.id as id, n.updated_at as updated_at, labels(n) as labels
+		ORDER BY n.updated_at DESC
+		LIMIT 1000
+	`, nodeType)
+
+	return s.Query(ctx, query, nil)
+}
+
+// CleanupOrphanedPlaceholders removes placeholder nodes that have been
+// unresolved for longer than the specified duration and have no relationships
+func (s *Store) CleanupOrphanedPlaceholders(ctx context.Context, olderThan time.Duration) error {
+	cutoffTime := time.Now().Add(-olderThan).Unix()
+
+	query := `
+		MATCH (n)
+		WHERE n.placeholder = true 
+			AND n.updated_at < $cutoff
+			AND NOT (n)-[]-()
+		DETACH DELETE n
+		RETURN count(n) as deleted_count
+	`
+
+	result, err := s.Query(ctx, query, map[string]interface{}{
+		"cutoff": cutoffTime,
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to cleanup orphaned placeholders: %w", err)
+	}
+
+	if len(result) > 0 {
+		if deletedCount, ok := result[0]["deleted_count"].(int64); ok {
+			s.logger.Info("cleaned up orphaned placeholder nodes",
+				zap.Int64("deleted_count", deletedCount))
+		}
+	}
+
+	return nil
 }
