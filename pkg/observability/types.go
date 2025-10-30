@@ -10,11 +10,12 @@ type NodeType string
 
 // Observability NodeTypes (trace/monitoring data, not K8s resources)
 const (
-	NodeTypeMetric      NodeType = "Metric"
-	NodeTypeLogEntry    NodeType = "LogEntry"
-	NodeTypeTrace       NodeType = "Trace"
-	NodeTypeSpan        NodeType = "Span"
-	NodeTypeServiceCall NodeType = "ServiceCall"
+	NodeTypeMetric        NodeType = "Metric"
+	NodeTypeLogEntry      NodeType = "LogEntry"
+	NodeTypeTrace         NodeType = "Trace"
+	NodeTypeSpan          NodeType = "Span"
+	NodeTypeServiceCall   NodeType = "ServiceCall"
+	NodeTypeInvestigation NodeType = "Investigation"
 )
 
 // EdgeType represents the type of an observability graph edge (relationship)
@@ -34,15 +35,41 @@ const (
 	EdgeTypeCalls          EdgeType = "CALLS"
 	EdgeTypeFailedCallTo   EdgeType = "FAILED_CALL_TO"
 	EdgeTypeExecutedIn     EdgeType = "EXECUTED_IN"
+
+	// Metric relationships
+	EdgeTypeEmittedBy EdgeType = "EMITTED_BY" // Metric → Resource
+
+	// Investigation relationships
+	EdgeTypeRelatedTo         EdgeType = "RELATED_TO"          // Metric → Investigation
+	EdgeTypeInvestigating     EdgeType = "INVESTIGATING"       // Investigation → Resource
+	EdgeTypeHasMetricEvidence EdgeType = "HAS_METRIC_EVIDENCE" // Investigation → Metric
+)
+
+// MetricType represents Prometheus metric types
+type MetricType string
+
+const (
+	MetricTypeCounter   MetricType = "counter"
+	MetricTypeGauge     MetricType = "gauge"
+	MetricTypeHistogram MetricType = "histogram"
+	MetricTypeSummary   MetricType = "summary"
+	MetricTypeUnknown   MetricType = "unknown"
 )
 
 // MetricData represents a single metric data point
 type MetricData struct {
 	Name      string
+	Type      MetricType
 	Value     float64
 	Timestamp time.Time
 	Labels    map[string]string
-	Source    string // e.g., "pod/namespace/podname/container/containername"
+	Unit      string // e.g., "bytes", "seconds", "requests"
+
+	// Investigation context (optional)
+	InvestigationID string // Links metric to investigation session
+
+	// Deprecated: Use Labels instead for correlation
+	Source string // e.g., "pod/namespace/podname/container/containername"
 }
 
 // LogEntry represents a single log entry
@@ -145,10 +172,36 @@ type Trace struct {
 	Namespaces    []string // Unique namespaces involved
 }
 
+// InvestigationSession tracks an active RCA investigation
+type InvestigationSession struct {
+	ID               string
+	ResourceType     string // Pod, Service, Node, etc.
+	ResourceID       string // e.g., "Pod/prod/api-gateway-xyz"
+	Symptom          string // e.g., "CrashLoopBackOff", "HighLatency"
+	StartTime        time.Time
+	LookbackDuration time.Duration // How far back to pull metrics
+	Status           string        // "active", "completed", "abandoned"
+	CreatedAt        time.Time
+}
+
+// MetricQuerySpec defines what metrics to pull for an investigation
+type MetricQuerySpec struct {
+	MetricNames  []string // e.g., ["container_memory_usage_bytes", "container_cpu_usage_seconds_total"]
+	ResourceType string   // Pod, Node, Container
+	ResourceID   string   // e.g., "Pod/prod/api-gateway-xyz"
+	StartTime    time.Time
+	EndTime      time.Time
+	StepDuration time.Duration     // Aggregation interval (default: 1 minute)
+	Labels       map[string]string // Additional label filters
+}
+
 // MetricsProvider defines the interface for metrics collection
 type MetricsProvider interface {
 	// GetMetrics retrieves metrics for a specific resource
 	GetMetrics(ctx context.Context, resourceType, resourceID string, startTime, endTime time.Time) ([]MetricData, error)
+
+	// QueryMetrics retrieves metrics with flexible query specification
+	QueryMetrics(ctx context.Context, spec MetricQuerySpec) ([]MetricData, error)
 
 	// StreamMetrics streams real-time metrics
 	StreamMetrics(ctx context.Context, resourceType, resourceID string) (<-chan MetricData, error)
