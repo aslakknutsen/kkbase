@@ -5,6 +5,37 @@ import (
 	"time"
 )
 
+// NodeType represents the type of an observability graph node
+type NodeType string
+
+// Observability NodeTypes (trace/monitoring data, not K8s resources)
+const (
+	NodeTypeMetric      NodeType = "Metric"
+	NodeTypeLogEntry    NodeType = "LogEntry"
+	NodeTypeTrace       NodeType = "Trace"
+	NodeTypeSpan        NodeType = "Span"
+	NodeTypeServiceCall NodeType = "ServiceCall"
+)
+
+// EdgeType represents the type of an observability graph edge (relationship)
+type EdgeType string
+
+// Observability EdgeTypes
+const (
+	// General observability relationships
+	EdgeTypeEmits     EdgeType = "EMITS"
+	EdgeTypeGenerates EdgeType = "GENERATES"
+
+	// Trace relationships
+	EdgeTypeContainsSpan   EdgeType = "CONTAINS_SPAN"
+	EdgeTypeParentOf       EdgeType = "PARENT_OF"
+	EdgeTypeOriginatedFrom EdgeType = "ORIGINATED_FROM"
+	EdgeTypeObservedCallTo EdgeType = "OBSERVED_CALL_TO"
+	EdgeTypeCalls          EdgeType = "CALLS"
+	EdgeTypeFailedCallTo   EdgeType = "FAILED_CALL_TO"
+	EdgeTypeExecutedIn     EdgeType = "EXECUTED_IN"
+)
+
 // MetricData represents a single metric data point
 type MetricData struct {
 	Name      string

@@ -1,4 +1,4 @@
-package watchers
+package observability
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
-	"github.com/kagenti/kkbase/pkg/observability"
 	"go.uber.org/zap"
 )
 
@@ -35,10 +34,10 @@ func NewTraceProcessor(graphStore graph.GraphStore, logger *zap.Logger, spanRete
 }
 
 // ProcessTrace processes a single trace and creates graph nodes/edges
-func (tp *TraceProcessor) ProcessTrace(ctx context.Context, trace observability.Trace) error {
+func (tp *TraceProcessor) ProcessTrace(ctx context.Context, trace Trace) error {
 	// Create Trace node (lightweight aggregation)
 	traceNode := models.NewGraphNode(
-		models.NodeTypeTrace,
+		models.NodeType(NodeTypeTrace),
 		models.GetNodeID("Trace", "", trace.TraceID),
 		map[string]interface{}{
 			"trace_id":          trace.TraceID,
@@ -77,7 +76,7 @@ func (tp *TraceProcessor) ProcessTrace(ctx context.Context, trace observability.
 }
 
 // processSpan processes a single span
-func (tp *TraceProcessor) processSpan(ctx context.Context, traceID string, span observability.TraceSpan) error {
+func (tp *TraceProcessor) processSpan(ctx context.Context, traceID string, span TraceSpan) error {
 	spanID := models.GetNodeID("Span", traceID, span.SpanID)
 
 	// Create Span node with OpenTelemetry 1.21+ attributes

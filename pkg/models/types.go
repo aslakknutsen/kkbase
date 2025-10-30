@@ -90,18 +90,12 @@ func NodeTypeFromString(s string) (NodeType, bool) {
 // - pkg/watchers/handlers/core/types.go (core Kubernetes resources)
 // - pkg/watchers/handlers/extensions/gateway/types.go (Gateway API)
 // - pkg/watchers/handlers/extensions/istio/types.go (Istio)
+// - pkg/observability/types.go (observability/trace data)
 const (
 	// Infrastructure
 
 	// Derived from other resources (not a K8s resource itself)
 	NodeTypeContainer NodeType = "Container"
-
-	// Observability (from traces/monitoring, not K8s resources)
-	NodeTypeMetric      NodeType = "Metric"
-	NodeTypeLogEntry    NodeType = "LogEntry"
-	NodeTypeTrace       NodeType = "Trace"
-	NodeTypeSpan        NodeType = "Span"
-	NodeTypeServiceCall NodeType = "ServiceCall"
 )
 
 // GetNodeID generates a unique identifier for a Kubernetes resource
@@ -135,6 +129,7 @@ type EdgeType string
 // - pkg/watchers/handlers/core/types.go (core Kubernetes resources)
 // - pkg/watchers/handlers/extensions/gateway/types.go (Gateway API)
 // - pkg/watchers/handlers/extensions/istio/types.go (Istio)
+// - pkg/observability/types.go (observability/trace relationships)
 const (
 	// Structural & Hierarchical (shared)
 	EdgeTypePartOf      EdgeType = "PART_OF"
@@ -149,19 +144,6 @@ const (
 	EdgeTypeAttachesTo EdgeType = "ATTACHES_TO" // Used by Gateway and Istio
 	EdgeTypeAppliesTo  EdgeType = "APPLIES_TO"  // Used by Gateway and Istio
 	EdgeTypeUsesSecret EdgeType = "USES_SECRET" // Used by Core and Gateway
-
-	// Observability (shared)
-	EdgeTypeEmits     EdgeType = "EMITS"
-	EdgeTypeGenerates EdgeType = "GENERATES"
-
-	// Trace relationships
-	EdgeTypeContainsSpan   EdgeType = "CONTAINS_SPAN"
-	EdgeTypeParentOf       EdgeType = "PARENT_OF"
-	EdgeTypeOriginatedFrom EdgeType = "ORIGINATED_FROM"
-	EdgeTypeObservedCallTo EdgeType = "OBSERVED_CALL_TO"
-	EdgeTypeCalls          EdgeType = "CALLS"
-	EdgeTypeFailedCallTo   EdgeType = "FAILED_CALL_TO"
-	EdgeTypeExecutedIn     EdgeType = "EXECUTED_IN"
 
 	// Dynamic relationships
 	EdgeTypeCommunicatesWith EdgeType = "COMMUNICATES_WITH"

@@ -1,4 +1,4 @@
-package watchers
+package observability
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
-	"github.com/kagenti/kkbase/pkg/observability"
 	"go.uber.org/zap"
 )
 
@@ -92,7 +91,7 @@ func (trb *TraceRelationshipBuilder) CreateSpanExecutedInPodEdge(ctx context.Con
 }
 
 // CreateServiceCallEdge creates runtime CALLS or FAILED_CALL_TO edges between services
-func (trb *TraceRelationshipBuilder) CreateServiceCallEdge(ctx context.Context, span observability.TraceSpan) error {
+func (trb *TraceRelationshipBuilder) CreateServiceCallEdge(ctx context.Context, span TraceSpan) error {
 	// Determine target from ServerAddress or URLFull
 	targetAddress := span.ServerAddress
 	if targetAddress == "" && span.URLFull != "" {

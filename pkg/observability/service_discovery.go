@@ -1,4 +1,4 @@
-package watchers
+package observability
 
 import (
 	"context"
