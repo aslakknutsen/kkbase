@@ -1,21 +1,23 @@
 package istio
 
+import "github.com/kagenti/kkbase/pkg/models"
+
 // Istio NodeTypes
 // These constants are co-located with Istio handlers conceptually,
 // but placed in models/istio to avoid circular dependencies with converters.
 // They represent node types as strings that match models.NodeType.
 const (
 	// Traffic Management
-	NodeTypeIstioGateway    = "IstioGateway"
-	NodeTypeVirtualService  = "VirtualService"
-	NodeTypeDestinationRule = "DestinationRule"
-	NodeTypeServiceEntry    = "ServiceEntry"
-	NodeTypeSidecar         = "Sidecar"
+	NodeTypeIstioGateway    models.NodeType = "IstioGateway"
+	NodeTypeVirtualService  models.NodeType = "VirtualService"
+	NodeTypeDestinationRule models.NodeType = "DestinationRule"
+	NodeTypeServiceEntry    models.NodeType = "ServiceEntry"
+	NodeTypeSidecar         models.NodeType = "Sidecar"
 
 	// Security
-	NodeTypeAuthorizationPolicy   = "AuthorizationPolicy"
-	NodeTypePeerAuthentication    = "PeerAuthentication"
-	NodeTypeRequestAuthentication = "RequestAuthentication"
+	NodeTypeAuthorizationPolicy   models.NodeType = "AuthorizationPolicy"
+	NodeTypePeerAuthentication    models.NodeType = "PeerAuthentication"
+	NodeTypeRequestAuthentication models.NodeType = "RequestAuthentication"
 )
 
 // Istio EdgeTypes
@@ -23,9 +25,9 @@ const (
 // Shared edge types (used across multiple handler packages) remain in models.EdgeType.
 const (
 	// Traffic Management
-	EdgeTypeSelectsProxy      = "SELECTS_PROXY"
-	EdgeTypeRoutesTrafficFor  = "ROUTES_TRAFFIC_FOR"
-	EdgeTypeRoutesToSubset    = "ROUTES_TO_SUBSET"
-	EdgeTypeDefinesPolicyFor  = "DEFINES_POLICY_FOR"
-	EdgeTypeSelectsSubsetPods = "SELECTS_SUBSET_PODS"
+	EdgeTypeSelectsProxy      models.EdgeType = "SELECTS_PROXY"
+	EdgeTypeRoutesTrafficFor  models.EdgeType = "ROUTES_TRAFFIC_FOR"
+	EdgeTypeRoutesToSubset    models.EdgeType = "ROUTES_TO_SUBSET"
+	EdgeTypeDefinesPolicyFor  models.EdgeType = "DEFINES_POLICY_FOR"
+	EdgeTypeSelectsSubsetPods models.EdgeType = "SELECTS_SUBSET_PODS"
 )
