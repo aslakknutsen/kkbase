@@ -20,7 +20,7 @@ type IstioGatewayHandler struct {
 	*watchers.BaseWatcher
 	clientset           *kubernetes.Clientset
 	dynamicClient       dynamic.Interface
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewIstioGatewayHandler creates a new Istio Gateway handler
@@ -37,7 +37,7 @@ func NewIstioGatewayHandler(
 	handler := &IstioGatewayHandler{
 		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
 		clientset:     clientset,
-		dynamicClient: dynamicClient, relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		dynamicClient: dynamicClient, relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -68,14 +68,14 @@ func (h *IstioGatewayHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create Gateway node
-	gatewayNode := models.IstioGatewayToGraphNode(gateway)
+	gatewayNode := IstioGatewayToGraphNode(gateway)
 	if err := h.GraphStore.UpsertNode(ctx, string(gatewayNode.Type), gatewayNode.ID, gatewayNode.Properties); err != nil {
 		h.Logger.Error("failed to create istio gateway node", zap.Error(err), zap.String("gateway", gateway.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeIstioGateway, gatewayNode.ID, gateway.Namespace); err != nil {
+	if err := h.relationshipBuilder.base.CreateNamespaceEdge(ctx, NodeTypeIstioGateway, gatewayNode.ID, gateway.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
@@ -104,7 +104,7 @@ func (h *IstioGatewayHandler) HandleUpdate(oldObj, newObj interface{}) {
 	gatewayID := models.GetNodeID("IstioGateway", gateway.Namespace, gateway.Name)
 
 	// Delete old edges
-	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(models.NodeTypeIstioGateway), gatewayID); err != nil {
+	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeIstioGateway), gatewayID); err != nil {
 		h.Logger.Error("failed to delete old istio gateway edges", zap.Error(err))
 	}
 
@@ -128,7 +128,7 @@ func (h *IstioGatewayHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	gatewayID := models.GetNodeID("IstioGateway", gateway.Namespace, gateway.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeIstioGateway), gatewayID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeIstioGateway), gatewayID); err != nil {
 		h.Logger.Error("failed to delete istio gateway node", zap.Error(err), zap.String("gateway", gateway.Name))
 	}
 }

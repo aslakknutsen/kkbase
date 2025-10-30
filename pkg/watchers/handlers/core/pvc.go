@@ -17,7 +17,7 @@ import (
 // PVCHandler handles PersistentVolumeClaim resources
 type PVCHandler struct {
 	*watchers.BaseWatcher
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewPVCHandler creates a new PVC handler
@@ -36,7 +36,7 @@ func NewPVCHandler(
 
 	handler := &PVCHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
-		relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -63,14 +63,14 @@ func (h *PVCHandler) HandleAdd(obj interface{}) {
 
 	ctx := context.Background()
 
-	pvcNode := models.PersistentVolumeClaimToGraphNode(pvc)
+	pvcNode := PersistentVolumeClaimToGraphNode(pvc)
 	if err := h.GraphStore.UpsertNode(ctx, string(pvcNode.Type), pvcNode.ID, pvcNode.Properties); err != nil {
 		h.Logger.Error("failed to create pvc node", zap.Error(err), zap.String("pvc", pvc.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypePersistentVolumeClaim, pvcNode.ID, pvc.Namespace); err != nil {
+	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, NodeTypePersistentVolumeClaim, pvcNode.ID, pvc.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
@@ -110,7 +110,7 @@ func (h *PVCHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	pvcID := models.GetNodeID("PersistentVolumeClaim", pvc.Namespace, pvc.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypePersistentVolumeClaim), pvcID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypePersistentVolumeClaim), pvcID); err != nil {
 		h.Logger.Error("failed to delete pvc node", zap.Error(err), zap.String("pvc", pvc.Name))
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/kagenti/kkbase/pkg/graph"
-	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	storagev1 "k8s.io/api/storage/v1"
@@ -17,7 +16,7 @@ import (
 // StorageClassHandler handles StorageClass resources
 type StorageClassHandler struct {
 	*watchers.BaseWatcher
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewStorageClassHandler creates a new StorageClass handler
@@ -36,7 +35,7 @@ func NewStorageClassHandler(
 
 	handler := &StorageClassHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
-		relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -63,7 +62,7 @@ func (h *StorageClassHandler) HandleAdd(obj interface{}) {
 
 	ctx := context.Background()
 
-	storageClassNode := models.StorageClassToGraphNode(storageClass)
+	storageClassNode := StorageClassToGraphNode(storageClass)
 	if err := h.GraphStore.UpsertNode(ctx, string(storageClassNode.Type), storageClassNode.ID, storageClassNode.Properties); err != nil {
 		h.Logger.Error("failed to create storageclass node", zap.Error(err), zap.String("storageclass", storageClass.Name))
 		return
@@ -94,7 +93,7 @@ func (h *StorageClassHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeStorageClass), storageClass.Name); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeStorageClass), storageClass.Name); err != nil {
 		h.Logger.Error("failed to delete storageclass node", zap.Error(err), zap.String("storageclass", storageClass.Name))
 	}
 }

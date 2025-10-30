@@ -18,7 +18,7 @@ import (
 type StatefulSetHandler struct {
 	*watchers.BaseWatcher
 	clientset           *kubernetes.Clientset
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewStatefulSetHandler creates a new StatefulSet handler
@@ -38,7 +38,7 @@ func NewStatefulSetHandler(
 	handler := &StatefulSetHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
 		clientset:           clientset,
-		relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -66,14 +66,14 @@ func (h *StatefulSetHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create StatefulSet node
-	statefulSetNode := models.StatefulSetToGraphNode(statefulSet)
+	statefulSetNode := StatefulSetToGraphNode(statefulSet)
 	if err := h.GraphStore.UpsertNode(ctx, string(statefulSetNode.Type), statefulSetNode.ID, statefulSetNode.Properties); err != nil {
 		h.Logger.Error("failed to create statefulset node", zap.Error(err), zap.String("statefulset", statefulSet.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeStatefulSet, statefulSetNode.ID, statefulSet.Namespace); err != nil {
+	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, NodeTypeStatefulSet, statefulSetNode.ID, statefulSet.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 }
@@ -104,7 +104,7 @@ func (h *StatefulSetHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	statefulSetID := models.GetNodeID("StatefulSet", statefulSet.Namespace, statefulSet.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeStatefulSet), statefulSetID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeStatefulSet), statefulSetID); err != nil {
 		h.Logger.Error("failed to delete statefulset node", zap.Error(err), zap.String("statefulset", statefulSet.Name))
 	}
 }

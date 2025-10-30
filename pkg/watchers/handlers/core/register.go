@@ -20,7 +20,7 @@ func RegisterCoreHandlers(
 	// Namespace must be registered first as other resources depend on it
 	manager.RegisterHandler(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypeNamespace,
+			NodeType:      NodeTypeNamespace,
 			Kind:          "Namespace",
 			APIGroup:      "",
 			ClusterScoped: true,
@@ -31,7 +31,7 @@ func RegisterCoreHandlers(
 	// Nodes
 	manager.RegisterHandler(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypeNode,
+			NodeType:      NodeTypeNode,
 			Kind:          "Node",
 			APIGroup:      "",
 			ClusterScoped: true,
@@ -42,7 +42,7 @@ func RegisterCoreHandlers(
 	// Workload resources
 	manager.RegisterHandler(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypeDeployment,
+			NodeType:      NodeTypeDeployment,
 			Kind:          "Deployment",
 			APIGroup:      "apps",
 			ClusterScoped: false,
@@ -52,7 +52,7 @@ func RegisterCoreHandlers(
 
 	manager.RegisterHandler(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypeReplicaSet,
+			NodeType:      NodeTypeReplicaSet,
 			Kind:          "ReplicaSet",
 			APIGroup:      "apps",
 			ClusterScoped: false,
@@ -62,7 +62,7 @@ func RegisterCoreHandlers(
 
 	manager.RegisterHandler(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypeStatefulSet,
+			NodeType:      NodeTypeStatefulSet,
 			Kind:          "StatefulSet",
 			APIGroup:      "apps",
 			ClusterScoped: false,
@@ -72,7 +72,7 @@ func RegisterCoreHandlers(
 
 	manager.RegisterHandler(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypeDaemonSet,
+			NodeType:      NodeTypeDaemonSet,
 			Kind:          "DaemonSet",
 			APIGroup:      "apps",
 			ClusterScoped: false,
@@ -82,7 +82,7 @@ func RegisterCoreHandlers(
 
 	manager.RegisterHandler(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypePod,
+			NodeType:      NodeTypePod,
 			Kind:          "Pod",
 			APIGroup:      "",
 			ClusterScoped: false,
@@ -93,7 +93,7 @@ func RegisterCoreHandlers(
 	// Networking resources
 	manager.RegisterHandler(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypeService,
+			NodeType:      NodeTypeService,
 			Kind:          "Service",
 			APIGroup:      "",
 			ClusterScoped: false,
@@ -104,7 +104,7 @@ func RegisterCoreHandlers(
 	// Storage resources
 	manager.RegisterHandler(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypePersistentVolume,
+			NodeType:      NodeTypePersistentVolume,
 			Kind:          "PersistentVolume",
 			APIGroup:      "",
 			ClusterScoped: true,
@@ -114,7 +114,7 @@ func RegisterCoreHandlers(
 
 	manager.RegisterHandler(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypePersistentVolumeClaim,
+			NodeType:      NodeTypePersistentVolumeClaim,
 			Kind:          "PersistentVolumeClaim",
 			APIGroup:      "",
 			ClusterScoped: false,
@@ -124,7 +124,7 @@ func RegisterCoreHandlers(
 
 	manager.RegisterHandler(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypeStorageClass,
+			NodeType:      NodeTypeStorageClass,
 			Kind:          "StorageClass",
 			APIGroup:      "storage.k8s.io",
 			ClusterScoped: true,
@@ -135,7 +135,7 @@ func RegisterCoreHandlers(
 	// Configuration resources
 	manager.RegisterHandler(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypeConfigMap,
+			NodeType:      NodeTypeConfigMap,
 			Kind:          "ConfigMap",
 			APIGroup:      "",
 			ClusterScoped: false,
@@ -145,7 +145,7 @@ func RegisterCoreHandlers(
 
 	manager.RegisterHandler(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypeSecret,
+			NodeType:      NodeTypeSecret,
 			Kind:          "Secret",
 			APIGroup:      "",
 			ClusterScoped: false,
@@ -156,7 +156,7 @@ func RegisterCoreHandlers(
 	// Observability resources
 	manager.RegisterHandler(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypeK8sEvent,
+			NodeType:      NodeTypeK8sEvent,
 			Kind:          "Event",
 			APIGroup:      "",
 			ClusterScoped: false,

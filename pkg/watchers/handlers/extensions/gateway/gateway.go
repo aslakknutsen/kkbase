@@ -17,7 +17,7 @@ import (
 type GatewayHandler struct {
 	*watchers.BaseWatcher
 	dynamicClient       dynamic.Interface
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewGatewayHandler creates a new Gateway handler
@@ -33,7 +33,7 @@ func NewGatewayHandler(
 
 	handler := &GatewayHandler{
 		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
-		dynamicClient: dynamicClient, relationshipBuilder: watchers.NewRelationshipBuilder(nil, graphStore, logger),
+		dynamicClient: dynamicClient, relationshipBuilder: NewRelationshipBuilder(nil, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -65,14 +65,14 @@ func (h *GatewayHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create Gateway node
-	gatewayNode := models.GatewayToGraphNode(gateway)
+	gatewayNode := GatewayToGraphNode(gateway)
 	if err := h.GraphStore.UpsertNode(ctx, string(gatewayNode.Type), gatewayNode.ID, gatewayNode.Properties); err != nil {
 		h.Logger.Error("failed to create gateway node", zap.Error(err), zap.String("gateway", gateway.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeGateway, gatewayNode.ID, gateway.Namespace); err != nil {
+	if err := h.relationshipBuilder.base.CreateNamespaceEdge(ctx, NodeTypeGateway, gatewayNode.ID, gateway.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
@@ -131,7 +131,7 @@ func (h *GatewayHandler) HandleUpdate(oldObj, newObj interface{}) {
 	gatewayID := models.GetNodeID("Gateway", gateway.Namespace, gateway.Name)
 
 	// Delete old edges
-	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(models.NodeTypeGateway), gatewayID); err != nil {
+	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeGateway), gatewayID); err != nil {
 		h.Logger.Error("failed to delete old gateway edges", zap.Error(err))
 	}
 
@@ -159,7 +159,7 @@ func (h *GatewayHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	gatewayID := models.GetNodeID("Gateway", gateway.Namespace, gateway.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeGateway), gatewayID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeGateway), gatewayID); err != nil {
 		h.Logger.Error("failed to delete gateway node", zap.Error(err), zap.String("gateway", gateway.Name))
 	}
 }

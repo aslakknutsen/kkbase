@@ -20,7 +20,7 @@ type RequestAuthenticationHandler struct {
 	*watchers.BaseWatcher
 	clientset           *kubernetes.Clientset
 	dynamicClient       dynamic.Interface
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewRequestAuthenticationHandler creates a new RequestAuthentication handler
@@ -37,7 +37,7 @@ func NewRequestAuthenticationHandler(
 	handler := &RequestAuthenticationHandler{
 		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
 		clientset:     clientset,
-		dynamicClient: dynamicClient, relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		dynamicClient: dynamicClient, relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -68,14 +68,14 @@ func (h *RequestAuthenticationHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create RequestAuthentication node
-	raNode := models.RequestAuthenticationToGraphNode(requestAuthentication)
+	raNode := RequestAuthenticationToGraphNode(requestAuthentication)
 	if err := h.GraphStore.UpsertNode(ctx, string(raNode.Type), raNode.ID, raNode.Properties); err != nil {
 		h.Logger.Error("failed to create requestauthentication node", zap.Error(err), zap.String("requestauthentication", requestAuthentication.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeRequestAuthentication, raNode.ID, requestAuthentication.Namespace); err != nil {
+	if err := h.relationshipBuilder.base.CreateNamespaceEdge(ctx, NodeTypeRequestAuthentication, raNode.ID, requestAuthentication.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
@@ -86,7 +86,7 @@ func (h *RequestAuthenticationHandler) HandleAdd(obj interface{}) {
 	}
 
 	if err := h.relationshipBuilder.CreateIstioPolicyAppliesToEdge(
-		ctx, models.NodeTypeRequestAuthentication, requestAuthentication.Namespace, requestAuthentication.Name, selector, nil); err != nil {
+		ctx, NodeTypeRequestAuthentication, requestAuthentication.Namespace, requestAuthentication.Name, selector, nil); err != nil {
 		h.Logger.Error("failed to create APPLIES_TO edges", zap.Error(err))
 	}
 }
@@ -108,7 +108,7 @@ func (h *RequestAuthenticationHandler) HandleUpdate(oldObj, newObj interface{}) 
 	raID := models.GetNodeID("RequestAuthentication", requestAuthentication.Namespace, requestAuthentication.Name)
 
 	// Delete old edges
-	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(models.NodeTypeRequestAuthentication), raID); err != nil {
+	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeRequestAuthentication), raID); err != nil {
 		h.Logger.Error("failed to delete old requestauthentication edges", zap.Error(err))
 	}
 
@@ -132,7 +132,7 @@ func (h *RequestAuthenticationHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	raID := models.GetNodeID("RequestAuthentication", requestAuthentication.Namespace, requestAuthentication.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeRequestAuthentication), raID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeRequestAuthentication), raID); err != nil {
 		h.Logger.Error("failed to delete requestauthentication node", zap.Error(err), zap.String("requestauthentication", requestAuthentication.Name))
 	}
 }

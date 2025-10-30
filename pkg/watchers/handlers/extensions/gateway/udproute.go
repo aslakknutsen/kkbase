@@ -17,7 +17,7 @@ import (
 type UDPRouteHandler struct {
 	*watchers.BaseWatcher
 	dynamicClient       dynamic.Interface
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewUDPRouteHandler creates a new UDPRoute handler
@@ -33,7 +33,7 @@ func NewUDPRouteHandler(
 
 	handler := &UDPRouteHandler{
 		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
-		dynamicClient: dynamicClient, relationshipBuilder: watchers.NewRelationshipBuilder(nil, graphStore, logger),
+		dynamicClient: dynamicClient, relationshipBuilder: NewRelationshipBuilder(nil, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -68,14 +68,14 @@ func (h *UDPRouteHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create UDPRoute node
-	udpRouteNode := models.UDPRouteToGraphNode(udpRoute)
+	udpRouteNode := UDPRouteToGraphNode(udpRoute)
 	if err := h.GraphStore.UpsertNode(ctx, string(udpRouteNode.Type), udpRouteNode.ID, udpRouteNode.Properties); err != nil {
 		h.Logger.Error("failed to create udproute node", zap.Error(err), zap.String("udproute", udpRoute.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeUDPRoute, udpRouteNode.ID, udpRoute.Namespace); err != nil {
+	if err := h.relationshipBuilder.base.CreateNamespaceEdge(ctx, NodeTypeUDPRoute, udpRouteNode.ID, udpRoute.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
@@ -95,7 +95,7 @@ func (h *UDPRouteHandler) HandleAdd(obj interface{}) {
 
 		if err := h.relationshipBuilder.CreateRouteAttachesToEdge(
 			ctx,
-			models.NodeTypeUDPRoute,
+			NodeTypeUDPRoute,
 			udpRoute.Namespace,
 			udpRoute.Name,
 			gatewayNamespace,
@@ -124,7 +124,7 @@ func (h *UDPRouteHandler) HandleAdd(obj interface{}) {
 
 			if err := h.relationshipBuilder.CreateRouteForwardsToEdge(
 				ctx,
-				models.NodeTypeUDPRoute,
+				NodeTypeUDPRoute,
 				udpRoute.Namespace,
 				udpRoute.Name,
 				serviceNamespace,
@@ -161,7 +161,7 @@ func (h *UDPRouteHandler) HandleUpdate(oldObj, newObj interface{}) {
 	udpRouteID := models.GetNodeID("UDPRoute", udpRoute.Namespace, udpRoute.Name)
 
 	// Delete old edges
-	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(models.NodeTypeUDPRoute), udpRouteID); err != nil {
+	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeUDPRoute), udpRouteID); err != nil {
 		h.Logger.Error("failed to delete old udproute edges", zap.Error(err))
 	}
 
@@ -189,7 +189,7 @@ func (h *UDPRouteHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	udpRouteID := models.GetNodeID("UDPRoute", udpRoute.Namespace, udpRoute.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeUDPRoute), udpRouteID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeUDPRoute), udpRouteID); err != nil {
 		h.Logger.Error("failed to delete udproute node", zap.Error(err), zap.String("udproute", udpRoute.Name))
 	}
 }

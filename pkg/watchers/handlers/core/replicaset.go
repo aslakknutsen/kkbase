@@ -18,7 +18,7 @@ import (
 type ReplicaSetHandler struct {
 	*watchers.BaseWatcher
 	clientset           *kubernetes.Clientset
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewReplicaSetHandler creates a new ReplicaSet handler
@@ -38,7 +38,7 @@ func NewReplicaSetHandler(
 	handler := &ReplicaSetHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
 		clientset:           clientset,
-		relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -66,20 +66,20 @@ func (h *ReplicaSetHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create ReplicaSet node
-	replicaSetNode := models.ReplicaSetToGraphNode(replicaSet)
+	replicaSetNode := ReplicaSetToGraphNode(replicaSet)
 	if err := h.GraphStore.UpsertNode(ctx, string(replicaSetNode.Type), replicaSetNode.ID, replicaSetNode.Properties); err != nil {
 		h.Logger.Error("failed to create replicaset node", zap.Error(err), zap.String("replicaset", replicaSet.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeReplicaSet, replicaSetNode.ID, replicaSet.Namespace); err != nil {
+	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, NodeTypeReplicaSet, replicaSetNode.ID, replicaSet.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
 	// Create owner reference edges (typically to Deployment)
 	if ownerRef := models.GetOwnerReference(replicaSet.OwnerReferences); ownerRef != nil {
-		if err := h.relationshipBuilder.CreateOwnerEdge(ctx, models.NodeTypeReplicaSet, replicaSetNode.ID, *ownerRef, replicaSet.Namespace); err != nil {
+		if err := h.relationshipBuilder.CreateOwnerEdge(ctx, NodeTypeReplicaSet, replicaSetNode.ID, *ownerRef, replicaSet.Namespace); err != nil {
 			h.Logger.Error("failed to create owner edge", zap.Error(err))
 		}
 	}
@@ -111,7 +111,7 @@ func (h *ReplicaSetHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	replicaSetID := models.GetNodeID("ReplicaSet", replicaSet.Namespace, replicaSet.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeReplicaSet), replicaSetID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeReplicaSet), replicaSetID); err != nil {
 		h.Logger.Error("failed to delete replicaset node", zap.Error(err), zap.String("replicaset", replicaSet.Name))
 	}
 }

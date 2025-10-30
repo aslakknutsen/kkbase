@@ -20,7 +20,7 @@ type AuthorizationPolicyHandler struct {
 	*watchers.BaseWatcher
 	clientset           *kubernetes.Clientset
 	dynamicClient       dynamic.Interface
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewAuthorizationPolicyHandler creates a new AuthorizationPolicy handler
@@ -37,7 +37,7 @@ func NewAuthorizationPolicyHandler(
 	handler := &AuthorizationPolicyHandler{
 		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
 		clientset:     clientset,
-		dynamicClient: dynamicClient, relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		dynamicClient: dynamicClient, relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -68,14 +68,14 @@ func (h *AuthorizationPolicyHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create AuthorizationPolicy node
-	policyNode := models.AuthorizationPolicyToGraphNode(policy)
+	policyNode := AuthorizationPolicyToGraphNode(policy)
 	if err := h.GraphStore.UpsertNode(ctx, string(policyNode.Type), policyNode.ID, policyNode.Properties); err != nil {
 		h.Logger.Error("failed to create authorizationpolicy node", zap.Error(err), zap.String("policy", policy.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeAuthorizationPolicy, policyNode.ID, policy.Namespace); err != nil {
+	if err := h.relationshipBuilder.base.CreateNamespaceEdge(ctx, NodeTypeAuthorizationPolicy, policyNode.ID, policy.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
@@ -91,7 +91,7 @@ func (h *AuthorizationPolicyHandler) HandleAdd(obj interface{}) {
 	}
 
 	if err := h.relationshipBuilder.CreateIstioPolicyAppliesToEdge(
-		ctx, models.NodeTypeAuthorizationPolicy, policy.Namespace, policy.Name, selector, additionalProps); err != nil {
+		ctx, NodeTypeAuthorizationPolicy, policy.Namespace, policy.Name, selector, additionalProps); err != nil {
 		h.Logger.Error("failed to create APPLIES_TO edges", zap.Error(err))
 	}
 }
@@ -113,7 +113,7 @@ func (h *AuthorizationPolicyHandler) HandleUpdate(oldObj, newObj interface{}) {
 	policyID := models.GetNodeID("AuthorizationPolicy", policy.Namespace, policy.Name)
 
 	// Delete old edges
-	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(models.NodeTypeAuthorizationPolicy), policyID); err != nil {
+	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeAuthorizationPolicy), policyID); err != nil {
 		h.Logger.Error("failed to delete old authorizationpolicy edges", zap.Error(err))
 	}
 
@@ -137,7 +137,7 @@ func (h *AuthorizationPolicyHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	policyID := models.GetNodeID("AuthorizationPolicy", policy.Namespace, policy.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeAuthorizationPolicy), policyID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeAuthorizationPolicy), policyID); err != nil {
 		h.Logger.Error("failed to delete authorizationpolicy node", zap.Error(err), zap.String("policy", policy.Name))
 	}
 }

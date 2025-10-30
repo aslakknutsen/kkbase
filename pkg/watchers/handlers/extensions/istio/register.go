@@ -2,7 +2,6 @@ package istio
 
 import (
 	"github.com/kagenti/kkbase/pkg/graph"
-	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
@@ -22,7 +21,7 @@ func RegisterIstioHandlers(
 	// Register Istio Gateway handler
 	manager.RegisterHandlerFactory(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypeIstioGateway,
+			NodeType:      NodeTypeIstioGateway,
 			Kind:          "Gateway",
 			APIGroup:      "networking.istio.io",
 			ClusterScoped: false,
@@ -35,7 +34,7 @@ func RegisterIstioHandlers(
 	// Register VirtualService handler
 	manager.RegisterHandlerFactory(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypeVirtualService,
+			NodeType:      NodeTypeVirtualService,
 			Kind:          "VirtualService",
 			APIGroup:      "networking.istio.io",
 			ClusterScoped: false,
@@ -48,7 +47,7 @@ func RegisterIstioHandlers(
 	// Register DestinationRule handler
 	manager.RegisterHandlerFactory(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypeDestinationRule,
+			NodeType:      NodeTypeDestinationRule,
 			Kind:          "DestinationRule",
 			APIGroup:      "networking.istio.io",
 			ClusterScoped: false,
@@ -61,7 +60,7 @@ func RegisterIstioHandlers(
 	// Register ServiceEntry handler
 	manager.RegisterHandlerFactory(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypeServiceEntry,
+			NodeType:      NodeTypeServiceEntry,
 			Kind:          "ServiceEntry",
 			APIGroup:      "networking.istio.io",
 			ClusterScoped: false,
@@ -74,7 +73,7 @@ func RegisterIstioHandlers(
 	// Register Sidecar handler
 	manager.RegisterHandlerFactory(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypeSidecar,
+			NodeType:      NodeTypeSidecar,
 			Kind:          "Sidecar",
 			APIGroup:      "networking.istio.io",
 			ClusterScoped: false,
@@ -87,7 +86,7 @@ func RegisterIstioHandlers(
 	// Register AuthorizationPolicy handler
 	manager.RegisterHandlerFactory(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypeAuthorizationPolicy,
+			NodeType:      NodeTypeAuthorizationPolicy,
 			Kind:          "AuthorizationPolicy",
 			APIGroup:      "security.istio.io",
 			ClusterScoped: false,
@@ -100,7 +99,7 @@ func RegisterIstioHandlers(
 	// Register PeerAuthentication handler
 	manager.RegisterHandlerFactory(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypePeerAuthentication,
+			NodeType:      NodeTypePeerAuthentication,
 			Kind:          "PeerAuthentication",
 			APIGroup:      "security.istio.io",
 			ClusterScoped: false,
@@ -113,7 +112,7 @@ func RegisterIstioHandlers(
 	// Register RequestAuthentication handler
 	manager.RegisterHandlerFactory(
 		watchers.ResourceTypeInfo{
-			NodeType:      models.NodeTypeRequestAuthentication,
+			NodeType:      NodeTypeRequestAuthentication,
 			Kind:          "RequestAuthentication",
 			APIGroup:      "security.istio.io",
 			ClusterScoped: false,

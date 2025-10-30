@@ -17,7 +17,7 @@ import (
 type GRPCRouteHandler struct {
 	*watchers.BaseWatcher
 	dynamicClient       dynamic.Interface
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewGRPCRouteHandler creates a new GRPCRoute handler
@@ -33,7 +33,7 @@ func NewGRPCRouteHandler(
 
 	handler := &GRPCRouteHandler{
 		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
-		dynamicClient: dynamicClient, relationshipBuilder: watchers.NewRelationshipBuilder(nil, graphStore, logger),
+		dynamicClient: dynamicClient, relationshipBuilder: NewRelationshipBuilder(nil, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -64,14 +64,14 @@ func (h *GRPCRouteHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create GRPCRoute node
-	grpcRouteNode := models.GRPCRouteToGraphNode(grpcRoute)
+	grpcRouteNode := GRPCRouteToGraphNode(grpcRoute)
 	if err := h.GraphStore.UpsertNode(ctx, string(grpcRouteNode.Type), grpcRouteNode.ID, grpcRouteNode.Properties); err != nil {
 		h.Logger.Error("failed to create grpcroute node", zap.Error(err), zap.String("grpcroute", grpcRoute.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeGRPCRoute, grpcRouteNode.ID, grpcRoute.Namespace); err != nil {
+	if err := h.relationshipBuilder.base.CreateNamespaceEdge(ctx, NodeTypeGRPCRoute, grpcRouteNode.ID, grpcRoute.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
@@ -91,7 +91,7 @@ func (h *GRPCRouteHandler) HandleAdd(obj interface{}) {
 
 		if err := h.relationshipBuilder.CreateRouteAttachesToEdge(
 			ctx,
-			models.NodeTypeGRPCRoute,
+			NodeTypeGRPCRoute,
 			grpcRoute.Namespace,
 			grpcRoute.Name,
 			gatewayNamespace,
@@ -121,7 +121,7 @@ func (h *GRPCRouteHandler) HandleAdd(obj interface{}) {
 
 				if err := h.relationshipBuilder.CreateRouteForwardsToEdge(
 					ctx,
-					models.NodeTypeGRPCRoute,
+					NodeTypeGRPCRoute,
 					grpcRoute.Namespace,
 					grpcRoute.Name,
 					serviceNamespace,
@@ -155,7 +155,7 @@ func (h *GRPCRouteHandler) HandleUpdate(oldObj, newObj interface{}) {
 	grpcRouteID := models.GetNodeID("GRPCRoute", grpcRoute.Namespace, grpcRoute.Name)
 
 	// Delete old edges
-	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(models.NodeTypeGRPCRoute), grpcRouteID); err != nil {
+	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeGRPCRoute), grpcRouteID); err != nil {
 		h.Logger.Error("failed to delete old grpcroute edges", zap.Error(err))
 	}
 
@@ -179,7 +179,7 @@ func (h *GRPCRouteHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	grpcRouteID := models.GetNodeID("GRPCRoute", grpcRoute.Namespace, grpcRoute.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeGRPCRoute), grpcRouteID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeGRPCRoute), grpcRouteID); err != nil {
 		h.Logger.Error("failed to delete grpcroute node", zap.Error(err), zap.String("grpcroute", grpcRoute.Name))
 	}
 }

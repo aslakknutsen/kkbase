@@ -17,7 +17,7 @@ import (
 type TCPRouteHandler struct {
 	*watchers.BaseWatcher
 	dynamicClient       dynamic.Interface
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewTCPRouteHandler creates a new TCPRoute handler
@@ -33,7 +33,7 @@ func NewTCPRouteHandler(
 
 	handler := &TCPRouteHandler{
 		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
-		dynamicClient: dynamicClient, relationshipBuilder: watchers.NewRelationshipBuilder(nil, graphStore, logger),
+		dynamicClient: dynamicClient, relationshipBuilder: NewRelationshipBuilder(nil, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -68,14 +68,14 @@ func (h *TCPRouteHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create TCPRoute node
-	tcpRouteNode := models.TCPRouteToGraphNode(tcpRoute)
+	tcpRouteNode := TCPRouteToGraphNode(tcpRoute)
 	if err := h.GraphStore.UpsertNode(ctx, string(tcpRouteNode.Type), tcpRouteNode.ID, tcpRouteNode.Properties); err != nil {
 		h.Logger.Error("failed to create tcproute node", zap.Error(err), zap.String("tcproute", tcpRoute.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeTCPRoute, tcpRouteNode.ID, tcpRoute.Namespace); err != nil {
+	if err := h.relationshipBuilder.base.CreateNamespaceEdge(ctx, NodeTypeTCPRoute, tcpRouteNode.ID, tcpRoute.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
@@ -95,7 +95,7 @@ func (h *TCPRouteHandler) HandleAdd(obj interface{}) {
 
 		if err := h.relationshipBuilder.CreateRouteAttachesToEdge(
 			ctx,
-			models.NodeTypeTCPRoute,
+			NodeTypeTCPRoute,
 			tcpRoute.Namespace,
 			tcpRoute.Name,
 			gatewayNamespace,
@@ -124,7 +124,7 @@ func (h *TCPRouteHandler) HandleAdd(obj interface{}) {
 
 			if err := h.relationshipBuilder.CreateRouteForwardsToEdge(
 				ctx,
-				models.NodeTypeTCPRoute,
+				NodeTypeTCPRoute,
 				tcpRoute.Namespace,
 				tcpRoute.Name,
 				serviceNamespace,
@@ -161,7 +161,7 @@ func (h *TCPRouteHandler) HandleUpdate(oldObj, newObj interface{}) {
 	tcpRouteID := models.GetNodeID("TCPRoute", tcpRoute.Namespace, tcpRoute.Name)
 
 	// Delete old edges
-	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(models.NodeTypeTCPRoute), tcpRouteID); err != nil {
+	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeTCPRoute), tcpRouteID); err != nil {
 		h.Logger.Error("failed to delete old tcproute edges", zap.Error(err))
 	}
 
@@ -189,7 +189,7 @@ func (h *TCPRouteHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	tcpRouteID := models.GetNodeID("TCPRoute", tcpRoute.Namespace, tcpRoute.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeTCPRoute), tcpRouteID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeTCPRoute), tcpRouteID); err != nil {
 		h.Logger.Error("failed to delete tcproute node", zap.Error(err), zap.String("tcproute", tcpRoute.Name))
 	}
 }

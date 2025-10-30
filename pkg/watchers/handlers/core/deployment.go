@@ -18,7 +18,7 @@ import (
 type DeploymentHandler struct {
 	*watchers.BaseWatcher
 	clientset           *kubernetes.Clientset
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewDeploymentHandler creates a new Deployment handler
@@ -38,7 +38,7 @@ func NewDeploymentHandler(
 	handler := &DeploymentHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
 		clientset:           clientset,
-		relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -66,14 +66,14 @@ func (h *DeploymentHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create Deployment node
-	deploymentNode := models.DeploymentToGraphNode(deployment)
+	deploymentNode := DeploymentToGraphNode(deployment)
 	if err := h.GraphStore.UpsertNode(ctx, string(deploymentNode.Type), deploymentNode.ID, deploymentNode.Properties); err != nil {
 		h.Logger.Error("failed to create deployment node", zap.Error(err), zap.String("deployment", deployment.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeDeployment, deploymentNode.ID, deployment.Namespace); err != nil {
+	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, NodeTypeDeployment, deploymentNode.ID, deployment.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 }
@@ -104,7 +104,7 @@ func (h *DeploymentHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	deploymentID := models.GetNodeID("Deployment", deployment.Namespace, deployment.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeDeployment), deploymentID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeDeployment), deploymentID); err != nil {
 		h.Logger.Error("failed to delete deployment node", zap.Error(err), zap.String("deployment", deployment.Name))
 	}
 }

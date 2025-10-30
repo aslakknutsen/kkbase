@@ -17,7 +17,7 @@ import (
 type HTTPRouteHandler struct {
 	*watchers.BaseWatcher
 	dynamicClient       dynamic.Interface
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewHTTPRouteHandler creates a new HTTPRoute handler
@@ -33,7 +33,7 @@ func NewHTTPRouteHandler(
 
 	handler := &HTTPRouteHandler{
 		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
-		dynamicClient: dynamicClient, relationshipBuilder: watchers.NewRelationshipBuilder(nil, graphStore, logger),
+		dynamicClient: dynamicClient, relationshipBuilder: NewRelationshipBuilder(nil, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -64,14 +64,14 @@ func (h *HTTPRouteHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create HTTPRoute node
-	httpRouteNode := models.HTTPRouteToGraphNode(httpRoute)
+	httpRouteNode := HTTPRouteToGraphNode(httpRoute)
 	if err := h.GraphStore.UpsertNode(ctx, string(httpRouteNode.Type), httpRouteNode.ID, httpRouteNode.Properties); err != nil {
 		h.Logger.Error("failed to create httproute node", zap.Error(err), zap.String("httproute", httpRoute.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeHTTPRoute, httpRouteNode.ID, httpRoute.Namespace); err != nil {
+	if err := h.relationshipBuilder.base.CreateNamespaceEdge(ctx, NodeTypeHTTPRoute, httpRouteNode.ID, httpRoute.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
@@ -91,7 +91,7 @@ func (h *HTTPRouteHandler) HandleAdd(obj interface{}) {
 
 		if err := h.relationshipBuilder.CreateRouteAttachesToEdge(
 			ctx,
-			models.NodeTypeHTTPRoute,
+			NodeTypeHTTPRoute,
 			httpRoute.Namespace,
 			httpRoute.Name,
 			gatewayNamespace,
@@ -133,7 +133,7 @@ func (h *HTTPRouteHandler) HandleAdd(obj interface{}) {
 
 				if err := h.relationshipBuilder.CreateRouteForwardsToEdge(
 					ctx,
-					models.NodeTypeHTTPRoute,
+					NodeTypeHTTPRoute,
 					httpRoute.Namespace,
 					httpRoute.Name,
 					serviceNamespace,
@@ -167,7 +167,7 @@ func (h *HTTPRouteHandler) HandleUpdate(oldObj, newObj interface{}) {
 	httpRouteID := models.GetNodeID("HTTPRoute", httpRoute.Namespace, httpRoute.Name)
 
 	// Delete old edges
-	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(models.NodeTypeHTTPRoute), httpRouteID); err != nil {
+	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeHTTPRoute), httpRouteID); err != nil {
 		h.Logger.Error("failed to delete old httproute edges", zap.Error(err))
 	}
 
@@ -191,7 +191,7 @@ func (h *HTTPRouteHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	httpRouteID := models.GetNodeID("HTTPRoute", httpRoute.Namespace, httpRoute.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeHTTPRoute), httpRouteID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeHTTPRoute), httpRouteID); err != nil {
 		h.Logger.Error("failed to delete httproute node", zap.Error(err), zap.String("httproute", httpRoute.Name))
 	}
 }

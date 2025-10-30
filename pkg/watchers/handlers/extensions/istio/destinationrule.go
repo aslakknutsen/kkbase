@@ -20,7 +20,7 @@ type DestinationRuleHandler struct {
 	*watchers.BaseWatcher
 	clientset           *kubernetes.Clientset
 	dynamicClient       dynamic.Interface
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewDestinationRuleHandler creates a new DestinationRule handler
@@ -37,7 +37,7 @@ func NewDestinationRuleHandler(
 	handler := &DestinationRuleHandler{
 		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
 		clientset:     clientset,
-		dynamicClient: dynamicClient, relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		dynamicClient: dynamicClient, relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -73,14 +73,14 @@ func (h *DestinationRuleHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create DestinationRule node
-	drNode := models.DestinationRuleToGraphNode(destinationRule)
+	drNode := DestinationRuleToGraphNode(destinationRule)
 	if err := h.GraphStore.UpsertNode(ctx, string(drNode.Type), drNode.ID, drNode.Properties); err != nil {
 		h.Logger.Error("failed to create destinationrule node", zap.Error(err), zap.String("destinationrule", destinationRule.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeDestinationRule, drNode.ID, destinationRule.Namespace); err != nil {
+	if err := h.relationshipBuilder.base.CreateNamespaceEdge(ctx, NodeTypeDestinationRule, drNode.ID, destinationRule.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
@@ -134,7 +134,7 @@ func (h *DestinationRuleHandler) HandleUpdate(oldObj, newObj interface{}) {
 	drID := models.GetNodeID("DestinationRule", destinationRule.Namespace, destinationRule.Name)
 
 	// Delete old edges
-	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(models.NodeTypeDestinationRule), drID); err != nil {
+	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeDestinationRule), drID); err != nil {
 		h.Logger.Error("failed to delete old destinationrule edges", zap.Error(err))
 	}
 
@@ -162,7 +162,7 @@ func (h *DestinationRuleHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	drID := models.GetNodeID("DestinationRule", destinationRule.Namespace, destinationRule.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeDestinationRule), drID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeDestinationRule), drID); err != nil {
 		h.Logger.Error("failed to delete destinationrule node", zap.Error(err), zap.String("destinationrule", destinationRule.Name))
 	}
 }

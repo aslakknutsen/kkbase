@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/kagenti/kkbase/pkg/graph"
-	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -59,7 +58,7 @@ func (h *NamespaceHandler) HandleAdd(obj interface{}) {
 
 	ctx := context.Background()
 
-	namespaceNode := models.NamespaceToGraphNode(namespace)
+	namespaceNode := NamespaceToGraphNode(namespace)
 	if err := h.GraphStore.UpsertNode(ctx, string(namespaceNode.Type), namespaceNode.ID, namespaceNode.Properties); err != nil {
 		h.Logger.Error("failed to create namespace node", zap.Error(err), zap.String("namespace", namespace.Name))
 		return
@@ -90,7 +89,7 @@ func (h *NamespaceHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeNamespace), namespace.Name); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeNamespace), namespace.Name); err != nil {
 		h.Logger.Error("failed to delete namespace node", zap.Error(err), zap.String("namespace", namespace.Name))
 	}
 }

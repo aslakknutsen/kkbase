@@ -1,6 +1,11 @@
 package models
 
-import "sync"
+import (
+	"fmt"
+	"sync"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
 // NodeType represents the type of a graph node
 type NodeType string
@@ -80,69 +85,47 @@ func NodeTypeFromString(s string) (NodeType, bool) {
 	return nodeType, ok
 }
 
-// Node types as defined in the knowledge graph schema
+// Shared NodeTypes (not specific to any handler package)
+// Handler-specific types are defined in their respective packages:
+// - pkg/watchers/handlers/core/types.go (core Kubernetes resources)
+// - pkg/watchers/handlers/extensions/gateway/types.go (Gateway API)
+// - pkg/watchers/handlers/extensions/istio/types.go (Istio)
 const (
-	// Compute & Hardware
-	NodeTypeCluster NodeType = "Cluster"
-	NodeTypeNode    NodeType = "Node"
+	// Infrastructure
 
-	// Workloads
-	NodeTypePod         NodeType = "Pod"
-	NodeTypeContainer   NodeType = "Container"
-	NodeTypeDeployment  NodeType = "Deployment"
-	NodeTypeReplicaSet  NodeType = "ReplicaSet"
-	NodeTypeStatefulSet NodeType = "StatefulSet"
-	NodeTypeDaemonSet   NodeType = "DaemonSet"
+	// Derived from other resources (not a K8s resource itself)
+	NodeTypeContainer NodeType = "Container"
 
-	// Networking
-	NodeTypeService       NodeType = "Service"
-	NodeTypeIngress       NodeType = "Ingress"
-	NodeTypeEndpoint      NodeType = "Endpoint"
-	NodeTypeNetworkPolicy NodeType = "NetworkPolicy"
-
-	// Gateway API
-	NodeTypeGatewayClass     NodeType = "GatewayClass"
-	NodeTypeGateway          NodeType = "Gateway"
-	NodeTypeHTTPRoute        NodeType = "HTTPRoute"
-	NodeTypeGRPCRoute        NodeType = "GRPCRoute"
-	NodeTypeTCPRoute         NodeType = "TCPRoute"
-	NodeTypeUDPRoute         NodeType = "UDPRoute"
-	NodeTypeTLSRoute         NodeType = "TLSRoute"
-	NodeTypeReferenceGrant   NodeType = "ReferenceGrant"
-	NodeTypeBackendTLSPolicy NodeType = "BackendTLSPolicy"
-
-	// Istio - Traffic Management
-	NodeTypeIstioGateway    NodeType = "IstioGateway"
-	NodeTypeVirtualService  NodeType = "VirtualService"
-	NodeTypeDestinationRule NodeType = "DestinationRule"
-	NodeTypeServiceEntry    NodeType = "ServiceEntry"
-	NodeTypeSidecar         NodeType = "Sidecar"
-
-	// Istio - Security
-	NodeTypeAuthorizationPolicy   NodeType = "AuthorizationPolicy"
-	NodeTypePeerAuthentication    NodeType = "PeerAuthentication"
-	NodeTypeRequestAuthentication NodeType = "RequestAuthentication"
-
-	// Storage
-	NodeTypePersistentVolume      NodeType = "PersistentVolume"
-	NodeTypePersistentVolumeClaim NodeType = "PersistentVolumeClaim"
-	NodeTypeStorageClass          NodeType = "StorageClass"
-
-	// Configuration
-	NodeTypeConfigMap NodeType = "ConfigMap"
-	NodeTypeSecret    NodeType = "Secret"
-
-	// Observability
+	// Observability (from traces/monitoring, not K8s resources)
 	NodeTypeMetric      NodeType = "Metric"
 	NodeTypeLogEntry    NodeType = "LogEntry"
 	NodeTypeTrace       NodeType = "Trace"
 	NodeTypeSpan        NodeType = "Span"
 	NodeTypeServiceCall NodeType = "ServiceCall"
-	NodeTypeK8sEvent    NodeType = "K8sEvent"
-
-	// Other
-	NodeTypeNamespace NodeType = "Namespace"
 )
+
+// GetNodeID generates a unique identifier for a Kubernetes resource
+// Format: kind/namespace/name for namespaced resources, kind/name for cluster-scoped
+func GetNodeID(kind, namespace, name string) string {
+	if namespace == "" {
+		return fmt.Sprintf("%s/%s", kind, name)
+	}
+	return fmt.Sprintf("%s/%s/%s", kind, namespace, name)
+}
+
+// GetOwnerReference extracts the controller owner reference from a list
+// Returns the first controller owner if found, otherwise the first owner, or nil
+func GetOwnerReference(ownerRefs []metav1.OwnerReference) *metav1.OwnerReference {
+	for i := range ownerRefs {
+		if ownerRefs[i].Controller != nil && *ownerRefs[i].Controller {
+			return &ownerRefs[i]
+		}
+	}
+	if len(ownerRefs) > 0 {
+		return &ownerRefs[0]
+	}
+	return nil
+}
 
 // EdgeType represents the type of a graph edge (relationship)
 type EdgeType string

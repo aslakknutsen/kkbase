@@ -19,7 +19,7 @@ import (
 type PodHandler struct {
 	*watchers.BaseWatcher
 	clientset           *kubernetes.Clientset
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewPodHandler creates a new Pod handler
@@ -39,7 +39,7 @@ func NewPodHandler(
 	handler := &PodHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
 		clientset:           clientset,
-		relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -67,7 +67,7 @@ func (h *PodHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create Pod node
-	podNode := models.PodToGraphNode(pod)
+	podNode := PodToGraphNode(pod)
 	if err := h.GraphStore.UpsertNode(ctx, string(podNode.Type), podNode.ID, podNode.Properties); err != nil {
 		h.Logger.Error("failed to create pod node", zap.Error(err), zap.String("pod", pod.Name))
 		return
@@ -80,7 +80,7 @@ func (h *PodHandler) HandleAdd(obj interface{}) {
 			containerStatus = &pod.Status.ContainerStatuses[i]
 		}
 
-		containerNode := models.ContainerToGraphNode(pod, container, containerStatus)
+		containerNode := ContainerToGraphNode(pod, container, containerStatus)
 		if err := h.GraphStore.UpsertNode(ctx, string(containerNode.Type), containerNode.ID, containerNode.Properties); err != nil {
 			h.Logger.Error("failed to create container node", zap.Error(err), zap.String("container", container.Name))
 			continue
@@ -102,7 +102,7 @@ func (h *PodHandler) HandleAdd(obj interface{}) {
 
 	// Create owner reference edges
 	if ownerRef := models.GetOwnerReference(pod.OwnerReferences); ownerRef != nil {
-		if err := h.relationshipBuilder.CreateOwnerEdge(ctx, models.NodeTypePod, podNode.ID, *ownerRef, pod.Namespace); err != nil {
+		if err := h.relationshipBuilder.CreateOwnerEdge(ctx, NodeTypePod, podNode.ID, *ownerRef, pod.Namespace); err != nil {
 			h.Logger.Error("failed to create owner edge", zap.Error(err))
 		}
 	}
@@ -144,7 +144,7 @@ func (h *PodHandler) HandleDelete(obj interface{}) {
 
 	// Delete Pod node
 	podID := models.GetNodeID("Pod", pod.Namespace, pod.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypePod), podID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypePod), podID); err != nil {
 		h.Logger.Error("failed to delete pod node", zap.Error(err), zap.String("pod", pod.Name))
 	}
 }

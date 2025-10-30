@@ -18,7 +18,7 @@ import (
 type DaemonSetHandler struct {
 	*watchers.BaseWatcher
 	clientset           *kubernetes.Clientset
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewDaemonSetHandler creates a new DaemonSet handler
@@ -38,7 +38,7 @@ func NewDaemonSetHandler(
 	handler := &DaemonSetHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
 		clientset:           clientset,
-		relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -66,14 +66,14 @@ func (h *DaemonSetHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create DaemonSet node
-	daemonSetNode := models.DaemonSetToGraphNode(daemonSet)
+	daemonSetNode := DaemonSetToGraphNode(daemonSet)
 	if err := h.GraphStore.UpsertNode(ctx, string(daemonSetNode.Type), daemonSetNode.ID, daemonSetNode.Properties); err != nil {
 		h.Logger.Error("failed to create daemonset node", zap.Error(err), zap.String("daemonset", daemonSet.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeDaemonSet, daemonSetNode.ID, daemonSet.Namespace); err != nil {
+	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, NodeTypeDaemonSet, daemonSetNode.ID, daemonSet.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 }
@@ -104,7 +104,7 @@ func (h *DaemonSetHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	daemonSetID := models.GetNodeID("DaemonSet", daemonSet.Namespace, daemonSet.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeDaemonSet), daemonSetID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeDaemonSet), daemonSetID); err != nil {
 		h.Logger.Error("failed to delete daemonset node", zap.Error(err), zap.String("daemonset", daemonSet.Name))
 	}
 }

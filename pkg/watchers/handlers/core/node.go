@@ -60,7 +60,7 @@ func (h *NodeHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create Node node
-	nodeNode := models.NodeToGraphNode(node)
+	nodeNode := NodeToGraphNode(node)
 	if err := h.GraphStore.UpsertNode(ctx, string(nodeNode.Type), nodeNode.ID, nodeNode.Properties); err != nil {
 		h.Logger.Error("failed to create node", zap.Error(err), zap.String("node", node.Name))
 		return
@@ -94,7 +94,7 @@ func (h *NodeHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	nodeID := models.GetNodeID("Node", "", node.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeNode), nodeID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeNode), nodeID); err != nil {
 		h.Logger.Error("failed to delete node", zap.Error(err), zap.String("node", node.Name))
 	}
 }

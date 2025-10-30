@@ -18,7 +18,7 @@ import (
 type ServiceHandler struct {
 	*watchers.BaseWatcher
 	clientset           *kubernetes.Clientset
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewServiceHandler creates a new Service handler
@@ -38,7 +38,7 @@ func NewServiceHandler(
 	handler := &ServiceHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
 		clientset:           clientset,
-		relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -66,14 +66,14 @@ func (h *ServiceHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create Service node
-	serviceNode := models.ServiceToGraphNode(service)
+	serviceNode := ServiceToGraphNode(service)
 	if err := h.GraphStore.UpsertNode(ctx, string(serviceNode.Type), serviceNode.ID, serviceNode.Properties); err != nil {
 		h.Logger.Error("failed to create service node", zap.Error(err), zap.String("service", service.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeService, serviceNode.ID, service.Namespace); err != nil {
+	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, NodeTypeService, serviceNode.ID, service.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
@@ -99,7 +99,7 @@ func (h *ServiceHandler) HandleUpdate(oldObj, newObj interface{}) {
 
 	// Delete only the edge types that we manage (not runtime-observed edges like ORIGINATED_FROM, CALLS, FAILED_CALL_TO)
 	managedEdgeTypes := []string{"SELECTS_PODS", "IN_NAMESPACE", "ROUTES_TO", "FORWARDS_TO"}
-	if err := h.GraphStore.DeleteEdgesByTypeAndNode(ctx, string(models.NodeTypeService), serviceID, managedEdgeTypes); err != nil {
+	if err := h.GraphStore.DeleteEdgesByTypeAndNode(ctx, string(NodeTypeService), serviceID, managedEdgeTypes); err != nil {
 		h.Logger.Error("failed to delete old service edges", zap.Error(err))
 	}
 
@@ -120,7 +120,7 @@ func (h *ServiceHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	serviceID := models.GetNodeID("Service", service.Namespace, service.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeService), serviceID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeService), serviceID); err != nil {
 		h.Logger.Error("failed to delete service node", zap.Error(err), zap.String("service", service.Name))
 	}
 }

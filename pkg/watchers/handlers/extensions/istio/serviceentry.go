@@ -20,7 +20,7 @@ type ServiceEntryHandler struct {
 	*watchers.BaseWatcher
 	clientset           *kubernetes.Clientset
 	dynamicClient       dynamic.Interface
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewServiceEntryHandler creates a new ServiceEntry handler
@@ -37,7 +37,7 @@ func NewServiceEntryHandler(
 	handler := &ServiceEntryHandler{
 		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
 		clientset:     clientset,
-		dynamicClient: dynamicClient, relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		dynamicClient: dynamicClient, relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -72,7 +72,7 @@ func (h *ServiceEntryHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create ServiceEntry node
-	seNode := models.ServiceEntryToGraphNode(serviceEntry)
+	seNode := ServiceEntryToGraphNode(serviceEntry)
 	if err := h.GraphStore.UpsertNode(ctx, string(seNode.Type), seNode.ID, seNode.Properties); err != nil {
 		h.Logger.Error("failed to create serviceentry node", zap.Error(err), zap.String("serviceentry", serviceEntry.Name))
 		return
@@ -80,7 +80,7 @@ func (h *ServiceEntryHandler) HandleAdd(obj interface{}) {
 
 	// Create IN_NAMESPACE edge (if namespaced)
 	if serviceEntry.Namespace != "" {
-		if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeServiceEntry, seNode.ID, serviceEntry.Namespace); err != nil {
+		if err := h.relationshipBuilder.base.CreateNamespaceEdge(ctx, NodeTypeServiceEntry, seNode.ID, serviceEntry.Namespace); err != nil {
 			h.Logger.Error("failed to create namespace edge", zap.Error(err))
 		}
 	}
@@ -107,7 +107,7 @@ func (h *ServiceEntryHandler) HandleUpdate(oldObj, newObj interface{}) {
 	seID := models.GetNodeID("ServiceEntry", serviceEntry.Namespace, serviceEntry.Name)
 
 	// Delete old edges
-	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(models.NodeTypeServiceEntry), seID); err != nil {
+	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeServiceEntry), seID); err != nil {
 		h.Logger.Error("failed to delete old serviceentry edges", zap.Error(err))
 	}
 
@@ -135,7 +135,7 @@ func (h *ServiceEntryHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	seID := models.GetNodeID("ServiceEntry", serviceEntry.Namespace, serviceEntry.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeServiceEntry), seID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeServiceEntry), seID); err != nil {
 		h.Logger.Error("failed to delete serviceentry node", zap.Error(err), zap.String("serviceentry", serviceEntry.Name))
 	}
 }

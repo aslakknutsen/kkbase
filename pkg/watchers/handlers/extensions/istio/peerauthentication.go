@@ -20,7 +20,7 @@ type PeerAuthenticationHandler struct {
 	*watchers.BaseWatcher
 	clientset           *kubernetes.Clientset
 	dynamicClient       dynamic.Interface
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewPeerAuthenticationHandler creates a new PeerAuthentication handler
@@ -37,7 +37,7 @@ func NewPeerAuthenticationHandler(
 	handler := &PeerAuthenticationHandler{
 		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
 		clientset:     clientset,
-		dynamicClient: dynamicClient, relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		dynamicClient: dynamicClient, relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -68,14 +68,14 @@ func (h *PeerAuthenticationHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create PeerAuthentication node
-	paNode := models.PeerAuthenticationToGraphNode(peerAuthentication)
+	paNode := PeerAuthenticationToGraphNode(peerAuthentication)
 	if err := h.GraphStore.UpsertNode(ctx, string(paNode.Type), paNode.ID, paNode.Properties); err != nil {
 		h.Logger.Error("failed to create peerauthentication node", zap.Error(err), zap.String("peerauthentication", peerAuthentication.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypePeerAuthentication, paNode.ID, peerAuthentication.Namespace); err != nil {
+	if err := h.relationshipBuilder.base.CreateNamespaceEdge(ctx, NodeTypePeerAuthentication, paNode.ID, peerAuthentication.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
@@ -91,7 +91,7 @@ func (h *PeerAuthenticationHandler) HandleAdd(obj interface{}) {
 	}
 
 	if err := h.relationshipBuilder.CreateIstioPolicyAppliesToEdge(
-		ctx, models.NodeTypePeerAuthentication, peerAuthentication.Namespace, peerAuthentication.Name, selector, additionalProps); err != nil {
+		ctx, NodeTypePeerAuthentication, peerAuthentication.Namespace, peerAuthentication.Name, selector, additionalProps); err != nil {
 		h.Logger.Error("failed to create APPLIES_TO edges", zap.Error(err))
 	}
 }
@@ -113,7 +113,7 @@ func (h *PeerAuthenticationHandler) HandleUpdate(oldObj, newObj interface{}) {
 	paID := models.GetNodeID("PeerAuthentication", peerAuthentication.Namespace, peerAuthentication.Name)
 
 	// Delete old edges
-	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(models.NodeTypePeerAuthentication), paID); err != nil {
+	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypePeerAuthentication), paID); err != nil {
 		h.Logger.Error("failed to delete old peerauthentication edges", zap.Error(err))
 	}
 
@@ -137,7 +137,7 @@ func (h *PeerAuthenticationHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	paID := models.GetNodeID("PeerAuthentication", peerAuthentication.Namespace, peerAuthentication.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypePeerAuthentication), paID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypePeerAuthentication), paID); err != nil {
 		h.Logger.Error("failed to delete peerauthentication node", zap.Error(err), zap.String("peerauthentication", peerAuthentication.Name))
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/kagenti/kkbase/pkg/graph"
-	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
@@ -17,7 +16,7 @@ import (
 type GatewayClassHandler struct {
 	*watchers.BaseWatcher
 	dynamicClient       dynamic.Interface
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewGatewayClassHandler creates a new GatewayClass handler
@@ -33,7 +32,7 @@ func NewGatewayClassHandler(
 
 	handler := &GatewayClassHandler{
 		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
-		dynamicClient: dynamicClient, relationshipBuilder: watchers.NewRelationshipBuilder(nil, graphStore, logger),
+		dynamicClient: dynamicClient, relationshipBuilder: NewRelationshipBuilder(nil, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -68,7 +67,7 @@ func (h *GatewayClassHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create GatewayClass node
-	gatewayClassNode := models.GatewayClassToGraphNode(gatewayClass)
+	gatewayClassNode := GatewayClassToGraphNode(gatewayClass)
 	if err := h.GraphStore.UpsertNode(ctx, string(gatewayClassNode.Type), gatewayClassNode.ID, gatewayClassNode.Properties); err != nil {
 		h.Logger.Error("failed to create gatewayclass node", zap.Error(err), zap.String("name", gatewayClass.Name))
 		return
@@ -109,7 +108,7 @@ func (h *GatewayClassHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeGatewayClass), gatewayClass.Name); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeGatewayClass), gatewayClass.Name); err != nil {
 		h.Logger.Error("failed to delete gatewayclass node", zap.Error(err), zap.String("name", gatewayClass.Name))
 	}
 }

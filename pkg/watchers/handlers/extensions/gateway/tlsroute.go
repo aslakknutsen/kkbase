@@ -17,7 +17,7 @@ import (
 type TLSRouteHandler struct {
 	*watchers.BaseWatcher
 	dynamicClient       dynamic.Interface
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewTLSRouteHandler creates a new TLSRoute handler
@@ -33,7 +33,7 @@ func NewTLSRouteHandler(
 
 	handler := &TLSRouteHandler{
 		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
-		dynamicClient: dynamicClient, relationshipBuilder: watchers.NewRelationshipBuilder(nil, graphStore, logger),
+		dynamicClient: dynamicClient, relationshipBuilder: NewRelationshipBuilder(nil, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -68,14 +68,14 @@ func (h *TLSRouteHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create TLSRoute node
-	tlsRouteNode := models.TLSRouteToGraphNode(tlsRoute)
+	tlsRouteNode := TLSRouteToGraphNode(tlsRoute)
 	if err := h.GraphStore.UpsertNode(ctx, string(tlsRouteNode.Type), tlsRouteNode.ID, tlsRouteNode.Properties); err != nil {
 		h.Logger.Error("failed to create tlsroute node", zap.Error(err), zap.String("tlsroute", tlsRoute.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeTLSRoute, tlsRouteNode.ID, tlsRoute.Namespace); err != nil {
+	if err := h.relationshipBuilder.base.CreateNamespaceEdge(ctx, NodeTypeTLSRoute, tlsRouteNode.ID, tlsRoute.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
@@ -95,7 +95,7 @@ func (h *TLSRouteHandler) HandleAdd(obj interface{}) {
 
 		if err := h.relationshipBuilder.CreateRouteAttachesToEdge(
 			ctx,
-			models.NodeTypeTLSRoute,
+			NodeTypeTLSRoute,
 			tlsRoute.Namespace,
 			tlsRoute.Name,
 			gatewayNamespace,
@@ -124,7 +124,7 @@ func (h *TLSRouteHandler) HandleAdd(obj interface{}) {
 
 			if err := h.relationshipBuilder.CreateRouteForwardsToEdge(
 				ctx,
-				models.NodeTypeTLSRoute,
+				NodeTypeTLSRoute,
 				tlsRoute.Namespace,
 				tlsRoute.Name,
 				serviceNamespace,
@@ -161,7 +161,7 @@ func (h *TLSRouteHandler) HandleUpdate(oldObj, newObj interface{}) {
 	tlsRouteID := models.GetNodeID("TLSRoute", tlsRoute.Namespace, tlsRoute.Name)
 
 	// Delete old edges
-	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(models.NodeTypeTLSRoute), tlsRouteID); err != nil {
+	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeTLSRoute), tlsRouteID); err != nil {
 		h.Logger.Error("failed to delete old tlsroute edges", zap.Error(err))
 	}
 
@@ -189,7 +189,7 @@ func (h *TLSRouteHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	tlsRouteID := models.GetNodeID("TLSRoute", tlsRoute.Namespace, tlsRoute.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeTLSRoute), tlsRouteID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeTLSRoute), tlsRouteID); err != nil {
 		h.Logger.Error("failed to delete tlsroute node", zap.Error(err), zap.String("tlsroute", tlsRoute.Name))
 	}
 }

@@ -18,7 +18,7 @@ import (
 type SecretHandler struct {
 	*watchers.BaseWatcher
 	clientset           *kubernetes.Clientset
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewSecretHandler creates a new Secret handler
@@ -38,7 +38,7 @@ func NewSecretHandler(
 	handler := &SecretHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
 		clientset:           clientset,
-		relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -70,14 +70,14 @@ func (h *SecretHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create Secret node
-	secretNode := models.SecretToGraphNode(secret)
+	secretNode := SecretToGraphNode(secret)
 	if err := h.GraphStore.UpsertNode(ctx, string(secretNode.Type), secretNode.ID, secretNode.Properties); err != nil {
 		h.Logger.Error("failed to create secret node", zap.Error(err), zap.String("secret", secret.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeSecret, secretNode.ID, secret.Namespace); err != nil {
+	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, NodeTypeSecret, secretNode.ID, secret.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 }
@@ -99,7 +99,7 @@ func (h *SecretHandler) HandleUpdate(oldObj, newObj interface{}) {
 	secretID := models.GetNodeID("Secret", newSecret.Namespace, newSecret.Name)
 
 	// Delete old edges
-	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(models.NodeTypeSecret), secretID); err != nil {
+	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeSecret), secretID); err != nil {
 		h.Logger.Error("failed to delete old secret edges", zap.Error(err))
 	}
 
@@ -123,7 +123,7 @@ func (h *SecretHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	secretID := models.GetNodeID("Secret", secret.Namespace, secret.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeSecret), secretID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeSecret), secretID); err != nil {
 		h.Logger.Error("failed to delete secret node", zap.Error(err), zap.String("secret", secret.Name))
 	}
 }

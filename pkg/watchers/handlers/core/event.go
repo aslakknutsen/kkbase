@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/kagenti/kkbase/pkg/graph"
-	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -18,7 +17,7 @@ import (
 // EventHandler handles K8s Event resources
 type EventHandler struct {
 	*watchers.BaseWatcher
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewEventHandler creates a new Event handler
@@ -37,7 +36,7 @@ func NewEventHandler(
 
 	handler := &EventHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
-		relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -67,7 +66,7 @@ func (h *EventHandler) HandleAdd(obj interface{}) {
 
 	ctx := context.Background()
 
-	eventNode := models.EventToGraphNode(event)
+	eventNode := EventToGraphNode(event)
 	if err := h.GraphStore.UpsertNode(ctx, string(eventNode.Type), eventNode.ID, eventNode.Properties); err != nil {
 		h.Logger.Error("failed to create event node", zap.Error(err), zap.String("event", event.Name))
 		return
@@ -110,7 +109,7 @@ func (h *EventHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	eventID := fmt.Sprintf("%s/%s/%s", event.Namespace, event.InvolvedObject.Name, event.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeK8sEvent), eventID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeK8sEvent), eventID); err != nil {
 		h.Logger.Error("failed to delete event node", zap.Error(err), zap.String("event", event.Name))
 	}
 }

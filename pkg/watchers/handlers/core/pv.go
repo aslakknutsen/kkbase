@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/kagenti/kkbase/pkg/graph"
-	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -17,7 +16,7 @@ import (
 // PVHandler handles PersistentVolume resources
 type PVHandler struct {
 	*watchers.BaseWatcher
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewPVHandler creates a new PV handler
@@ -36,7 +35,7 @@ func NewPVHandler(
 
 	handler := &PVHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
-		relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -63,7 +62,7 @@ func (h *PVHandler) HandleAdd(obj interface{}) {
 
 	ctx := context.Background()
 
-	pvNode := models.PersistentVolumeToGraphNode(pv)
+	pvNode := PersistentVolumeToGraphNode(pv)
 	if err := h.GraphStore.UpsertNode(ctx, string(pvNode.Type), pvNode.ID, pvNode.Properties); err != nil {
 		h.Logger.Error("failed to create pv node", zap.Error(err), zap.String("pv", pv.Name))
 		return
@@ -99,7 +98,7 @@ func (h *PVHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypePersistentVolume), pv.Name); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypePersistentVolume), pv.Name); err != nil {
 		h.Logger.Error("failed to delete pv node", zap.Error(err), zap.String("pv", pv.Name))
 	}
 }

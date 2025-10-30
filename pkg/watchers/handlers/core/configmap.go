@@ -17,7 +17,7 @@ import (
 // ConfigMapHandler handles ConfigMap resources
 type ConfigMapHandler struct {
 	*watchers.BaseWatcher
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewConfigMapHandler creates a new ConfigMap handler
@@ -36,7 +36,7 @@ func NewConfigMapHandler(
 
 	handler := &ConfigMapHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
-		relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -63,14 +63,14 @@ func (h *ConfigMapHandler) HandleAdd(obj interface{}) {
 
 	ctx := context.Background()
 
-	configMapNode := models.ConfigMapToGraphNode(configMap)
+	configMapNode := ConfigMapToGraphNode(configMap)
 	if err := h.GraphStore.UpsertNode(ctx, string(configMapNode.Type), configMapNode.ID, configMapNode.Properties); err != nil {
 		h.Logger.Error("failed to create configmap node", zap.Error(err), zap.String("configmap", configMap.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeConfigMap, configMapNode.ID, configMap.Namespace); err != nil {
+	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, NodeTypeConfigMap, configMapNode.ID, configMap.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 }
@@ -100,7 +100,7 @@ func (h *ConfigMapHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	configMapID := models.GetNodeID("ConfigMap", configMap.Namespace, configMap.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeConfigMap), configMapID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeConfigMap), configMapID); err != nil {
 		h.Logger.Error("failed to delete configmap node", zap.Error(err), zap.String("configmap", configMap.Name))
 	}
 }

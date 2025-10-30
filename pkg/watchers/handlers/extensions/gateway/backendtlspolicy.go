@@ -3,6 +3,8 @@ package gateway
 import (
 	"context"
 
+	"github.com/kagenti/kkbase/pkg/watchers/handlers/core"
+
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
@@ -17,7 +19,7 @@ import (
 type BackendTLSPolicyHandler struct {
 	*watchers.BaseWatcher
 	dynamicClient       dynamic.Interface
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewBackendTLSPolicyHandler creates a new BackendTLSPolicy handler
@@ -33,7 +35,7 @@ func NewBackendTLSPolicyHandler(
 	handler := &BackendTLSPolicyHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
 		dynamicClient:       dynamicClient,
-		relationshipBuilder: watchers.NewRelationshipBuilder(nil, graphStore, logger),
+		relationshipBuilder: NewRelationshipBuilder(nil, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -64,14 +66,14 @@ func (h *BackendTLSPolicyHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create BackendTLSPolicy node
-	backendTLSPolicyNode := models.BackendTLSPolicyToGraphNode(backendTLSPolicy)
+	backendTLSPolicyNode := BackendTLSPolicyToGraphNode(backendTLSPolicy)
 	if err := h.GraphStore.UpsertNode(ctx, string(backendTLSPolicyNode.Type), backendTLSPolicyNode.ID, backendTLSPolicyNode.Properties); err != nil {
 		h.Logger.Error("failed to create backendtlspolicy node", zap.Error(err), zap.String("backendtlspolicy", backendTLSPolicy.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeBackendTLSPolicy, backendTLSPolicyNode.ID, backendTLSPolicy.Namespace); err != nil {
+	if err := h.relationshipBuilder.base.CreateNamespaceEdge(ctx, NodeTypeBackendTLSPolicy, backendTLSPolicyNode.ID, backendTLSPolicy.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
@@ -93,9 +95,9 @@ func (h *BackendTLSPolicyHandler) HandleAdd(obj interface{}) {
 		if err := h.GraphStore.UpsertEdge(
 			ctx,
 			string(models.EdgeTypeAppliesTo),
-			string(models.NodeTypeBackendTLSPolicy),
+			string(NodeTypeBackendTLSPolicy),
 			backendTLSPolicyNode.ID,
-			string(models.NodeTypeService),
+			string(core.NodeTypeService),
 			backendID,
 			edgeProperties,
 		); err != nil {
@@ -124,9 +126,9 @@ func (h *BackendTLSPolicyHandler) HandleAdd(obj interface{}) {
 		if err := h.GraphStore.UpsertEdge(
 			ctx,
 			string(models.EdgeTypeUsesSecret),
-			string(models.NodeTypeBackendTLSPolicy),
+			string(NodeTypeBackendTLSPolicy),
 			backendTLSPolicyNode.ID,
-			string(models.NodeTypeSecret),
+			string(core.NodeTypeSecret),
 			secretID,
 			edgeProperties,
 		); err != nil {
@@ -155,7 +157,7 @@ func (h *BackendTLSPolicyHandler) HandleUpdate(oldObj, newObj interface{}) {
 	backendTLSPolicyID := models.GetNodeID("BackendTLSPolicy", backendTLSPolicy.Namespace, backendTLSPolicy.Name)
 
 	// Delete old edges
-	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(models.NodeTypeBackendTLSPolicy), backendTLSPolicyID); err != nil {
+	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeBackendTLSPolicy), backendTLSPolicyID); err != nil {
 		h.Logger.Error("failed to delete old backendtlspolicy edges", zap.Error(err))
 	}
 
@@ -179,7 +181,7 @@ func (h *BackendTLSPolicyHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	backendTLSPolicyID := models.GetNodeID("BackendTLSPolicy", backendTLSPolicy.Namespace, backendTLSPolicy.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeBackendTLSPolicy), backendTLSPolicyID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeBackendTLSPolicy), backendTLSPolicyID); err != nil {
 		h.Logger.Error("failed to delete backendtlspolicy node", zap.Error(err), zap.String("backendtlspolicy", backendTLSPolicy.Name))
 	}
 }

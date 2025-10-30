@@ -20,7 +20,7 @@ type SidecarHandler struct {
 	*watchers.BaseWatcher
 	clientset           *kubernetes.Clientset
 	dynamicClient       dynamic.Interface
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewSidecarHandler creates a new Sidecar handler
@@ -37,7 +37,7 @@ func NewSidecarHandler(
 	handler := &SidecarHandler{
 		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
 		clientset:     clientset,
-		dynamicClient: dynamicClient, relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
+		dynamicClient: dynamicClient, relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -72,14 +72,14 @@ func (h *SidecarHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create Sidecar node
-	sidecarNode := models.SidecarToGraphNode(sidecar)
+	sidecarNode := SidecarToGraphNode(sidecar)
 	if err := h.GraphStore.UpsertNode(ctx, string(sidecarNode.Type), sidecarNode.ID, sidecarNode.Properties); err != nil {
 		h.Logger.Error("failed to create sidecar node", zap.Error(err), zap.String("sidecar", sidecar.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeSidecar, sidecarNode.ID, sidecar.Namespace); err != nil {
+	if err := h.relationshipBuilder.base.CreateNamespaceEdge(ctx, NodeTypeSidecar, sidecarNode.ID, sidecar.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 }
@@ -105,7 +105,7 @@ func (h *SidecarHandler) HandleUpdate(oldObj, newObj interface{}) {
 	sidecarID := models.GetNodeID("Sidecar", sidecar.Namespace, sidecar.Name)
 
 	// Delete old edges
-	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(models.NodeTypeSidecar), sidecarID); err != nil {
+	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeSidecar), sidecarID); err != nil {
 		h.Logger.Error("failed to delete old sidecar edges", zap.Error(err))
 	}
 
@@ -133,7 +133,7 @@ func (h *SidecarHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	sidecarID := models.GetNodeID("Sidecar", sidecar.Namespace, sidecar.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeSidecar), sidecarID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeSidecar), sidecarID); err != nil {
 		h.Logger.Error("failed to delete sidecar node", zap.Error(err), zap.String("sidecar", sidecar.Name))
 	}
 }

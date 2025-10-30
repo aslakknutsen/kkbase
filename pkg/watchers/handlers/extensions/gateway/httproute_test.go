@@ -291,7 +291,7 @@ spec:
 			// Note: We create a minimal handler without the full informer setup
 			handler := &HTTPRouteHandler{
 				BaseWatcher:         watchers.NewBaseWatcher(mockStore, logger, nil),
-				relationshipBuilder: watchers.NewRelationshipBuilder(nil, mockStore, logger),
+				relationshipBuilder: NewRelationshipBuilder(nil, mockStore, logger),
 			}
 
 			// Execute the handler
@@ -356,7 +356,7 @@ spec:
 	// Create handler with mock store
 	handler := &HTTPRouteHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(mockStore, logger, nil),
-		relationshipBuilder: watchers.NewRelationshipBuilder(nil, mockStore, logger),
+		relationshipBuilder: NewRelationshipBuilder(nil, mockStore, logger),
 	}
 
 	// Execute the handler update (which calls HandleAdd internally)
@@ -418,7 +418,7 @@ spec:
 	// Create handler with mock store
 	handler := &HTTPRouteHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(mockStore, logger, nil),
-		relationshipBuilder: watchers.NewRelationshipBuilder(nil, mockStore, logger),
+		relationshipBuilder: NewRelationshipBuilder(nil, mockStore, logger),
 	}
 
 	// Execute the handler delete

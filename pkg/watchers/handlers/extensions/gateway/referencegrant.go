@@ -17,7 +17,7 @@ import (
 type ReferenceGrantHandler struct {
 	*watchers.BaseWatcher
 	dynamicClient       dynamic.Interface
-	relationshipBuilder *watchers.RelationshipBuilder
+	relationshipBuilder *RelationshipBuilder
 }
 
 // NewReferenceGrantHandler creates a new ReferenceGrant handler
@@ -33,7 +33,7 @@ func NewReferenceGrantHandler(
 
 	handler := &ReferenceGrantHandler{
 		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
-		dynamicClient: dynamicClient, relationshipBuilder: watchers.NewRelationshipBuilder(nil, graphStore, logger),
+		dynamicClient: dynamicClient, relationshipBuilder: NewRelationshipBuilder(nil, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -68,14 +68,14 @@ func (h *ReferenceGrantHandler) HandleAdd(obj interface{}) {
 	ctx := context.Background()
 
 	// Create ReferenceGrant node
-	referenceGrantNode := models.ReferenceGrantToGraphNode(referenceGrant)
+	referenceGrantNode := ReferenceGrantToGraphNode(referenceGrant)
 	if err := h.GraphStore.UpsertNode(ctx, string(referenceGrantNode.Type), referenceGrantNode.ID, referenceGrantNode.Properties); err != nil {
 		h.Logger.Error("failed to create referencegrant node", zap.Error(err), zap.String("referencegrant", referenceGrant.Name))
 		return
 	}
 
 	// Create IN_NAMESPACE edge
-	if err := h.relationshipBuilder.CreateNamespaceEdge(ctx, models.NodeTypeReferenceGrant, referenceGrantNode.ID, referenceGrant.Namespace); err != nil {
+	if err := h.relationshipBuilder.base.CreateNamespaceEdge(ctx, NodeTypeReferenceGrant, referenceGrantNode.ID, referenceGrant.Namespace); err != nil {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
@@ -128,7 +128,7 @@ func (h *ReferenceGrantHandler) HandleUpdate(oldObj, newObj interface{}) {
 	referenceGrantID := models.GetNodeID("ReferenceGrant", referenceGrant.Namespace, referenceGrant.Name)
 
 	// Delete old edges
-	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(models.NodeTypeReferenceGrant), referenceGrantID); err != nil {
+	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeReferenceGrant), referenceGrantID); err != nil {
 		h.Logger.Error("failed to delete old referencegrant edges", zap.Error(err))
 	}
 
@@ -156,7 +156,7 @@ func (h *ReferenceGrantHandler) HandleDelete(obj interface{}) {
 	ctx := context.Background()
 
 	referenceGrantID := models.GetNodeID("ReferenceGrant", referenceGrant.Namespace, referenceGrant.Name)
-	if err := h.GraphStore.DeleteNode(ctx, string(models.NodeTypeReferenceGrant), referenceGrantID); err != nil {
+	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeReferenceGrant), referenceGrantID); err != nil {
 		h.Logger.Error("failed to delete referencegrant node", zap.Error(err), zap.String("referencegrant", referenceGrant.Name))
 	}
 }
