@@ -34,3 +34,27 @@ const (
 	// Observability
 	NodeTypeK8sEvent = "K8sEvent"
 )
+
+// Core Kubernetes EdgeTypes
+// These constants represent edge types (relationships) that are specific to core K8s resources.
+// Shared edge types (used across multiple handler packages) remain in models.EdgeType.
+const (
+	// Structural & Hierarchical
+	EdgeTypeManages     = "MANAGES"
+	EdgeTypeContains    = "CONTAINS"
+	EdgeTypeScheduledOn = "SCHEDULED_ON"
+
+	// Networking
+	EdgeTypeSelectsPods = "SELECTS_PODS"
+
+	// Storage
+	EdgeTypeMounts        = "MOUNTS"
+	EdgeTypeBoundTo       = "BOUND_TO"
+	EdgeTypeProvisionedBy = "PROVISIONED_BY"
+
+	// Configuration
+	EdgeTypeUsesConfig = "USES_CONFIG"
+
+	// Observability
+	EdgeTypeInvolves = "INVOLVES"
+)

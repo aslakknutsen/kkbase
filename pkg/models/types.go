@@ -130,42 +130,29 @@ func GetOwnerReference(ownerRefs []metav1.OwnerReference) *metav1.OwnerReference
 // EdgeType represents the type of a graph edge (relationship)
 type EdgeType string
 
-// Edge types as defined in the knowledge graph schema
+// Shared EdgeTypes (used across multiple handler packages)
+// Handler-specific edge types are defined in their respective packages:
+// - pkg/watchers/handlers/core/types.go (core Kubernetes resources)
+// - pkg/watchers/handlers/extensions/gateway/types.go (Gateway API)
+// - pkg/watchers/handlers/extensions/istio/types.go (Istio)
 const (
-	// Structural & Hierarchical
-	EdgeTypeManages     EdgeType = "MANAGES"
-	EdgeTypeContains    EdgeType = "CONTAINS"
-	EdgeTypeScheduledOn EdgeType = "SCHEDULED_ON"
+	// Structural & Hierarchical (shared)
 	EdgeTypePartOf      EdgeType = "PART_OF"
 	EdgeTypeInNamespace EdgeType = "IN_NAMESPACE"
 
-	// Networking
-	EdgeTypeSelectsPods EdgeType = "SELECTS_PODS"
+	// Networking (shared)
 	EdgeTypeHasEndpoint EdgeType = "HAS_ENDPOINT"
 	EdgeTypeRoutesTo    EdgeType = "ROUTES_TO"
 	EdgeTypeAffectedBy  EdgeType = "AFFECTED_BY"
 
-	// Gateway API
-	EdgeTypeImplementedBy EdgeType = "IMPLEMENTED_BY"
-	EdgeTypeAttachesTo    EdgeType = "ATTACHES_TO"
-	EdgeTypeForwardsTo    EdgeType = "FORWARDS_TO"
-	EdgeTypeUsesTLSFrom   EdgeType = "USES_TLS_FROM"
-	EdgeTypePermittedBy   EdgeType = "PERMITTED_BY"
-	EdgeTypeAllowsRouteTo EdgeType = "ALLOWS_ROUTE_TO"
+	// Cross-handler relationships (shared)
+	EdgeTypeAttachesTo EdgeType = "ATTACHES_TO" // Used by Gateway and Istio
+	EdgeTypeAppliesTo  EdgeType = "APPLIES_TO"  // Used by Gateway and Istio
+	EdgeTypeUsesSecret EdgeType = "USES_SECRET" // Used by Core and Gateway
 
-	// Storage
-	EdgeTypeMounts        EdgeType = "MOUNTS"
-	EdgeTypeBoundTo       EdgeType = "BOUND_TO"
-	EdgeTypeProvisionedBy EdgeType = "PROVISIONED_BY"
-
-	// Configuration
-	EdgeTypeUsesConfig EdgeType = "USES_CONFIG"
-	EdgeTypeUsesSecret EdgeType = "USES_SECRET"
-
-	// Observability
+	// Observability (shared)
 	EdgeTypeEmits     EdgeType = "EMITS"
 	EdgeTypeGenerates EdgeType = "GENERATES"
-	EdgeTypeInvolves  EdgeType = "INVOLVES"
 
 	// Trace relationships
 	EdgeTypeContainsSpan   EdgeType = "CONTAINS_SPAN"
@@ -179,14 +166,6 @@ const (
 	// Dynamic relationships
 	EdgeTypeCommunicatesWith EdgeType = "COMMUNICATES_WITH"
 	EdgeTypeDependsOn        EdgeType = "DEPENDS_ON"
-
-	// Istio relationships
-	EdgeTypeSelectsProxy      EdgeType = "SELECTS_PROXY"
-	EdgeTypeRoutesTrafficFor  EdgeType = "ROUTES_TRAFFIC_FOR"
-	EdgeTypeRoutesToSubset    EdgeType = "ROUTES_TO_SUBSET"
-	EdgeTypeDefinesPolicyFor  EdgeType = "DEFINES_POLICY_FOR"
-	EdgeTypeSelectsSubsetPods EdgeType = "SELECTS_SUBSET_PODS"
-	EdgeTypeAppliesTo         EdgeType = "APPLIES_TO"
 )
 
 // GraphNode represents a node in the knowledge graph

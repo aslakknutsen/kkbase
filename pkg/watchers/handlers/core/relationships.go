@@ -41,7 +41,7 @@ func (rb *RelationshipBuilder) CreateOwnerEdge(ctx context.Context, childType mo
 	}
 
 	// Use MANAGES edge type for owner relationships
-	edgeType := models.EdgeTypeManages
+	edgeType := EdgeTypeManages
 
 	// Determine if the owner is cluster-scoped (no namespace)
 	ownerNamespace := namespace
@@ -72,7 +72,7 @@ func (rb *RelationshipBuilder) CreatePodSchedulingEdges(ctx context.Context, pod
 			ctx,
 			string(NodeTypePod),
 			podID,
-			string(models.EdgeTypeScheduledOn),
+			string(EdgeTypeScheduledOn),
 			string(NodeTypeNode),
 			nodeID,
 			nil,
@@ -109,7 +109,7 @@ func (rb *RelationshipBuilder) CreatePodContainerEdges(ctx context.Context, pod 
 			ctx,
 			string(NodeTypePod),
 			podID,
-			string(models.EdgeTypeContains),
+			string(EdgeTypeContains),
 			string(models.NodeTypeContainer),
 			containerID,
 			nil,
@@ -134,7 +134,7 @@ func (rb *RelationshipBuilder) CreatePodVolumeEdges(ctx context.Context, pod *co
 				ctx,
 				string(NodeTypePod),
 				podID,
-				string(models.EdgeTypeMounts),
+				string(EdgeTypeMounts),
 				string(NodeTypePersistentVolumeClaim),
 				pvcID,
 				map[string]interface{}{
@@ -153,7 +153,7 @@ func (rb *RelationshipBuilder) CreatePodVolumeEdges(ctx context.Context, pod *co
 				ctx,
 				string(NodeTypePod),
 				podID,
-				string(models.EdgeTypeUsesConfig),
+				string(EdgeTypeUsesConfig),
 				string(NodeTypeConfigMap),
 				configMapID,
 				map[string]interface{}{
@@ -194,7 +194,7 @@ func (rb *RelationshipBuilder) CreatePodVolumeEdges(ctx context.Context, pod *co
 					ctx,
 					string(NodeTypePod),
 					podID,
-					string(models.EdgeTypeUsesConfig),
+					string(EdgeTypeUsesConfig),
 					string(NodeTypeConfigMap),
 					configMapID,
 					map[string]interface{}{
@@ -258,7 +258,7 @@ func (rb *RelationshipBuilder) CreateServicePodEdges(ctx context.Context, servic
 			ctx,
 			string(NodeTypeService),
 			serviceID,
-			string(models.EdgeTypeSelectsPods),
+			string(EdgeTypeSelectsPods),
 			string(NodeTypePod),
 			podID,
 			nil,
@@ -283,7 +283,7 @@ func (rb *RelationshipBuilder) CreatePVCPVEdge(ctx context.Context, pvc *corev1.
 		ctx,
 		string(NodeTypePersistentVolumeClaim),
 		pvcID,
-		string(models.EdgeTypeBoundTo),
+		string(EdgeTypeBoundTo),
 		string(NodeTypePersistentVolume),
 		pvID,
 		nil,
@@ -303,7 +303,7 @@ func (rb *RelationshipBuilder) CreatePVStorageClassEdge(ctx context.Context, pv 
 		ctx,
 		string(NodeTypePersistentVolume),
 		pvID,
-		string(models.EdgeTypeProvisionedBy),
+		string(EdgeTypeProvisionedBy),
 		string(NodeTypeStorageClass),
 		storageClassID,
 		nil,
@@ -323,7 +323,7 @@ func (rb *RelationshipBuilder) CreatePVCStorageClassEdge(ctx context.Context, pv
 		ctx,
 		string(NodeTypePersistentVolumeClaim),
 		pvcID,
-		string(models.EdgeTypeProvisionedBy),
+		string(EdgeTypeProvisionedBy),
 		string(NodeTypeStorageClass),
 		storageClassID,
 		nil,
@@ -373,7 +373,7 @@ func (rb *RelationshipBuilder) CreateEventInvolvedObjectEdge(ctx context.Context
 		ctx,
 		string(NodeTypeK8sEvent),
 		eventID,
-		string(models.EdgeTypeInvolves),
+		string(EdgeTypeInvolves),
 		string(objectType),
 		objectID,
 		nil,

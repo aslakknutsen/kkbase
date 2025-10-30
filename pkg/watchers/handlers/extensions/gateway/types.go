@@ -15,3 +15,14 @@ const (
 	NodeTypeReferenceGrant   = "ReferenceGrant"
 	NodeTypeBackendTLSPolicy = "BackendTLSPolicy"
 )
+
+// Gateway API EdgeTypes
+// These constants represent edge types (relationships) that are specific to Gateway API resources.
+// Shared edge types (used across multiple handler packages) remain in models.EdgeType.
+const (
+	EdgeTypeImplementedBy = "IMPLEMENTED_BY"
+	EdgeTypeForwardsTo    = "FORWARDS_TO"
+	EdgeTypeUsesTLSFrom   = "USES_TLS_FROM"
+	EdgeTypePermittedBy   = "PERMITTED_BY"
+	EdgeTypeAllowsRouteTo = "ALLOWS_ROUTE_TO"
+)

@@ -58,7 +58,7 @@ func (rb *RelationshipBuilder) CreateIstioGatewaySelectsProxyEdge(ctx context.Co
 			ctx,
 			string(NodeTypeIstioGateway),
 			gatewayID,
-			string(models.EdgeTypeSelectsProxy),
+			string(EdgeTypeSelectsProxy),
 			string(core.NodeTypePod),
 			podID,
 			map[string]interface{}{
@@ -103,7 +103,7 @@ func (rb *RelationshipBuilder) CreateVirtualServiceRoutesTrafficForEdge(ctx cont
 		ctx,
 		string(NodeTypeVirtualService),
 		vsID,
-		string(models.EdgeTypeRoutesTrafficFor),
+		string(EdgeTypeRoutesTrafficFor),
 		string(core.NodeTypeService),
 		svcID,
 		map[string]interface{}{
@@ -128,7 +128,7 @@ func (rb *RelationshipBuilder) CreateVirtualServiceRoutesToSubsetEdge(ctx contex
 		ctx,
 		string(NodeTypeVirtualService),
 		vsID,
-		string(models.EdgeTypeRoutesToSubset),
+		string(EdgeTypeRoutesToSubset),
 		string(NodeTypeDestinationRule),
 		drID,
 		properties,
@@ -144,7 +144,7 @@ func (rb *RelationshipBuilder) CreateDestinationRuleDefinesPolicyForEdge(ctx con
 		ctx,
 		string(NodeTypeDestinationRule),
 		drID,
-		string(models.EdgeTypeDefinesPolicyFor),
+		string(EdgeTypeDefinesPolicyFor),
 		string(core.NodeTypeService),
 		svcID,
 		map[string]interface{}{
@@ -183,7 +183,7 @@ func (rb *RelationshipBuilder) CreateDestinationRuleSelectsSubsetPodsEdge(ctx co
 			ctx,
 			string(NodeTypeDestinationRule),
 			drID,
-			string(models.EdgeTypeSelectsSubsetPods),
+			string(EdgeTypeSelectsSubsetPods),
 			string(core.NodeTypePod),
 			podID,
 			map[string]interface{}{

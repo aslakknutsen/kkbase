@@ -17,3 +17,15 @@ const (
 	NodeTypePeerAuthentication    = "PeerAuthentication"
 	NodeTypeRequestAuthentication = "RequestAuthentication"
 )
+
+// Istio EdgeTypes
+// These constants represent edge types (relationships) that are specific to Istio resources.
+// Shared edge types (used across multiple handler packages) remain in models.EdgeType.
+const (
+	// Traffic Management
+	EdgeTypeSelectsProxy      = "SELECTS_PROXY"
+	EdgeTypeRoutesTrafficFor  = "ROUTES_TRAFFIC_FOR"
+	EdgeTypeRoutesToSubset    = "ROUTES_TO_SUBSET"
+	EdgeTypeDefinesPolicyFor  = "DEFINES_POLICY_FOR"
+	EdgeTypeSelectsSubsetPods = "SELECTS_SUBSET_PODS"
+)
