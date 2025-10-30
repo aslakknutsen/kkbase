@@ -33,7 +33,7 @@ func NewRelationshipBuilder(clientset *kubernetes.Clientset, graphStore graph.Gr
 // CreateOwnerEdge creates an edge based on owner reference
 func (rb *RelationshipBuilder) CreateOwnerEdge(ctx context.Context, childType models.NodeType, childID string, ownerRef metav1.OwnerReference, namespace string) error {
 	// Convert the owner kind to a node type
-	parentType, ok := models.KindToNodeType(ownerRef.Kind)
+	parentType, ok := models.NodeTypeFromKind(ownerRef.Kind)
 	if !ok {
 		rb.logger.Debug("unknown owner kind", zap.String("kind", ownerRef.Kind))
 		return nil
@@ -44,9 +44,7 @@ func (rb *RelationshipBuilder) CreateOwnerEdge(ctx context.Context, childType mo
 
 	// Determine if the owner is cluster-scoped (no namespace)
 	ownerNamespace := namespace
-	switch ownerRef.Kind {
-	case "Node", "PersistentVolume", "StorageClass", "Namespace", "GatewayClass":
-		// Cluster-scoped resources don't have a namespace
+	if parentType.IsClusterScoped() {
 		ownerNamespace = ""
 	}
 
@@ -352,43 +350,15 @@ func (rb *RelationshipBuilder) CreateEventInvolvedObjectEdge(ctx context.Context
 	// Event IDs include kind to avoid collisions
 	eventID := fmt.Sprintf("Event/%s/%s/%s", event.Namespace, event.InvolvedObject.Name, event.Name)
 
-	var objectType models.NodeType
-	var isClusterScoped bool
-	switch event.InvolvedObject.Kind {
-	case "Pod":
-		objectType = models.NodeTypePod
-	case "Node":
-		objectType = models.NodeTypeNode
-		isClusterScoped = true
-	case "Deployment":
-		objectType = models.NodeTypeDeployment
-	case "ReplicaSet":
-		objectType = models.NodeTypeReplicaSet
-	case "StatefulSet":
-		objectType = models.NodeTypeStatefulSet
-	case "DaemonSet":
-		objectType = models.NodeTypeDaemonSet
-	case "Service":
-		objectType = models.NodeTypeService
-	case "PersistentVolumeClaim":
-		objectType = models.NodeTypePersistentVolumeClaim
-	case "PersistentVolume":
-		objectType = models.NodeTypePersistentVolume
-		isClusterScoped = true
-	case "StorageClass":
-		objectType = models.NodeTypeStorageClass
-		isClusterScoped = true
-	case "Namespace":
-		objectType = models.NodeTypeNamespace
-		isClusterScoped = true
-	default:
+	objectType, ok := models.NodeTypeFromKind(event.InvolvedObject.Kind)
+	if !ok {
 		rb.logger.Debug("unknown involved object kind", zap.String("kind", event.InvolvedObject.Kind))
 		return nil
 	}
 
 	// For cluster-scoped resources, don't use a namespace in the ID
 	objectNamespace := ""
-	if !isClusterScoped {
+	if !objectType.IsClusterScoped() {
 		objectNamespace = event.InvolvedObject.Namespace
 		if objectNamespace == "" {
 			objectNamespace = event.Namespace

@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"github.com/kagenti/kkbase/pkg/graph"
+	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
@@ -20,9 +21,12 @@ func RegisterGatewayAPIHandlers(
 
 	// Register GatewayClass handler
 	manager.RegisterHandlerFactory(
-		"gatewayclass",
-		"gateway.networking.k8s.io",
-		"GatewayClass",
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeGatewayClass,
+			Kind:          "GatewayClass",
+			APIGroup:      "gateway.networking.k8s.io",
+			ClusterScoped: true,
+		},
 		func() watchers.ResourceWatcher {
 			return NewGatewayClassHandler(dynamicClient, graphStore, logger, factory)
 		},
@@ -30,9 +34,12 @@ func RegisterGatewayAPIHandlers(
 
 	// Register Gateway handler
 	manager.RegisterHandlerFactory(
-		"gateway",
-		"gateway.networking.k8s.io",
-		"Gateway",
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeGateway,
+			Kind:          "Gateway",
+			APIGroup:      "gateway.networking.k8s.io",
+			ClusterScoped: false,
+		},
 		func() watchers.ResourceWatcher {
 			return NewGatewayHandler(dynamicClient, graphStore, logger, factory)
 		},
@@ -40,9 +47,12 @@ func RegisterGatewayAPIHandlers(
 
 	// Register HTTPRoute handler
 	manager.RegisterHandlerFactory(
-		"httproute",
-		"gateway.networking.k8s.io",
-		"HTTPRoute",
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeHTTPRoute,
+			Kind:          "HTTPRoute",
+			APIGroup:      "gateway.networking.k8s.io",
+			ClusterScoped: false,
+		},
 		func() watchers.ResourceWatcher {
 			return NewHTTPRouteHandler(dynamicClient, graphStore, logger, factory)
 		},
@@ -50,9 +60,12 @@ func RegisterGatewayAPIHandlers(
 
 	// Register GRPCRoute handler
 	manager.RegisterHandlerFactory(
-		"grpcroute",
-		"gateway.networking.k8s.io",
-		"GRPCRoute",
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeGRPCRoute,
+			Kind:          "GRPCRoute",
+			APIGroup:      "gateway.networking.k8s.io",
+			ClusterScoped: false,
+		},
 		func() watchers.ResourceWatcher {
 			return NewGRPCRouteHandler(dynamicClient, graphStore, logger, factory)
 		},
@@ -60,9 +73,12 @@ func RegisterGatewayAPIHandlers(
 
 	// Register TCPRoute handler
 	manager.RegisterHandlerFactory(
-		"tcproute",
-		"gateway.networking.k8s.io",
-		"TCPRoute",
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeTCPRoute,
+			Kind:          "TCPRoute",
+			APIGroup:      "gateway.networking.k8s.io",
+			ClusterScoped: false,
+		},
 		func() watchers.ResourceWatcher {
 			return NewTCPRouteHandler(dynamicClient, graphStore, logger, factory)
 		},
@@ -70,9 +86,12 @@ func RegisterGatewayAPIHandlers(
 
 	// Register UDPRoute handler
 	manager.RegisterHandlerFactory(
-		"udproute",
-		"gateway.networking.k8s.io",
-		"UDPRoute",
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeUDPRoute,
+			Kind:          "UDPRoute",
+			APIGroup:      "gateway.networking.k8s.io",
+			ClusterScoped: false,
+		},
 		func() watchers.ResourceWatcher {
 			return NewUDPRouteHandler(dynamicClient, graphStore, logger, factory)
 		},
@@ -80,9 +99,12 @@ func RegisterGatewayAPIHandlers(
 
 	// Register TLSRoute handler
 	manager.RegisterHandlerFactory(
-		"tlsroute",
-		"gateway.networking.k8s.io",
-		"TLSRoute",
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeTLSRoute,
+			Kind:          "TLSRoute",
+			APIGroup:      "gateway.networking.k8s.io",
+			ClusterScoped: false,
+		},
 		func() watchers.ResourceWatcher {
 			return NewTLSRouteHandler(dynamicClient, graphStore, logger, factory)
 		},
@@ -90,9 +112,12 @@ func RegisterGatewayAPIHandlers(
 
 	// Register ReferenceGrant handler
 	manager.RegisterHandlerFactory(
-		"referencegrant",
-		"gateway.networking.k8s.io",
-		"ReferenceGrant",
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeReferenceGrant,
+			Kind:          "ReferenceGrant",
+			APIGroup:      "gateway.networking.k8s.io",
+			ClusterScoped: false,
+		},
 		func() watchers.ResourceWatcher {
 			return NewReferenceGrantHandler(dynamicClient, graphStore, logger, factory)
 		},
@@ -100,9 +125,12 @@ func RegisterGatewayAPIHandlers(
 
 	// Register BackendTLSPolicy handler
 	manager.RegisterHandlerFactory(
-		"backendtlspolicy",
-		"gateway.networking.k8s.io",
-		"BackendTLSPolicy",
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeBackendTLSPolicy,
+			Kind:          "BackendTLSPolicy",
+			APIGroup:      "gateway.networking.k8s.io",
+			ClusterScoped: false,
+		},
 		func() watchers.ResourceWatcher {
 			return NewBackendTLSPolicyHandler(dynamicClient, graphStore, logger, factory)
 		},

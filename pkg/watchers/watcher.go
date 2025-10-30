@@ -3,10 +3,12 @@ package watchers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/kagenti/kkbase/pkg/graph"
+	"github.com/kagenti/kkbase/pkg/models"
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
@@ -31,6 +33,14 @@ type ResourceWatcher interface {
 	Start(ctx context.Context) bool
 }
 
+// ResourceTypeInfo contains metadata about a resource type
+type ResourceTypeInfo struct {
+	NodeType      models.NodeType
+	Kind          string
+	APIGroup      string
+	ClusterScoped bool
+}
+
 // Config holds configuration for watchers
 type Config struct {
 	Clientset    *kubernetes.Clientset
@@ -38,6 +48,14 @@ type Config struct {
 	Logger       *zap.Logger
 	ResyncPeriod time.Duration
 	Namespace    string // Empty string for all namespaces
+}
+
+// deriveHandlerName derives a unique handler name from ResourceTypeInfo
+func deriveHandlerName(typeInfo ResourceTypeInfo) string {
+	if typeInfo.APIGroup == "" {
+		return strings.ToLower(typeInfo.Kind)
+	}
+	return strings.ToLower(typeInfo.APIGroup + "/" + typeInfo.Kind)
 }
 
 // Manager manages multiple resource watchers with dynamic client support
@@ -101,10 +119,22 @@ func NewManager(config Config, restConfig *rest.Config) (*Manager, error) {
 	}, nil
 }
 
-// RegisterHandler registers a resource handler with a given name
-func (m *Manager) RegisterHandler(name string, handler ResourceWatcher) {
+// RegisterHandler registers a resource handler with type metadata
+// Used for core resources that are always available (no CRD detection needed)
+func (m *Manager) RegisterHandler(typeInfo ResourceTypeInfo, handler ResourceWatcher) {
 	m.handlersMu.Lock()
 	defer m.handlersMu.Unlock()
+
+	// Register the NodeType metadata
+	models.RegisterNodeType(models.NodeTypeMetadata{
+		Type:          typeInfo.NodeType,
+		ClusterScoped: typeInfo.ClusterScoped,
+		Kind:          typeInfo.Kind,
+		APIGroup:      typeInfo.APIGroup,
+	})
+
+	// Derive handler name from type info
+	name := deriveHandlerName(typeInfo)
 
 	m.handlers[name] = handler
 
@@ -113,7 +143,12 @@ func (m *Manager) RegisterHandler(name string, handler ResourceWatcher) {
 		m.coreHandlers[name] = true
 	}
 
-	m.logger.Info("registered handler", zap.String("name", name))
+	m.logger.Info("registered handler",
+		zap.String("name", name),
+		zap.String("kind", typeInfo.Kind),
+		zap.String("node_type", string(typeInfo.NodeType)),
+		zap.Bool("cluster_scoped", typeInfo.ClusterScoped),
+	)
 }
 
 // UnregisterHandler removes a resource handler
@@ -125,14 +160,39 @@ func (m *Manager) UnregisterHandler(name string) {
 	m.logger.Info("unregistered handler", zap.String("name", name))
 }
 
-// RegisterHandlerFactory registers a handler factory that will be called when a CRD becomes available
+// registerHandlerOnly is an internal method that registers only the handler
+// without registering type metadata (used when type is already registered)
+func (m *Manager) registerHandlerOnly(name string, handler ResourceWatcher) {
+	m.handlersMu.Lock()
+	defer m.handlersMu.Unlock()
+
+	m.handlers[name] = handler
+
+	// Track if this is a core handler
+	if !m.started {
+		m.coreHandlers[name] = true
+	}
+}
+
+// RegisterHandlerFactory registers a handler factory for CRD-based resources
+// The handler will be created when the CRD becomes available
 func (m *Manager) RegisterHandlerFactory(
-	name string,
-	group string,
-	kind string,
+	typeInfo ResourceTypeInfo,
 	factory func() ResourceWatcher,
 ) {
-	m.crdWatcher.WatchCRD(group, kind, func(crd *CRDInfo) {
+	// Register the NodeType metadata immediately (even before CRD is available)
+	models.RegisterNodeType(models.NodeTypeMetadata{
+		Type:          typeInfo.NodeType,
+		ClusterScoped: typeInfo.ClusterScoped,
+		Kind:          typeInfo.Kind,
+		APIGroup:      typeInfo.APIGroup,
+	})
+
+	// Derive handler name
+	name := deriveHandlerName(typeInfo)
+
+	// Watch for the CRD
+	m.crdWatcher.WatchCRD(typeInfo.APIGroup, typeInfo.Kind, func(crd *CRDInfo) {
 		// Check if handler is already registered (prevent duplicates)
 		m.handlersMu.RLock()
 		_, exists := m.handlers[name]
@@ -151,16 +211,16 @@ func (m *Manager) RegisterHandlerFactory(
 			zap.String("handler", name),
 			zap.String("group", crd.Group),
 			zap.String("kind", crd.Kind),
+			zap.String("node_type", string(typeInfo.NodeType)),
 		)
 
 		// Create the handler
 		handler := factory()
 
-		// Register it
-		m.RegisterHandler(name, handler)
+		// Register it (without type info since we already registered it above)
+		m.registerHandlerOnly(name, handler)
 
-		// If manager is already started, we need to manually start the informer
-		// because the factory.Start() has already been called
+		// If manager is already started, manually start the informer
 		if m.started {
 			m.logger.Info("handler registered dynamically (runtime), starting informer",
 				zap.String("handler", name),
@@ -178,6 +238,14 @@ func (m *Manager) RegisterHandlerFactory(
 			}
 		}
 	}, nil)
+
+	m.logger.Info("registered handler factory",
+		zap.String("name", name),
+		zap.String("group", typeInfo.APIGroup),
+		zap.String("kind", typeInfo.Kind),
+		zap.String("node_type", string(typeInfo.NodeType)),
+		zap.Bool("cluster_scoped", typeInfo.ClusterScoped),
+	)
 }
 
 // Start starts the manager and all registered handlers

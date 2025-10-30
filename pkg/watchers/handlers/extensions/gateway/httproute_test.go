@@ -47,7 +47,7 @@ spec:
 					FromID:     "HTTPRoute/default/example-route",
 					EdgeType:   "IN_NAMESPACE",
 					ToType:     "Namespace",
-					ToID:       "default",
+					ToID:       "Namespace/default",
 					Properties: nil,
 				},
 				{
@@ -95,7 +95,7 @@ spec:
 					FromID:     "HTTPRoute/default/backend-route",
 					EdgeType:   "IN_NAMESPACE",
 					ToType:     "Namespace",
-					ToID:       "default",
+					ToID:       "Namespace/default",
 					Properties: nil,
 				},
 				{
@@ -167,7 +167,7 @@ spec:
 					FromID:     "HTTPRoute/prod/complex-route",
 					EdgeType:   "IN_NAMESPACE",
 					ToType:     "Namespace",
-					ToID:       "prod",
+					ToID:       "Namespace/prod",
 					Properties: nil,
 				},
 				{
@@ -244,7 +244,7 @@ spec:
 					FromID:     "HTTPRoute/app-namespace/cross-ns-route",
 					EdgeType:   "IN_NAMESPACE",
 					ToType:     "Namespace",
-					ToID:       "app-namespace",
+					ToID:       "Namespace/app-namespace",
 					Properties: nil,
 				},
 				{

@@ -41,93 +41,9 @@ func GetNodeID(kind, namespace, name string) string {
 
 // KindToNodeType converts a Kubernetes Kind string to a NodeType
 // Returns the NodeType and a boolean indicating if the kind is recognized
+// Deprecated: Use NodeTypeFromKind instead
 func KindToNodeType(kind string) (NodeType, bool) {
-	switch kind {
-	// Compute & Hardware
-	case "Node":
-		return NodeTypeNode, true
-
-	// Workloads
-	case "Pod":
-		return NodeTypePod, true
-	case "Deployment":
-		return NodeTypeDeployment, true
-	case "ReplicaSet":
-		return NodeTypeReplicaSet, true
-	case "StatefulSet":
-		return NodeTypeStatefulSet, true
-	case "DaemonSet":
-		return NodeTypeDaemonSet, true
-
-	// Networking
-	case "Service":
-		return NodeTypeService, true
-	case "Ingress":
-		return NodeTypeIngress, true
-	case "NetworkPolicy":
-		return NodeTypeNetworkPolicy, true
-
-	// Gateway API
-	case "GatewayClass":
-		return NodeTypeGatewayClass, true
-	case "Gateway":
-		return NodeTypeGateway, true
-	case "HTTPRoute":
-		return NodeTypeHTTPRoute, true
-	case "GRPCRoute":
-		return NodeTypeGRPCRoute, true
-	case "TCPRoute":
-		return NodeTypeTCPRoute, true
-	case "UDPRoute":
-		return NodeTypeUDPRoute, true
-	case "TLSRoute":
-		return NodeTypeTLSRoute, true
-	case "ReferenceGrant":
-		return NodeTypeReferenceGrant, true
-	case "BackendTLSPolicy":
-		return NodeTypeBackendTLSPolicy, true
-
-	// Istio - Traffic Management
-	case "IstioGateway":
-		return NodeTypeIstioGateway, true
-	case "VirtualService":
-		return NodeTypeVirtualService, true
-	case "DestinationRule":
-		return NodeTypeDestinationRule, true
-	case "ServiceEntry":
-		return NodeTypeServiceEntry, true
-	case "Sidecar":
-		return NodeTypeSidecar, true
-
-	// Istio - Security
-	case "AuthorizationPolicy":
-		return NodeTypeAuthorizationPolicy, true
-	case "PeerAuthentication":
-		return NodeTypePeerAuthentication, true
-	case "RequestAuthentication":
-		return NodeTypeRequestAuthentication, true
-
-	// Storage
-	case "PersistentVolume":
-		return NodeTypePersistentVolume, true
-	case "PersistentVolumeClaim":
-		return NodeTypePersistentVolumeClaim, true
-	case "StorageClass":
-		return NodeTypeStorageClass, true
-
-	// Configuration
-	case "ConfigMap":
-		return NodeTypeConfigMap, true
-	case "Secret":
-		return NodeTypeSecret, true
-
-	// Other
-	case "Namespace":
-		return NodeTypeNamespace, true
-
-	default:
-		return "", false
-	}
+	return NodeTypeFromKind(kind)
 }
 
 // NodeToGraphNode converts a Kubernetes Node to a graph node

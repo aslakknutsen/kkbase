@@ -59,6 +59,55 @@ Examples:
 
 This ensures globally unique identifiers that clearly represent the resource hierarchy.
 
+### Resource Type Registry
+
+The system maintains a dynamic, thread-safe registry of all resource types with their metadata:
+
+```go
+type NodeTypeMetadata struct {
+    Type          NodeType  // e.g., "Pod", "Service"
+    ClusterScoped bool      // true for Node, Namespace, PV, StorageClass, GatewayClass
+    Kind          string    // Kubernetes Kind name
+    APIGroup      string    // API group (empty for core resources)
+}
+```
+
+**Automatic Registration:**
+
+When handlers are registered, they automatically register their type metadata:
+
+```go
+// Core handlers (always available)
+manager.RegisterHandler(
+    watchers.ResourceTypeInfo{
+        NodeType:      models.NodeTypePod,
+        Kind:          "Pod",
+        APIGroup:      "",
+        ClusterScoped: false,
+    },
+    handler,
+)
+
+// Extension handlers (CRD-based)
+manager.RegisterHandlerFactory(
+    watchers.ResourceTypeInfo{
+        NodeType:      models.NodeTypeHTTPRoute,
+        Kind:          "HTTPRoute",
+        APIGroup:      "gateway.networking.k8s.io",
+        ClusterScoped: false,
+    },
+    handlerFactory,
+)
+```
+
+**Benefits:**
+
+1. **No Hardcoded Lists**: Cluster-scope determined dynamically via `nodeType.IsClusterScoped()`
+2. **Single Source of Truth**: Metadata declared once at handler registration
+3. **Bidirectional Lookup**: Convert between Kind strings and NodeTypes
+4. **Self-Documenting**: Registration code shows all resource properties
+5. **Extensible**: New extensions automatically integrate with existing relationship code
+
 ## Component Layers
 
 ### 1. Graph Database Layer (`pkg/graph/`)

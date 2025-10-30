@@ -30,6 +30,33 @@ Format: `Container/namespace/pod-name/container-name`
 Example:
 - `Container/default/nginx-abc123/app`
 
+### Determining Resource Scope
+
+Resource scope (cluster-scoped vs. namespaced) is automatically determined via the NodeType metadata registry. Each resource type registers its scope when its handler is registered:
+
+```go
+// Example: Pod is namespaced
+watchers.ResourceTypeInfo{
+    NodeType:      models.NodeTypePod,
+    Kind:          "Pod",
+    ClusterScoped: false,  // Uses namespace in ID
+}
+
+// Example: Node is cluster-scoped
+watchers.ResourceTypeInfo{
+    NodeType:      models.NodeTypeNode,
+    Kind:          "Node",
+    ClusterScoped: true,   // No namespace in ID
+}
+```
+
+This metadata is used throughout the system to:
+- Generate correct node IDs
+- Create proper ownership relationships
+- Validate cross-namespace references
+
+See [Architecture > Resource Type Registry](../development/architecture.md#resource-type-registry) for details.
+
 ## Node Types
 
 ### Core Kubernetes Resources

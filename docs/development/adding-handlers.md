@@ -234,44 +234,60 @@ func serializeLabels(labels map[string]string) string {
 
 ### Step 2: Register the Handler
 
-Create or update `pkg/watchers/handlers/extensions/register.go`:
+For extension/CRD handlers, use `RegisterHandlerFactory` with `ResourceTypeInfo`. Create or update `pkg/watchers/handlers/extensions/myresource/register.go`:
 
 ```go
-package extensions
+package myresource
 
 import (
 	"github.com/kagenti/kkbase/pkg/graph"
+	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
-	"github.com/kagenti/kkbase/pkg/watchers/handlers"
 	"go.uber.org/zap"
-	"k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 )
 
-// RegisterExtensionHandlers registers all extension/CRD handlers
-func RegisterExtensionHandlers(registry *handlers.Registry) {
-	registry.Register(&handlers.HandlerRegistration{
-		Name:        "myresource",
-		Description: "Watches MyResource CRD from example.com/v1",
-		Category:    "extensions",
-		Required:    false,
-		Factory: func(
-			clientset *kubernetes.Clientset,
-			graphStore graph.GraphStore,
-			logger *zap.Logger,
-			informerFactory informers.SharedInformerFactory,
-		) watchers.ResourceWatcher {
-			return NewMyResourceHandler(clientset, graphStore, logger, informerFactory)
+// RegisterMyResourceHandler registers the MyResource CRD handler
+func RegisterMyResourceHandler(
+	manager *watchers.Manager,
+	dynamicClient dynamic.Interface,
+	factory dynamicinformer.DynamicSharedInformerFactory,
+	graphStore graph.GraphStore,
+	logger *zap.Logger,
+) {
+	logger.Info("registering MyResource handler with CRD watcher")
+
+	// Register with ResourceTypeInfo
+	manager.RegisterHandlerFactory(
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeMyResource,
+			Kind:          "MyResource",
+			APIGroup:      "example.com",
+			ClusterScoped: false, // Set true if resource is cluster-scoped
 		},
-	})
-	
-	// Add more extension handlers here
+		func() watchers.ResourceWatcher {
+			return NewMyResourceHandler(
+				dynamicClient,
+				graphStore,
+				logger,
+				factory,
+			)
+		},
+	)
+
+	logger.Info("MyResource handler registered with CRD watcher")
 }
 ```
 
+The `ResourceTypeInfo` struct automatically:
+- Registers the NodeType metadata in the global registry
+- Determines the correct handler name (e.g., "example.com/myresource")
+- Ensures cluster-scope is handled correctly throughout the system
+
 ### Step 3: Define Node and Edge Types
 
-Update `pkg/models/types.go`:
+Update `pkg/models/types.go` to add the NodeType constant:
 
 ```go
 // Add to NodeType constants
@@ -287,6 +303,8 @@ const (
 )
 ```
 
+**Note:** You don't need to manually register the NodeType metadata anywhere. The `RegisterHandlerFactory` call in Step 2 automatically registers the metadata (Kind, APIGroup, ClusterScoped) into the global registry when your handler is registered.
+
 ### Step 4: Enable in Main
 
 Update `cmd/watcher/main.go`:
@@ -294,21 +312,39 @@ Update `cmd/watcher/main.go`:
 ```go
 import (
 	// ... existing imports ...
-	"github.com/kagenti/kkbase/pkg/watchers/handlers/extensions"
+	"github.com/kagenti/kkbase/pkg/watchers/handlers/extensions/myresource"
 )
 
 func run() error {
 	// ... existing code ...
 	
-	// Create handler registry
-	handlerRegistry := handlers.NewRegistry(logger)
+	// Create watcher manager
+	watcherManager, err := watchers.NewManager(watchers.Config{
+		Clientset:    clientset,
+		GraphStore:   graphStore,
+		Logger:       logger,
+		ResyncPeriod: cfg.ResyncPeriod,
+		Namespace:    cfg.Namespace,
+	}, k8sConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create watcher manager: %w", err)
+	}
+
+	// Get shared factory and clients
+	factory := watcherManager.GetFactory()
+	dynamicClient := watcherManager.GetDynamicClient()
 	
 	// Register core handlers (always enabled)
-	core.RegisterCoreHandlers(handlerRegistry)
+	core.RegisterCoreHandlers(watcherManager, clientset, factory, graphStore, logger)
 	
 	// Register extension handlers (conditional)
-	if cfg.EnableExtensions {
-		extensions.RegisterExtensionHandlers(handlerRegistry)
+	if cfg.EnableMyResource {
+		myresource.RegisterMyResourceHandler(watcherManager, dynamicClient, factory, graphStore, logger)
+	}
+	
+	// Start watchers
+	if err := watcherManager.Start(ctx); err != nil {
+		return fmt.Errorf("watcher manager failed: %w", err)
 	}
 	
 	// ... rest of the code ...
@@ -322,7 +358,7 @@ Update `pkg/config/config.go`:
 ```go
 type Config struct {
 	// ... existing fields ...
-	EnableExtensions bool `env:"ENABLE_EXTENSIONS" envDefault:"false"`
+	EnableMyResource bool `env:"ENABLE_MYRESOURCE" envDefault:"false"`
 }
 ```
 
@@ -337,66 +373,60 @@ data:
   NEO4J_URI: "bolt://neo4j:7687"
   NEO4J_USERNAME: "neo4j"
   LOG_LEVEL: "info"
-  ENABLE_EXTENSIONS: "true"  # Enable extension handlers
+  ENABLE_MYRESOURCE: "true"  # Enable MyResource handler
 ```
 
 ## Example: Istio VirtualService Handler
 
-Here's a complete example for watching Istio VirtualServices:
+Here's a real example from the codebase for watching Istio VirtualServices:
+
+**Registration** (`pkg/watchers/handlers/extensions/istio/register.go`):
 
 ```go
-package extensions
+package istio
 
-// ... imports ...
+import (
+	"github.com/kagenti/kkbase/pkg/graph"
+	"github.com/kagenti/kkbase/pkg/models"
+	"github.com/kagenti/kkbase/pkg/watchers"
+	"go.uber.org/zap"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/dynamic/dynamicinformer"
+)
 
-type VirtualServiceHandler struct {
-	*watchers.BaseWatcher
-	clientset           *kubernetes.Clientset
-	dynamicClient       dynamic.Interface
-	relationshipBuilder *watchers.RelationshipBuilder
-}
-
-func NewVirtualServiceHandler(
-	clientset *kubernetes.Clientset,
+func RegisterIstioHandlers(
+	manager *watchers.Manager,
+	dynamicClient dynamic.Interface,
+	factory dynamicinformer.DynamicSharedInformerFactory,
 	graphStore graph.GraphStore,
 	logger *zap.Logger,
-	informerFactory informers.SharedInformerFactory,
-) *VirtualServiceHandler {
-	dynamicClient := dynamic.NewForConfigOrDie(clientset.RESTClient().GetConfig())
-	
-	gvr := schema.GroupVersionResource{
-		Group:    "networking.istio.io",
-		Version:  "v1beta1",
-		Resource: "virtualservices",
-	}
-	
-	dynInformerFactory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(
-		dynamicClient,
-		informerFactory.ResyncPeriod(),
-		"",
-		nil,
+) {
+	logger.Info("registering Istio handlers with CRD watcher")
+
+	// Register VirtualService handler
+	manager.RegisterHandlerFactory(
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeVirtualService,
+			Kind:          "VirtualService",
+			APIGroup:      "networking.istio.io",
+			ClusterScoped: false,
+		},
+		func() watchers.ResourceWatcher {
+			return NewVirtualServiceHandler(nil, dynamicClient, graphStore, logger, factory)
+		},
 	)
 	
-	informer := dynInformerFactory.ForResource(gvr).Informer()
+	// Register other Istio handlers...
 	
-	handler := &VirtualServiceHandler{
-		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
-		clientset:           clientset,
-		dynamicClient:       dynamicClient,
-		relationshipBuilder: watchers.NewRelationshipBuilder(clientset, graphStore, logger),
-	}
-	
-	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    handler.HandleAdd,
-		UpdateFunc: handler.HandleUpdate,
-		DeleteFunc: handler.HandleDelete,
-	})
-	
-	return handler
+	logger.Info("Istio handlers registered with CRD watcher")
 }
-
-// ... implement HandleAdd, HandleUpdate, HandleDelete ...
 ```
+
+This pattern:
+- Uses `RegisterHandlerFactory` for dynamic CRD detection
+- Automatically registers NodeType metadata
+- Handler is created only when the CRD is detected in the cluster
+- Supports multiple Istio versions gracefully
 
 ## Testing
 

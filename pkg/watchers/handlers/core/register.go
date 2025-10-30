@@ -2,6 +2,7 @@ package core
 
 import (
 	"github.com/kagenti/kkbase/pkg/graph"
+	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic/dynamicinformer"
@@ -17,31 +18,157 @@ func RegisterCoreHandlers(
 	logger *zap.Logger,
 ) {
 	// Namespace must be registered first as other resources depend on it
-	manager.RegisterHandler("namespace", NewNamespaceHandler(graphStore, logger, factory))
+	manager.RegisterHandler(
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeNamespace,
+			Kind:          "Namespace",
+			APIGroup:      "",
+			ClusterScoped: true,
+		},
+		NewNamespaceHandler(graphStore, logger, factory),
+	)
 
 	// Nodes
-	manager.RegisterHandler("node", NewNodeHandler(graphStore, logger, factory))
+	manager.RegisterHandler(
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeNode,
+			Kind:          "Node",
+			APIGroup:      "",
+			ClusterScoped: true,
+		},
+		NewNodeHandler(graphStore, logger, factory),
+	)
 
 	// Workload resources
-	manager.RegisterHandler("deployment", NewDeploymentHandler(clientset, graphStore, logger, factory))
-	manager.RegisterHandler("replicaset", NewReplicaSetHandler(clientset, graphStore, logger, factory))
-	manager.RegisterHandler("statefulset", NewStatefulSetHandler(clientset, graphStore, logger, factory))
-	manager.RegisterHandler("daemonset", NewDaemonSetHandler(clientset, graphStore, logger, factory))
-	manager.RegisterHandler("pod", NewPodHandler(clientset, graphStore, logger, factory))
+	manager.RegisterHandler(
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeDeployment,
+			Kind:          "Deployment",
+			APIGroup:      "apps",
+			ClusterScoped: false,
+		},
+		NewDeploymentHandler(clientset, graphStore, logger, factory),
+	)
+
+	manager.RegisterHandler(
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeReplicaSet,
+			Kind:          "ReplicaSet",
+			APIGroup:      "apps",
+			ClusterScoped: false,
+		},
+		NewReplicaSetHandler(clientset, graphStore, logger, factory),
+	)
+
+	manager.RegisterHandler(
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeStatefulSet,
+			Kind:          "StatefulSet",
+			APIGroup:      "apps",
+			ClusterScoped: false,
+		},
+		NewStatefulSetHandler(clientset, graphStore, logger, factory),
+	)
+
+	manager.RegisterHandler(
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeDaemonSet,
+			Kind:          "DaemonSet",
+			APIGroup:      "apps",
+			ClusterScoped: false,
+		},
+		NewDaemonSetHandler(clientset, graphStore, logger, factory),
+	)
+
+	manager.RegisterHandler(
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypePod,
+			Kind:          "Pod",
+			APIGroup:      "",
+			ClusterScoped: false,
+		},
+		NewPodHandler(clientset, graphStore, logger, factory),
+	)
 
 	// Networking resources
-	manager.RegisterHandler("service", NewServiceHandler(clientset, graphStore, logger, factory))
+	manager.RegisterHandler(
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeService,
+			Kind:          "Service",
+			APIGroup:      "",
+			ClusterScoped: false,
+		},
+		NewServiceHandler(clientset, graphStore, logger, factory),
+	)
 
 	// Storage resources
-	manager.RegisterHandler("persistentvolume", NewPVHandler(clientset, graphStore, logger, factory))
-	manager.RegisterHandler("persistentvolumeclaim", NewPVCHandler(clientset, graphStore, logger, factory))
-	manager.RegisterHandler("storageclass", NewStorageClassHandler(clientset, graphStore, logger, factory))
+	manager.RegisterHandler(
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypePersistentVolume,
+			Kind:          "PersistentVolume",
+			APIGroup:      "",
+			ClusterScoped: true,
+		},
+		NewPVHandler(clientset, graphStore, logger, factory),
+	)
+
+	manager.RegisterHandler(
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypePersistentVolumeClaim,
+			Kind:          "PersistentVolumeClaim",
+			APIGroup:      "",
+			ClusterScoped: false,
+		},
+		NewPVCHandler(clientset, graphStore, logger, factory),
+	)
+
+	manager.RegisterHandler(
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeStorageClass,
+			Kind:          "StorageClass",
+			APIGroup:      "storage.k8s.io",
+			ClusterScoped: true,
+		},
+		NewStorageClassHandler(clientset, graphStore, logger, factory),
+	)
 
 	// Configuration resources
-	manager.RegisterHandler("configmap", NewConfigMapHandler(clientset, graphStore, logger, factory))
-	manager.RegisterHandler("secret", NewSecretHandler(clientset, graphStore, logger, factory))
+	manager.RegisterHandler(
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeConfigMap,
+			Kind:          "ConfigMap",
+			APIGroup:      "",
+			ClusterScoped: false,
+		},
+		NewConfigMapHandler(clientset, graphStore, logger, factory),
+	)
+
+	manager.RegisterHandler(
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeSecret,
+			Kind:          "Secret",
+			APIGroup:      "",
+			ClusterScoped: false,
+		},
+		NewSecretHandler(clientset, graphStore, logger, factory),
+	)
 
 	// Observability resources
-	manager.RegisterHandler("event", NewEventHandler(clientset, graphStore, logger, factory))
+	manager.RegisterHandler(
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeK8sEvent,
+			Kind:          "Event",
+			APIGroup:      "",
+			ClusterScoped: false,
+		},
+		NewEventHandler(clientset, graphStore, logger, factory),
+	)
 
+	// Container is special - not a real K8s resource, but we register its type
+	models.RegisterNodeType(models.NodeTypeMetadata{
+		Type:          models.NodeTypeContainer,
+		Kind:          "Container",
+		APIGroup:      "",
+		ClusterScoped: false,
+	})
 }

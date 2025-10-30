@@ -2,6 +2,7 @@ package istio
 
 import (
 	"github.com/kagenti/kkbase/pkg/graph"
+	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
@@ -20,9 +21,12 @@ func RegisterIstioHandlers(
 
 	// Register Istio Gateway handler
 	manager.RegisterHandlerFactory(
-		"istio-gateway",
-		"networking.istio.io",
-		"Gateway",
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeIstioGateway,
+			Kind:          "Gateway",
+			APIGroup:      "networking.istio.io",
+			ClusterScoped: false,
+		},
 		func() watchers.ResourceWatcher {
 			return NewIstioGatewayHandler(nil, dynamicClient, graphStore, logger, factory)
 		},
@@ -30,9 +34,12 @@ func RegisterIstioHandlers(
 
 	// Register VirtualService handler
 	manager.RegisterHandlerFactory(
-		"virtualservice",
-		"networking.istio.io",
-		"VirtualService",
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeVirtualService,
+			Kind:          "VirtualService",
+			APIGroup:      "networking.istio.io",
+			ClusterScoped: false,
+		},
 		func() watchers.ResourceWatcher {
 			return NewVirtualServiceHandler(nil, dynamicClient, graphStore, logger, factory)
 		},
@@ -40,9 +47,12 @@ func RegisterIstioHandlers(
 
 	// Register DestinationRule handler
 	manager.RegisterHandlerFactory(
-		"destinationrule",
-		"networking.istio.io",
-		"DestinationRule",
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeDestinationRule,
+			Kind:          "DestinationRule",
+			APIGroup:      "networking.istio.io",
+			ClusterScoped: false,
+		},
 		func() watchers.ResourceWatcher {
 			return NewDestinationRuleHandler(nil, dynamicClient, graphStore, logger, factory)
 		},
@@ -50,9 +60,12 @@ func RegisterIstioHandlers(
 
 	// Register ServiceEntry handler
 	manager.RegisterHandlerFactory(
-		"serviceentry",
-		"networking.istio.io",
-		"ServiceEntry",
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeServiceEntry,
+			Kind:          "ServiceEntry",
+			APIGroup:      "networking.istio.io",
+			ClusterScoped: false,
+		},
 		func() watchers.ResourceWatcher {
 			return NewServiceEntryHandler(nil, dynamicClient, graphStore, logger, factory)
 		},
@@ -60,9 +73,12 @@ func RegisterIstioHandlers(
 
 	// Register Sidecar handler
 	manager.RegisterHandlerFactory(
-		"sidecar",
-		"networking.istio.io",
-		"Sidecar",
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeSidecar,
+			Kind:          "Sidecar",
+			APIGroup:      "networking.istio.io",
+			ClusterScoped: false,
+		},
 		func() watchers.ResourceWatcher {
 			return NewSidecarHandler(nil, dynamicClient, graphStore, logger, factory)
 		},
@@ -70,9 +86,12 @@ func RegisterIstioHandlers(
 
 	// Register AuthorizationPolicy handler
 	manager.RegisterHandlerFactory(
-		"authorizationpolicy",
-		"security.istio.io",
-		"AuthorizationPolicy",
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeAuthorizationPolicy,
+			Kind:          "AuthorizationPolicy",
+			APIGroup:      "security.istio.io",
+			ClusterScoped: false,
+		},
 		func() watchers.ResourceWatcher {
 			return NewAuthorizationPolicyHandler(nil, dynamicClient, graphStore, logger, factory)
 		},
@@ -80,9 +99,12 @@ func RegisterIstioHandlers(
 
 	// Register PeerAuthentication handler
 	manager.RegisterHandlerFactory(
-		"peerauthentication",
-		"security.istio.io",
-		"PeerAuthentication",
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypePeerAuthentication,
+			Kind:          "PeerAuthentication",
+			APIGroup:      "security.istio.io",
+			ClusterScoped: false,
+		},
 		func() watchers.ResourceWatcher {
 			return NewPeerAuthenticationHandler(nil, dynamicClient, graphStore, logger, factory)
 		},
@@ -90,9 +112,12 @@ func RegisterIstioHandlers(
 
 	// Register RequestAuthentication handler
 	manager.RegisterHandlerFactory(
-		"requestauthentication",
-		"security.istio.io",
-		"RequestAuthentication",
+		watchers.ResourceTypeInfo{
+			NodeType:      models.NodeTypeRequestAuthentication,
+			Kind:          "RequestAuthentication",
+			APIGroup:      "security.istio.io",
+			ClusterScoped: false,
+		},
 		func() watchers.ResourceWatcher {
 			return NewRequestAuthenticationHandler(nil, dynamicClient, graphStore, logger, factory)
 		},
