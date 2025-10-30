@@ -33,6 +33,10 @@ type Config struct {
 	JaegerPollInterval   time.Duration
 	JaegerLookbackWindow time.Duration
 	JaegerSpanRetention  time.Duration
+
+	// MCP Server configuration
+	MCPPort    int
+	MCPEnabled bool
 }
 
 // LoadFromEnv loads configuration from environment variables
@@ -52,6 +56,9 @@ func LoadFromEnv() (*Config, error) {
 		EnableTraces:  getBoolEnv("ENABLE_TRACES", false),
 
 		JaegerQueryURL: getEnv("JAEGER_QUERY_URL", "http://localhost:16686"),
+
+		MCPPort:    getIntEnv("MCP_PORT", 8080),
+		MCPEnabled: getBoolEnv("MCP_ENABLED", false),
 	}
 
 	// Parse resync period
@@ -110,6 +117,18 @@ func getBoolEnv(key string, defaultValue bool) bool {
 			return defaultValue
 		}
 		return boolValue
+	}
+	return defaultValue
+}
+
+// getIntEnv gets an integer environment variable with a default value
+func getIntEnv(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		intValue, err := strconv.Atoi(value)
+		if err != nil {
+			return defaultValue
+		}
+		return intValue
 	}
 	return defaultValue
 }

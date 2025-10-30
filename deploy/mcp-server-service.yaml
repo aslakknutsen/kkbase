@@ -1,0 +1,19 @@
+---
+# Service for standalone MCP Server
+# Use this for standalone mode deployment
+apiVersion: v1
+kind: Service
+metadata:
+  name: kkbase-mcp-server
+  labels:
+    app: kkbase-mcp-server
+spec:
+  selector:
+    app: kkbase-mcp-server
+  ports:
+    - name: mcp
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+  type: ClusterIP
+

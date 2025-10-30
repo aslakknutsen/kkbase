@@ -1,0 +1,45 @@
+---
+# Ingress for MCP Server (Optional)
+# Use this to expose MCP server externally
+# Requires an Ingress controller (nginx, traefik, etc.)
+# IMPORTANT: Add TLS and authentication before exposing to internet!
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kkbase-mcp-server
+  labels:
+    app: kkbase-mcp-server
+  annotations:
+    # Example: NGINX Ingress Controller annotations
+    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    
+    # Example: Add basic auth (create secret first)
+    # nginx.ingress.kubernetes.io/auth-type: basic
+    # nginx.ingress.kubernetes.io/auth-secret: mcp-basic-auth
+    # nginx.ingress.kubernetes.io/auth-realm: 'MCP Server Authentication Required'
+    
+    # Example: Rate limiting
+    # nginx.ingress.kubernetes.io/limit-rps: "10"
+    
+    # Example: CORS (if needed for web clients)
+    # nginx.ingress.kubernetes.io/enable-cors: "true"
+    # nginx.ingress.kubernetes.io/cors-allow-origin: "https://your-domain.com"
+spec:
+  ingressClassName: nginx  # Change based on your ingress controller
+  tls:
+    - hosts:
+        - mcp.example.com  # Change to your domain
+      secretName: mcp-tls-secret  # Create this TLS secret
+  rules:
+    - host: mcp.example.com  # Change to your domain
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kkbase-mcp-server  # Or kkbase-watcher for integrated mode
+                port:
+                  number: 8080  # Or 8081 for integrated mode
+

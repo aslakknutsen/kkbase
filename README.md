@@ -34,6 +34,7 @@ See [Quick Start Guide](docs/user-guide/quickstart.md) for detailed instructions
 - **Istio Support** - Models service mesh configuration, security policies, and canary deployments
 - **Extensible** - Plugin architecture for custom resources and CRDs
 - **Agent-Ready** - Designed as the knowledge base for autonomous diagnostic systems
+- **MCP Server** - Streaming HTTP server implementing Model Context Protocol for AI agent integration
 
 ## Use Cases
 
@@ -43,6 +44,25 @@ See [Quick Start Guide](docs/user-guide/quickstart.md) for detailed instructions
 - **Dependency Mapping** - Visualize service dependencies and data flow
 - **Security Auditing** - Query policies, permissions, and configuration
 - **Capacity Planning** - Analyze resource utilization patterns
+
+## MCP Server for AI Agents
+
+kkbase includes a streaming MCP (Model Context Protocol) server that exposes the knowledge graph to AI agents via HTTP. This enables LLMs and autonomous agents to directly query and explore your cluster topology.
+
+```bash
+# Start the MCP server
+export NEO4J_URI="bolt://localhost:7687"
+export NEO4J_PASSWORD="changeme"
+./mcp-server
+
+# Access at http://localhost:8080/mcp
+```
+
+**Available Tools**:
+- `query` - Execute read-only Cypher queries
+- `structure` - Get complete graph schema
+
+See [MCP Server Guide](docs/user-guide/mcp-server.md) for integration with Claude Desktop, MCP Inspector, and other AI tools.
 
 ## Documentation
 

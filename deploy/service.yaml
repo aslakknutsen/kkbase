@@ -1,0 +1,19 @@
+---
+# Service for kkbase-watcher
+# Exposes health check endpoints (and optionally MCP if integrated mode is enabled)
+apiVersion: v1
+kind: Service
+metadata:
+  name: kkbase-watcher
+  labels:
+    app: kkbase-watcher
+spec:
+  selector:
+    app: kkbase-watcher
+  ports:
+    - name: mcp
+      port: 8081
+      targetPort: 8081
+      protocol: TCP
+  type: ClusterIP
+

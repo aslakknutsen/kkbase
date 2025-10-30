@@ -20,6 +20,9 @@ data:
   ENABLE_METRICS: "false"
   ENABLE_LOGS: "false"
   ENABLE_TRACES: "true"
+
+  MCP_ENABLED: "true"
+  MCP_PORT: "8081"
   
   # Jaeger tracing configuration
   JAEGER_QUERY_URL: "http://jaeger-query.observability.svc.cluster.local:16686"

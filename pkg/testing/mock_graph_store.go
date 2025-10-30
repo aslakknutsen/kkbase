@@ -50,15 +50,21 @@ type MockGraphStore struct {
 	DeleteEdgeErr  error
 	QueryErr       error
 	HealthCheckErr error
+
+	// Query results for testing
+	QueryResult         []map[string]interface{}
+	QueryResponses      map[string][]map[string]interface{}
+	QueryResponsesIndex int
 }
 
 // NewMockGraphStore creates a new mock graph store
 func NewMockGraphStore() *MockGraphStore {
 	return &MockGraphStore{
-		Nodes:        make([]NodeCall, 0),
-		Edges:        make([]EdgeCall, 0),
-		DeletedNodes: make([]DeleteNodeCall, 0),
-		DeletedEdges: make([]DeleteEdgeCall, 0),
+		Nodes:          make([]NodeCall, 0),
+		Edges:          make([]EdgeCall, 0),
+		DeletedNodes:   make([]DeleteNodeCall, 0),
+		DeletedEdges:   make([]DeleteEdgeCall, 0),
+		QueryResponses: make(map[string][]map[string]interface{}),
 	}
 }
 
@@ -188,12 +194,81 @@ func (m *MockGraphStore) DeleteEdgesByTypeAndNode(ctx context.Context, nodeType,
 	return nil
 }
 
-// Query is a no-op for the mock
+// Query returns mocked query results
 func (m *MockGraphStore) Query(ctx context.Context, query string, params map[string]interface{}) ([]map[string]interface{}, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.QueryErr != nil {
 		return nil, m.QueryErr
 	}
-	return nil, nil
+
+	// If we have a simple QueryResult set, return it
+	if m.QueryResult != nil {
+		return m.QueryResult, nil
+	}
+
+	// If we have multiple query responses keyed by query pattern, return the next one
+	for key, results := range m.QueryResponses {
+		if contains(query, key) {
+			return results, nil
+		}
+	}
+
+	// Default: return empty result
+	return []map[string]interface{}{}, nil
+}
+
+// SetQueryResult sets a single query result for all queries
+func (m *MockGraphStore) SetQueryResult(result []map[string]interface{}) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.QueryResult = result
+}
+
+// SetQueryError sets an error to be returned by Query
+func (m *MockGraphStore) SetQueryError(errMsg string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.QueryErr = context.DeadlineExceeded
+	if errMsg != "" {
+		m.QueryErr = &mockError{msg: errMsg}
+	}
+}
+
+// AddQueryResponse adds a query response for queries containing the given key
+func (m *MockGraphStore) AddQueryResponse(key string, result []map[string]interface{}) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.QueryResponses[key] = result
+}
+
+// mockError is a simple error implementation for testing
+type mockError struct {
+	msg string
+}
+
+func (e *mockError) Error() string {
+	return e.msg
+}
+
+// contains checks if a string contains a substring (case-insensitive helper)
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) &&
+		(s == substr ||
+			len(s) > len(substr) &&
+				(s[:len(substr)] == substr ||
+					s[len(s)-len(substr):] == substr ||
+					findSubstring(s, substr)))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 // Close is a no-op for the mock
