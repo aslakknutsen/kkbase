@@ -34,6 +34,9 @@ type Config struct {
 	JaegerLookbackWindow time.Duration
 	JaegerSpanRetention  time.Duration
 
+	// Prometheus configuration
+	PrometheusURL string
+
 	// MCP Server configuration
 	MCPPort    int
 	MCPEnabled bool
@@ -56,6 +59,8 @@ func LoadFromEnv() (*Config, error) {
 		EnableTraces:  getBoolEnv("ENABLE_TRACES", false),
 
 		JaegerQueryURL: getEnv("JAEGER_QUERY_URL", "http://localhost:16686"),
+
+		PrometheusURL: getEnv("PROMETHEUS_URL", ""),
 
 		MCPPort:    getIntEnv("MCP_PORT", 8080),
 		MCPEnabled: getBoolEnv("MCP_ENABLED", false),

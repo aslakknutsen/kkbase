@@ -4,10 +4,15 @@ The kkbase MCP (Model Context Protocol) server provides AI agents with direct ac
 
 ## Overview
 
-The MCP server is a standalone binary that connects to the same Neo4j database as the kkbase watcher. It provides two main tools:
+The MCP server is a standalone binary that connects to the same Neo4j database as the kkbase watcher. It provides the following tools:
 
 - **query**: Execute read-only Cypher queries against the knowledge graph
 - **structure**: Get a complete overview of the graph schema
+- **start_investigation**: Start a metrics-based RCA investigation (requires Prometheus)
+- **complete_investigation**: Complete an investigation and cleanup metrics
+- **get_investigation_status**: Check the status of an active investigation
+
+> **Note**: The investigation tools are only available when `PROMETHEUS_URL` is configured.
 
 ## Installation
 
@@ -46,6 +51,9 @@ export NEO4J_DATABASE="neo4j"
 export MCP_PORT="8080"
 export LOG_LEVEL="info"
 
+# Optional: Enable metrics investigation tools
+export PROMETHEUS_URL="http://prometheus.monitoring.svc:9090"
+
 # Run the server
 ./mcp-server
 
@@ -65,6 +73,9 @@ export MCP_ENABLED="true"    # Enable MCP server
 export MCP_PORT="8081"        # Use different port than health server (8080)
 export LOG_LEVEL="info"
 
+# Optional: Enable metrics investigation tools
+export PROMETHEUS_URL="http://prometheus.monitoring.svc:9090"
+
 # Run the combined watcher+MCP binary
 ./watcher
 
@@ -74,7 +85,7 @@ export LOG_LEVEL="info"
 
 ## Configuration
 
-The MCP server is configured via environment variables:
+The MCP server is configured via environment variables loaded through the centralized `Config` object:
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
@@ -83,7 +94,10 @@ The MCP server is configured via environment variables:
 | `NEO4J_PASSWORD` | Neo4j password | - | Yes |
 | `NEO4J_DATABASE` | Neo4j database name | `neo4j` | No |
 | `MCP_PORT` | HTTP server port | `8080` | No |
+| `PROMETHEUS_URL` | Prometheus server URL (enables investigation tools) | - | No |
 | `LOG_LEVEL` | Logging level (debug, info, warn, error) | `info` | No |
+
+**Note**: All configuration is loaded via `pkg/config.LoadFromEnv()`, following the same pattern as the watcher.
 
 ## API Endpoints
 
@@ -170,6 +184,47 @@ Get the complete graph schema including node types, relationship types, properti
 - `relationship_types`: Array of all relationship types
 - `relationship_properties`: Object mapping relationship types to their properties
 - `schema_triplets`: Array of from-relationship-to patterns
+
+### Investigation Tools (Optional)
+
+When `PROMETHEUS_URL` is configured, three additional tools are available for metrics-based root cause analysis:
+
+#### start_investigation
+
+Start a new RCA investigation for a Kubernetes resource exhibiting a symptom. This tool pulls relevant metrics from Prometheus and stores them temporarily in the graph.
+
+**Input Parameters**:
+- `resource_type` (string, required): Type of resource (Pod, Service, Node, Deployment, etc.)
+- `resource_id` (string, required): Full resource identifier (e.g., "Pod/prod/api-gateway-xyz")
+- `symptom` (string, required): Symptom being investigated (OOMKilled, HighLatency, CrashLoopBackOff, etc.)
+- `lookback_minutes` (int, optional): How far back to pull metrics (default: 15, range: 5-120)
+
+**Output**:
+- `investigation_id`: Unique ID for this investigation
+- `status`: Investigation status (typically "active")
+- `metrics_collected`: Number of metric data points collected
+
+#### complete_investigation
+
+Complete an investigation and purge all associated metrics from the graph.
+
+**Input Parameters**:
+- `investigation_id` (string, required): Investigation ID to complete
+
+**Output**:
+- `metrics_purged`: Number of metric data points removed
+
+#### get_investigation_status
+
+Get the current status and details of an investigation.
+
+**Input Parameters**:
+- `investigation_id` (string, required): Investigation ID to query
+
+**Output**:
+- Investigation details including status, resource info, symptom, and timeframes
+
+For detailed usage and examples, see the [Investigation Tools Guide](./investigation-tools.md).
 
 ## Usage Examples
 
@@ -323,6 +378,9 @@ To add a new tool to the MCP server:
 
 ## Related Documentation
 
+- [Investigation Tools Guide](./investigation-tools.md) - Detailed guide for metrics-based RCA
+- [Metrics Investigation Workflow](./metrics-investigation.md) - Investigation patterns and best practices
+- [Metrics RCA Queries](../reference/metrics-rca-queries.md) - Cypher query examples for RCA
 - [Graph Schema Reference](../reference/graph-schema.md)
 - [Cypher Query Examples](../reference/cypher-queries.md)
 - [Architecture Overview](../development/architecture.md)
