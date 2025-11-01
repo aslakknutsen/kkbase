@@ -23,6 +23,8 @@ data:
 
   MCP_ENABLED: "true"
   MCP_PORT: "8081"
+
+  PROMETHEUS_URL: "http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090"
   
   # Jaeger tracing configuration
   JAEGER_QUERY_URL: "http://jaeger-query.observability.svc.cluster.local:16686"

@@ -51,96 +51,81 @@ func StructureTool(ctx context.Context, store graph.GraphStore, logger *zap.Logg
 		SchemaTriplets:         make([]SchemaTriplet, 0),
 	}
 
-	// Get all node labels
-	labelsQuery := "CALL db.labels() YIELD label RETURN label ORDER BY label"
-	labelsResult, err := store.Query(ctx, labelsQuery, nil)
+	// Query 1: Get all node types and their properties in a single query
+	nodePropsQuery := `
+		MATCH (n) 
+		WITH labels(n)[0] AS NodeType, n 
+		UNWIND keys(n) AS Property 
+		RETURN NodeType, collect(DISTINCT Property) AS Properties 
+		ORDER BY NodeType
+	`
+
+	nodePropsResult, err := store.Query(ctx, nodePropsQuery, nil)
 	if err != nil {
-		logger.Error("failed to fetch node labels", zap.Error(err))
-		return nil, fmt.Errorf("failed to fetch node labels: %w", err)
+		logger.Error("failed to fetch node types and properties", zap.Error(err))
+		return nil, fmt.Errorf("failed to fetch node types and properties: %w", err)
 	}
 
-	for _, record := range labelsResult {
-		if label, ok := record["label"].(string); ok {
-			output.NodeTypes = append(output.NodeTypes, label)
+	// Process node types and properties
+	for _, record := range nodePropsResult {
+		nodeType, nodeTypeOk := record["NodeType"].(string)
+		properties, propsOk := record["Properties"].([]interface{})
+
+		if nodeTypeOk && propsOk && nodeType != "" {
+			output.NodeTypes = append(output.NodeTypes, nodeType)
+
+			// Convert properties from []interface{} to []string
+			propStrings := make([]string, 0, len(properties))
+			for _, prop := range properties {
+				if propStr, ok := prop.(string); ok {
+					propStrings = append(propStrings, propStr)
+				}
+			}
+			output.NodeProperties[nodeType] = propStrings
 		}
 	}
 
-	// Get all relationship types
-	relTypesQuery := "CALL db.relationshipTypes() YIELD relationshipType RETURN relationshipType ORDER BY relationshipType"
-	relTypesResult, err := store.Query(ctx, relTypesQuery, nil)
+	// Query 2: Get all relationship types and their properties in a single query
+	relPropsQuery := `
+		MATCH ()-[r]->()
+		WITH type(r) AS RelationshipType, r
+		UNWIND keys(r) AS Property
+		RETURN RelationshipType, collect(DISTINCT Property) AS Properties
+		ORDER BY RelationshipType
+	`
+
+	relPropsResult, err := store.Query(ctx, relPropsQuery, nil)
 	if err != nil {
-		logger.Error("failed to fetch relationship types", zap.Error(err))
-		return nil, fmt.Errorf("failed to fetch relationship types: %w", err)
+		logger.Error("failed to fetch relationship types and properties", zap.Error(err))
+		return nil, fmt.Errorf("failed to fetch relationship types and properties: %w", err)
 	}
 
-	for _, record := range relTypesResult {
-		if relType, ok := record["relationshipType"].(string); ok {
+	// Process relationship types and properties
+	for _, record := range relPropsResult {
+		relType, relTypeOk := record["RelationshipType"].(string)
+		properties, propsOk := record["Properties"].([]interface{})
+
+		if relTypeOk && propsOk {
 			output.RelationshipTypes = append(output.RelationshipTypes, relType)
-		}
-	}
 
-	// Get node properties for each label
-	for _, label := range output.NodeTypes {
-		propsQuery := fmt.Sprintf(`
-			MATCH (n:%s)
-			WITH n LIMIT 100
-			UNWIND keys(n) AS key
-			RETURN DISTINCT key
-			ORDER BY key
-		`, label)
-
-		propsResult, err := store.Query(ctx, propsQuery, nil)
-		if err != nil {
-			logger.Warn("failed to fetch properties for node type",
-				zap.String("node_type", label),
-				zap.Error(err))
-			continue
-		}
-
-		properties := make([]string, 0)
-		for _, record := range propsResult {
-			if key, ok := record["key"].(string); ok {
-				properties = append(properties, key)
+			// Convert properties from []interface{} to []string
+			propStrings := make([]string, 0, len(properties))
+			for _, prop := range properties {
+				if propStr, ok := prop.(string); ok {
+					propStrings = append(propStrings, propStr)
+				}
 			}
+			output.RelationshipProperties[relType] = propStrings
 		}
-		output.NodeProperties[label] = properties
 	}
 
-	// Get relationship properties for each type
-	for _, relType := range output.RelationshipTypes {
-		propsQuery := fmt.Sprintf(`
-			MATCH ()-[r:%s]->()
-			WITH r LIMIT 100
-			UNWIND keys(r) AS key
-			RETURN DISTINCT key
-			ORDER BY key
-		`, relType)
-
-		propsResult, err := store.Query(ctx, propsQuery, nil)
-		if err != nil {
-			logger.Warn("failed to fetch properties for relationship type",
-				zap.String("relationship_type", relType),
-				zap.Error(err))
-			continue
-		}
-
-		properties := make([]string, 0)
-		for _, record := range propsResult {
-			if key, ok := record["key"].(string); ok {
-				properties = append(properties, key)
-			}
-		}
-		output.RelationshipProperties[relType] = properties
-	}
-
-	// Get schema triplets (from-relationship-to patterns)
+	// Query 3: Get schema triplets (from-relationship-to patterns)
 	tripletsQuery := `
 		MATCH (a)-[r]->(b)
-		WITH DISTINCT labels(a) AS fromLabels, type(r) AS relType, labels(b) AS toLabels
-		UNWIND fromLabels AS fromLabel
-		UNWIND toLabels AS toLabel
-		RETURN DISTINCT fromLabel, relType, toLabel
-		ORDER BY fromLabel, relType, toLabel
+		RETURN DISTINCT labels(a)[0] AS FromNodeType, 
+		       type(r) AS RelationshipType, 
+		       labels(b)[0] AS ToNodeType
+		ORDER BY FromNodeType, RelationshipType, ToNodeType
 	`
 
 	tripletsResult, err := store.Query(ctx, tripletsQuery, nil)
@@ -149,16 +134,17 @@ func StructureTool(ctx context.Context, store graph.GraphStore, logger *zap.Logg
 		return nil, fmt.Errorf("failed to fetch schema triplets: %w", err)
 	}
 
+	// Process schema triplets
 	for _, record := range tripletsResult {
-		fromLabel, fromOk := record["fromLabel"].(string)
-		relType, relOk := record["relType"].(string)
-		toLabel, toOk := record["toLabel"].(string)
+		fromNodeType, fromOk := record["FromNodeType"].(string)
+		relType, relOk := record["RelationshipType"].(string)
+		toNodeType, toOk := record["ToNodeType"].(string)
 
-		if fromOk && relOk && toOk {
+		if fromOk && relOk && toOk && fromNodeType != "" && toNodeType != "" {
 			output.SchemaTriplets = append(output.SchemaTriplets, SchemaTriplet{
-				From:         fromLabel,
+				From:         fromNodeType,
 				Relationship: relType,
-				To:           toLabel,
+				To:           toNodeType,
 			})
 		}
 	}

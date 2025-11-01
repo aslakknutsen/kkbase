@@ -112,73 +112,46 @@ func TestStructureTool(t *testing.T) {
 	t.Run("successful structure fetch", func(t *testing.T) {
 		mockStore := kktesting.NewMockGraphStore()
 
-		// Mock labels query
+		// Mock Query 1: Node types and their properties
 		mockStore.AddQueryResponse(
-			"CALL db.labels()",
+			"MATCH (n)",
 			[]map[string]interface{}{
-				{"label": "Pod"},
-				{"label": "Service"},
-				{"label": "Node"},
+				{
+					"NodeType":   "Pod",
+					"Properties": []interface{}{"name", "namespace", "status"},
+				},
+				{
+					"NodeType":   "Service",
+					"Properties": []interface{}{"name", "namespace", "type"},
+				},
+				{
+					"NodeType":   "Node",
+					"Properties": []interface{}{"name", "status"},
+				},
 			},
 		)
 
-		// Mock relationship types query
+		// Mock Query 2: Relationship types and their properties
 		mockStore.AddQueryResponse(
-			"CALL db.relationshipTypes()",
+			"MATCH ()-[r]->()",
 			[]map[string]interface{}{
-				{"relationshipType": "SCHEDULED_ON"},
-				{"relationshipType": "EXPOSES"},
+				{
+					"RelationshipType": "SCHEDULED_ON",
+					"Properties":       []interface{}{"created_at"},
+				},
+				{
+					"RelationshipType": "EXPOSES",
+					"Properties":       []interface{}{"port"},
+				},
 			},
 		)
 
-		// Mock properties queries for each node type
-		mockStore.AddQueryResponse(
-			"Pod",
-			[]map[string]interface{}{
-				{"key": "name"},
-				{"key": "namespace"},
-				{"key": "status"},
-			},
-		)
-
-		mockStore.AddQueryResponse(
-			"Service",
-			[]map[string]interface{}{
-				{"key": "name"},
-				{"key": "namespace"},
-				{"key": "type"},
-			},
-		)
-
-		mockStore.AddQueryResponse(
-			"Node",
-			[]map[string]interface{}{
-				{"key": "name"},
-				{"key": "status"},
-			},
-		)
-
-		// Mock relationship properties
-		mockStore.AddQueryResponse(
-			"SCHEDULED_ON",
-			[]map[string]interface{}{
-				{"key": "created_at"},
-			},
-		)
-
-		mockStore.AddQueryResponse(
-			"EXPOSES",
-			[]map[string]interface{}{
-				{"key": "port"},
-			},
-		)
-
-		// Mock triplets query (matches "MATCH (a)-[r]->(b)")
+		// Mock Query 3: Schema triplets (from-relationship-to patterns)
 		mockStore.AddQueryResponse(
 			"MATCH (a)-[r]->(b)",
 			[]map[string]interface{}{
-				{"fromLabel": "Pod", "relType": "SCHEDULED_ON", "toLabel": "Node"},
-				{"fromLabel": "Service", "relType": "EXPOSES", "toLabel": "Pod"},
+				{"FromNodeType": "Pod", "RelationshipType": "SCHEDULED_ON", "ToNodeType": "Node"},
+				{"FromNodeType": "Service", "RelationshipType": "EXPOSES", "ToNodeType": "Pod"},
 			},
 		)
 
@@ -198,15 +171,37 @@ func TestStructureTool(t *testing.T) {
 		if len(output.SchemaTriplets) != 2 {
 			t.Errorf("StructureTool() triplets count = %d, want 2", len(output.SchemaTriplets))
 		}
+
+		// Verify node properties
+		if props, ok := output.NodeProperties["Pod"]; !ok || len(props) != 3 {
+			t.Errorf("StructureTool() Pod properties = %v, want 3 properties", props)
+		}
+
+		if props, ok := output.NodeProperties["Service"]; !ok || len(props) != 3 {
+			t.Errorf("StructureTool() Service properties = %v, want 3 properties", props)
+		}
+
+		if props, ok := output.NodeProperties["Node"]; !ok || len(props) != 2 {
+			t.Errorf("StructureTool() Node properties = %v, want 2 properties", props)
+		}
+
+		// Verify relationship properties
+		if props, ok := output.RelationshipProperties["SCHEDULED_ON"]; !ok || len(props) != 1 {
+			t.Errorf("StructureTool() SCHEDULED_ON properties = %v, want 1 property", props)
+		}
+
+		if props, ok := output.RelationshipProperties["EXPOSES"]; !ok || len(props) != 1 {
+			t.Errorf("StructureTool() EXPOSES properties = %v, want 1 property", props)
+		}
 	})
 
-	t.Run("labels query error", func(t *testing.T) {
+	t.Run("node properties query error", func(t *testing.T) {
 		mockStore := kktesting.NewMockGraphStore()
 		mockStore.SetQueryError("database connection failed")
 
 		_, err := StructureTool(ctx, mockStore, logger)
 		if err == nil {
-			t.Error("StructureTool() expected error from labels query, got nil")
+			t.Error("StructureTool() expected error from node properties query, got nil")
 		}
 	})
 }
