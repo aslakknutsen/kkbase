@@ -12,7 +12,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/tools/cache"
-	gatewayv1alpha3 "sigs.k8s.io/gateway-api/apis/v1alpha3"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 // BackendTLSPolicyHandler handles BackendTLSPolicy resources
@@ -29,7 +29,7 @@ func NewBackendTLSPolicyHandler(
 	logger *zap.Logger,
 	factory dynamicinformer.DynamicSharedInformerFactory,
 ) *BackendTLSPolicyHandler {
-	gvr := gatewayv1alpha3.SchemeGroupVersion.WithResource("backendtlspolicies")
+	gvr := gatewayv1.SchemeGroupVersion.WithResource("backendtlspolicies")
 	informer := factory.ForResource(gvr).Informer()
 
 	handler := &BackendTLSPolicyHandler{
@@ -52,7 +52,7 @@ func NewBackendTLSPolicyHandler(
 
 // HandleAdd processes a newly added BackendTLSPolicy
 func (h *BackendTLSPolicyHandler) HandleAdd(obj interface{}) {
-	backendTLSPolicy, err := watchers.ConvertToTyped[gatewayv1alpha3.BackendTLSPolicy](obj)
+	backendTLSPolicy, err := watchers.ConvertToTyped[gatewayv1.BackendTLSPolicy](obj)
 	if err != nil {
 		h.Logger.Error("failed to convert to BackendTLSPolicy", zap.Error(err))
 		return
@@ -142,7 +142,7 @@ func (h *BackendTLSPolicyHandler) HandleAdd(obj interface{}) {
 
 // HandleUpdate processes an updated BackendTLSPolicy
 func (h *BackendTLSPolicyHandler) HandleUpdate(oldObj, newObj interface{}) {
-	backendTLSPolicy, err := watchers.ConvertToTyped[gatewayv1alpha3.BackendTLSPolicy](newObj)
+	backendTLSPolicy, err := watchers.ConvertToTyped[gatewayv1.BackendTLSPolicy](newObj)
 	if err != nil {
 		h.Logger.Error("failed to convert to BackendTLSPolicy", zap.Error(err))
 		return
@@ -167,7 +167,7 @@ func (h *BackendTLSPolicyHandler) HandleUpdate(oldObj, newObj interface{}) {
 
 // HandleDelete processes a deleted BackendTLSPolicy
 func (h *BackendTLSPolicyHandler) HandleDelete(obj interface{}) {
-	backendTLSPolicy, err := watchers.ConvertToTyped[gatewayv1alpha3.BackendTLSPolicy](obj)
+	backendTLSPolicy, err := watchers.ConvertToTyped[gatewayv1.BackendTLSPolicy](obj)
 	if err != nil {
 		h.Logger.Error("failed to convert to BackendTLSPolicy", zap.Error(err))
 		return

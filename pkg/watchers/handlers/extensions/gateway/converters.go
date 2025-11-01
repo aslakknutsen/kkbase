@@ -6,7 +6,6 @@ import (
 
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
-	gatewayv1alpha3 "sigs.k8s.io/gateway-api/apis/v1alpha3"
 	gatewayv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	"github.com/kagenti/kkbase/pkg/models"
@@ -509,7 +508,7 @@ func ReferenceGrantToGraphNode(referenceGrant *gatewayv1beta1.ReferenceGrant) *m
 }
 
 // BackendTLSPolicyToGraphNode converts a Gateway API BackendTLSPolicy to a graph node
-func BackendTLSPolicyToGraphNode(backendTLSPolicy *gatewayv1alpha3.BackendTLSPolicy) *models.GraphNode {
+func BackendTLSPolicyToGraphNode(backendTLSPolicy *gatewayv1.BackendTLSPolicy) *models.GraphNode {
 	properties := map[string]interface{}{
 		"name":      backendTLSPolicy.Name,
 		"namespace": backendTLSPolicy.Namespace,
