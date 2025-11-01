@@ -10,6 +10,11 @@
    - Install via Helm (recommended)
    - Or use Neo4j Aura (cloud service)
 
+3. **Prometheus** (Optional - for metrics-based RCA)
+   - Enables investigation tools in MCP server
+   - Install via kube-prometheus-stack (see Step 3a)
+   - Or use existing Prometheus instance
+
 ## 5-Minute Setup
 
 ### Step 1: Deploy Neo4j
@@ -64,6 +69,190 @@ kubectl apply -f deploy/deployment.yaml
 
 # Wait for deployment
 kubectl wait --for=condition=available deployment/kkbase-watcher --timeout=120s
+```
+
+### Step 3a: Deploy Prometheus (Optional - Enables Metrics Investigation)
+
+Prometheus enables the metrics-based RCA investigation tools in the MCP server.
+
+#### Using kube-prometheus-stack (Recommended)
+
+```bash
+# Add Prometheus community Helm repository
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+# Install Prometheus with default configuration
+helm install prometheus prometheus-community/kube-prometheus-stack \
+  --namespace monitoring \
+  --create-namespace \
+  --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false
+
+# Wait for Prometheus to be ready
+kubectl wait --for=condition=ready pod \
+  -l app.kubernetes.io/name=prometheus \
+  -n monitoring \
+  --timeout=300s
+```
+
+#### Verify Prometheus is Working
+
+```bash
+# Check Prometheus pods
+kubectl get pods -n monitoring
+
+# Port forward to access Prometheus UI
+kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090
+
+# Open browser to: http://localhost:9090
+# Try a test query: up{job="kubernetes-nodes"}
+```
+
+#### Configure kkbase to Use Prometheus
+
+Update your ConfigMap to enable metrics investigation:
+
+```bash
+cat <<EOF >> deploy/configmap.yaml
+  # Enable Prometheus metrics investigation (optional)
+  PROMETHEUS_URL: "http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090"
+EOF
+
+# Apply the updated ConfigMap
+kubectl apply -f deploy/configmap.yaml
+
+# Restart kkbase to pick up the change
+kubectl rollout restart deployment/kkbase-watcher
+```
+
+**For MCP Server deployment**, add the same configuration:
+
+```bash
+# If using standalone MCP server deployment
+cat <<EOF >> deploy/mcp-server-deployment.yaml
+        - name: PROMETHEUS_URL
+          value: "http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090"
+EOF
+```
+
+#### Verify Metrics Integration
+
+```bash
+# Check logs for metrics integration message
+kubectl logs deployment/kkbase-watcher | grep "metrics integration"
+
+# You should see:
+# "metrics integration enabled - investigation tools available"
+# "registered MCP tools" [..., "start_investigation", "complete_investigation", "get_investigation_status"]
+```
+
+#### Alternative: Minimal Prometheus Deployment
+
+If you don't need the full kube-prometheus-stack, use a minimal Prometheus:
+
+```bash
+# Deploy minimal Prometheus
+kubectl apply -f - <<EOF
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+    scrape_configs:
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      serviceAccountName: prometheus
+      containers:
+      - name: prometheus
+        image: prom/prometheus:latest
+        args:
+          - '--config.file=/etc/prometheus/prometheus.yml'
+          - '--storage.tsdb.path=/prometheus'
+        ports:
+        - containerPort: 9090
+        volumeMounts:
+        - name: config
+          mountPath: /etc/prometheus
+        - name: storage
+          mountPath: /prometheus
+      volumes:
+      - name: config
+        configMap:
+          name: prometheus-config
+      - name: storage
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  selector:
+    app: prometheus
+  ports:
+  - port: 9090
+    targetPort: 9090
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+rules:
+- apiGroups: [""]
+  resources:
+  - nodes
+  - nodes/proxy
+  - services
+  - endpoints
+  - pods
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+- kind: ServiceAccount
+  name: prometheus
+  namespace: monitoring
+EOF
 ```
 
 ### Step 4: Verify
@@ -214,6 +403,35 @@ kubectl rollout restart deployment/kkbase-watcher
 kubectl logs deployment/kkbase-watcher | grep "caches synced"
 ```
 
+### Investigation Tools Not Available?
+
+```bash
+# Check if Prometheus URL is configured
+kubectl get configmap kkbase-watcher-config -o yaml | grep PROMETHEUS_URL
+
+# Verify Prometheus is accessible from kkbase
+kubectl exec -it deployment/kkbase-watcher -- \
+  curl -s http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090/api/v1/status/config
+
+# Check logs for metrics integration status
+kubectl logs deployment/kkbase-watcher | grep "metrics integration"
+```
+
+### Prometheus Connection Failed?
+
+```bash
+# Test Prometheus connectivity
+kubectl run -it --rm debug --image=curlimages/curl --restart=Never -- \
+  curl http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090/-/healthy
+
+# Check Prometheus service
+kubectl get svc -n monitoring | grep prometheus
+
+# Verify DNS resolution
+kubectl exec -it deployment/kkbase-watcher -- \
+  nslookup prometheus-kube-prometheus-prometheus.monitoring.svc
+```
+
 ## Configuration Options
 
 ### Watch Specific Namespace Only
@@ -240,11 +458,13 @@ data:
 
 ## Next Steps
 
-1. **Visualize**: Use Neo4j Bloom for visual graph exploration
-2. **Query**: Write custom Cypher queries for your use cases
-3. **Integrate**: Use Neo4j drivers to query from your apps
-4. **Extend**: Add custom resource handlers for CRDs
-5. **Monitor**: Add Prometheus metrics and Grafana dashboards
+1. **Enable Metrics**: Deploy Prometheus (see Step 3a) to enable RCA investigation tools
+2. **Use MCP Tools**: Try the [Investigation Tools](./investigation-tools.md) for AI-powered RCA
+3. **Visualize**: Use Neo4j Bloom for visual graph exploration
+4. **Query**: Write custom Cypher queries for your use cases - see [Metrics RCA Queries](../reference/metrics-rca-queries.md)
+5. **Integrate**: Use Neo4j drivers to query from your apps
+6. **Extend**: Add custom resource handlers for CRDs
+7. **Monitor**: Add Grafana dashboards for visualization
 
 ## Clean Up
 
@@ -254,14 +474,22 @@ kubectl delete -f deploy/
 
 # Remove Neo4j
 helm uninstall neo4j
+
+# Remove Prometheus (if installed)
+helm uninstall prometheus -n monitoring
+# Or for minimal deployment:
+kubectl delete namespace monitoring
 ```
 
 ## Resources
 
 - **Neo4j Cypher Manual**: https://neo4j.com/docs/cypher-manual/
 - **Kubernetes API**: https://kubernetes.io/docs/reference/kubernetes-api/
+- **Prometheus Docs**: https://prometheus.io/docs/
 - **Documentation**: See [Documentation Index](../README.md)
 - **Query Reference**: See [Cypher Queries](../reference/cypher-queries.md)
+- **Investigation Tools**: See [Investigation Tools Guide](./investigation-tools.md)
+- **Metrics RCA**: See [Metrics RCA Queries](../reference/metrics-rca-queries.md)
 
 ## Support
 
