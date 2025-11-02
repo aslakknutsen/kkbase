@@ -1,7 +1,7 @@
 # Build stage
-FROM golang:1.24-alpine AS builder
+FROM registry.access.redhat.com/ubi9/go-toolset:1.24 AS builder
 
-WORKDIR /app
+WORKDIR /opt/app-root/src
 
 # Copy go mod files
 COPY go.mod go.sum ./
@@ -11,26 +11,24 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -o /watcher ./cmd/watcher
+RUN CGO_ENABLED=0 GOOS=linux go build -buildvcs=false -o watcher ./cmd/watcher
 
 # Runtime stage
-FROM alpine:latest
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
-RUN apk --no-cache add ca-certificates
-
-# Create a non-root user and group
-RUN addgroup -g 1001 -S appgroup && \
-    adduser -u 1001 -S appuser -G appgroup
-
-# Use /app as working directory (accessible to non-root users)
+# UBI minimal already includes CA certificates and is OpenShift-ready
+# Set working directory
 WORKDIR /app
 
-# Copy the binary from builder and set permissions
-COPY --from=builder /watcher .
-RUN chmod +x /app/watcher && \
-    chown -R appuser:appgroup /app
+# Copy the binary from builder and set permissions for arbitrary UID compatibility
+COPY --from=builder --chown=1001:0 --chmod=775 /opt/app-root/src/watcher .
 
-# OpenShift runs as arbitrary UID, but we set a default user for non-OpenShift environments
+# Support running as arbitrary UID (OpenShift requirement)
+# The binary and directory are owned by root group (0) with group write permissions
+RUN chgrp -R 0 /app && \
+    chmod -R g=u /app
+
+# Default to non-root user (OpenShift will override with arbitrary UID)
 USER 1001
 
 EXPOSE 8080
