@@ -287,8 +287,8 @@ func (s *Store) Query(ctx context.Context, query string, params map[string]inter
 
 		for _, record := range records {
 			recordMap := make(map[string]interface{})
-			for _, key := range record.Keys {
-				recordMap[key] = record.Values[0]
+			for i, key := range record.Keys {
+				recordMap[key] = record.Values[i]
 			}
 			results = append(results, recordMap)
 		}
