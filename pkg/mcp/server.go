@@ -110,10 +110,37 @@ func (s *Server) registerTools() error {
 			Count:   len(results),
 		}
 
+		// Format results as readable text with JSON fallback for large datasets
+		var resultText string
+		if len(results) == 0 {
+			resultText = "Query returned 0 results"
+		} else if len(results) <= 10 {
+			// For small result sets, format as readable text
+			resultText = fmt.Sprintf("Query returned %d results:\n\n", len(results))
+			for i, result := range results {
+				resultText += fmt.Sprintf("Result %d:\n", i+1)
+				for key, value := range result {
+					resultText += fmt.Sprintf("  %s: %v\n", key, value)
+				}
+				resultText += "\n"
+			}
+		} else {
+			// For large result sets, provide summary + sample
+			resultText = fmt.Sprintf("Query returned %d results. Showing first 5:\n\n", len(results))
+			for i := 0; i < 5 && i < len(results); i++ {
+				resultText += fmt.Sprintf("Result %d:\n", i+1)
+				for key, value := range results[i] {
+					resultText += fmt.Sprintf("  %s: %v\n", key, value)
+				}
+				resultText += "\n"
+			}
+			resultText += fmt.Sprintf("... and %d more results (use LIMIT in query to refine)\n", len(results)-5)
+		}
+
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{
-					Text: fmt.Sprintf("Query returned %d results", len(results)),
+					Text: resultText,
 				},
 			},
 		}, output, nil
@@ -133,17 +160,69 @@ func (s *Server) registerTools() error {
 			return nil, nil, err
 		}
 
-		// Format output as text
+		// Format detailed output as text
 		text := fmt.Sprintf(
 			"Graph Schema Overview:\n"+
 				"- Node Types: %d\n"+
 				"- Relationship Types: %d\n"+
-				"- Schema Triplets: %d\n\n"+
-				"Use the query tool with Cypher to explore the data.",
+				"- Schema Triplets: %d\n\n",
 			len(output.NodeTypes),
 			len(output.RelationshipTypes),
 			len(output.SchemaTriplets),
 		)
+
+		// Show node types with properties (limit to first 15 for readability)
+		text += "=== NODE TYPES ===\n"
+		maxNodeTypes := 15
+		if len(output.NodeTypes) > maxNodeTypes {
+			text += fmt.Sprintf("Showing %d of %d node types:\n\n", maxNodeTypes, len(output.NodeTypes))
+		}
+		for i, nodeType := range output.NodeTypes {
+			if i >= maxNodeTypes {
+				text += fmt.Sprintf("... and %d more node types\n\n", len(output.NodeTypes)-maxNodeTypes)
+				break
+			}
+			text += fmt.Sprintf("%d. %s\n", i+1, nodeType)
+			if props, ok := output.NodeProperties[nodeType]; ok && len(props) > 0 {
+				text += fmt.Sprintf("   Properties (%d): ", len(props))
+				// Show first 8 properties inline
+				displayProps := props
+				if len(props) > 8 {
+					displayProps = props[:8]
+					text += fmt.Sprintf("%s, ... (+%d more)\n", formatList(displayProps), len(props)-8)
+				} else {
+					text += fmt.Sprintf("%s\n", formatList(displayProps))
+				}
+			}
+			text += "\n"
+		}
+
+		// Show relationship types
+		text += "=== RELATIONSHIP TYPES ===\n"
+		for i, relType := range output.RelationshipTypes {
+			text += fmt.Sprintf("%d. %s", i+1, relType)
+			if props, ok := output.RelationshipProperties[relType]; ok && len(props) > 0 {
+				text += fmt.Sprintf(" (properties: %s)", formatList(props))
+			}
+			text += "\n"
+		}
+		text += "\n"
+
+		// Show schema triplets (top 25)
+		text += "=== SCHEMA TRIPLETS (Graph Structure) ===\n"
+		maxTriplets := 25
+		if len(output.SchemaTriplets) > maxTriplets {
+			text += fmt.Sprintf("Showing %d of %d relationships:\n", maxTriplets, len(output.SchemaTriplets))
+		}
+		for i, triplet := range output.SchemaTriplets {
+			if i >= maxTriplets {
+				text += fmt.Sprintf("... and %d more relationships\n", len(output.SchemaTriplets)-maxTriplets)
+				break
+			}
+			text += fmt.Sprintf("  %s -[%s]-> %s\n", triplet.From, triplet.Relationship, triplet.To)
+		}
+
+		text += "\nUse the query tool with Cypher to explore the data in detail.\n"
 
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
@@ -194,9 +273,9 @@ func (s *Server) registerTools() error {
 
 			// Count metrics collected for this investigation
 			countQuery := `
-				MATCH (m:Metric {investigation_id: $investigation_id})
-				RETURN count(m) as count
-			`
+			MATCH (m:Metric {investigation_id: $investigation_id})
+			RETURN count(m) as count
+		`
 			countResults, err := s.store.Query(ctx, countQuery, map[string]interface{}{
 				"investigation_id": session.ID,
 			})
@@ -207,6 +286,16 @@ func (s *Server) registerTools() error {
 					metricsCollected = int(count)
 				}
 			}
+
+			// Get breakdown of metrics by name
+			breakdownQuery := `
+			MATCH (m:Metric {investigation_id: $investigation_id})
+			RETURN m.metric_name as metric_name, count(m) as data_points
+			ORDER BY data_points DESC
+		`
+			breakdownResults, err := s.store.Query(ctx, breakdownQuery, map[string]interface{}{
+				"investigation_id": session.ID,
+			})
 
 			output := StartInvestigationOutput{
 				InvestigationID:  session.ID,
@@ -219,6 +308,48 @@ func (s *Server) registerTools() error {
 					session.ID),
 			}
 
+			// Format detailed output message
+			detailedMessage := fmt.Sprintf("Investigation started: %s\n\n", session.ID)
+			detailedMessage += fmt.Sprintf("Resource: %s (%s)\n", session.ResourceID, session.ResourceType)
+			detailedMessage += fmt.Sprintf("Symptom: %s\n", session.Symptom)
+			detailedMessage += fmt.Sprintf("Lookback: %v\n", lookback)
+			detailedMessage += fmt.Sprintf("Status: %s\n\n", session.Status)
+
+			if metricsCollected > 0 {
+				detailedMessage += fmt.Sprintf("✓ Metrics Collected: %d data points\n", metricsCollected)
+				if err == nil && len(breakdownResults) > 0 {
+					detailedMessage += "\nMetrics Breakdown:\n"
+					for i, result := range breakdownResults {
+						if i >= 10 {
+							detailedMessage += fmt.Sprintf("  ... and %d more metric types\n", len(breakdownResults)-10)
+							break
+						}
+						metricName := ""
+						dataPoints := int64(0)
+						if mn, ok := result["metric_name"].(string); ok {
+							metricName = mn
+						}
+						if dp, ok := result["data_points"].(int64); ok {
+							dataPoints = dp
+						}
+						detailedMessage += fmt.Sprintf("  - %s: %d points\n", metricName, dataPoints)
+					}
+				}
+				detailedMessage += "\nQuery metrics with:\n"
+				detailedMessage += fmt.Sprintf("  MATCH (m:Metric {investigation_id: '%s'})\n", session.ID)
+				detailedMessage += "  WHERE m.metric_name = 'container_memory_working_set_bytes'\n"
+				detailedMessage += "  RETURN m.timestamp, m.value ORDER BY m.timestamp\n"
+			} else {
+				detailedMessage += "⚠ WARNING: No metrics collected!\n\n"
+				detailedMessage += "Possible causes:\n"
+				detailedMessage += "  - Prometheus is not configured (check PROMETHEUS_URL)\n"
+				detailedMessage += "  - No data available for this resource in Prometheus\n"
+				detailedMessage += "  - Resource ID may be incorrect\n"
+				detailedMessage += fmt.Sprintf("  - Time window may be too narrow (current: %v)\n", lookback)
+			}
+
+			detailedMessage += fmt.Sprintf("\nUse complete_investigation('%s') when done to cleanup.\n", session.ID)
+
 			s.logger.Info("investigation started",
 				zap.String("investigation_id", session.ID),
 				zap.Int("metrics_collected", metricsCollected))
@@ -226,7 +357,7 @@ func (s *Server) registerTools() error {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
 					&mcp.TextContent{
-						Text: output.Message,
+						Text: detailedMessage,
 					},
 				},
 			}, output, nil
@@ -334,6 +465,41 @@ func (s *Server) registerTools() error {
 				LookbackDuration: getStringField(result, "lookback_duration"),
 			}
 
+			// Count metrics for this investigation
+			metricsCountQuery := `
+			MATCH (m:Metric {investigation_id: $investigation_id})
+			RETURN count(m) as metric_count
+		`
+			metricsResults, err := s.store.Query(ctx, metricsCountQuery, map[string]interface{}{
+				"investigation_id": input.InvestigationID,
+			})
+			metricCount := 0
+			if err == nil && len(metricsResults) > 0 {
+				if count, ok := metricsResults[0]["metric_count"].(int64); ok {
+					metricCount = int(count)
+				}
+			}
+
+			// Format detailed status message
+			statusMessage := fmt.Sprintf("Investigation Status: %s\n\n", input.InvestigationID)
+			statusMessage += fmt.Sprintf("Status: %s\n", output.Status)
+			statusMessage += fmt.Sprintf("Resource: %s (%s)\n", output.ResourceID, output.ResourceType)
+			statusMessage += fmt.Sprintf("Symptom: %s\n", output.Symptom)
+			statusMessage += fmt.Sprintf("Started: %s\n", output.StartTime)
+			statusMessage += fmt.Sprintf("Lookback Duration: %s\n", output.LookbackDuration)
+			statusMessage += fmt.Sprintf("Metrics Collected: %d data points\n", metricCount)
+
+			if metricCount > 0 {
+				statusMessage += "\nTo query metrics:\n"
+				statusMessage += fmt.Sprintf("  MATCH (m:Metric {investigation_id: '%s'})\n", input.InvestigationID)
+				statusMessage += "  RETURN m.metric_name, m.timestamp, m.value\n"
+				statusMessage += "  ORDER BY m.timestamp\n"
+			}
+
+			if output.Status == "active" {
+				statusMessage += fmt.Sprintf("\nRemember to call complete_investigation('%s') when done.\n", input.InvestigationID)
+			}
+
 			s.logger.Debug("investigation status retrieved",
 				zap.String("investigation_id", input.InvestigationID),
 				zap.String("status", output.Status))
@@ -341,7 +507,7 @@ func (s *Server) registerTools() error {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
 					&mcp.TextContent{
-						Text: fmt.Sprintf("Investigation '%s' status: %s", input.InvestigationID, output.Status),
+						Text: statusMessage,
 					},
 				},
 			}, output, nil
@@ -354,6 +520,24 @@ func (s *Server) registerTools() error {
 		zap.Strings("tools", toolNames))
 
 	return nil
+}
+
+// formatList formats a string slice as a comma-separated list
+func formatList(items []string) string {
+	if len(items) == 0 {
+		return ""
+	}
+	if len(items) == 1 {
+		return items[0]
+	}
+	result := ""
+	for i, item := range items {
+		if i > 0 {
+			result += ", "
+		}
+		result += item
+	}
+	return result
 }
 
 // getStringField safely extracts a string field from query results
