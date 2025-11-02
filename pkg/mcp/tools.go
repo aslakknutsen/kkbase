@@ -51,101 +51,117 @@ func StructureTool(ctx context.Context, store graph.GraphStore, logger *zap.Logg
 		SchemaTriplets:         make([]SchemaTriplet, 0),
 	}
 
-	// Query 1: Get all node types and their properties in a single query
-	nodePropsQuery := `
-		MATCH (n)
-		WITH labels(n)[0] AS NodeType, n
-		UNWIND keys(n) AS Property
-		RETURN NodeType, collect(DISTINCT Property) AS Properties
-		ORDER BY NodeType
-	`
-
-	nodePropsResult, err := store.Query(ctx, nodePropsQuery, nil)
+	// Get all node labels using efficient Neo4j procedure
+	labelsQuery := "CALL db.labels() YIELD label RETURN label ORDER BY label"
+	labelsResult, err := store.Query(ctx, labelsQuery, nil)
 	if err != nil {
-		logger.Error("failed to fetch node types and properties", zap.Error(err))
-		return nil, fmt.Errorf("failed to fetch node types and properties: %w", err)
+		logger.Error("failed to fetch node labels", zap.Error(err))
+		return nil, fmt.Errorf("failed to fetch node labels: %w", err)
 	}
 
-	// Process node types and properties
-	for _, record := range nodePropsResult {
-		nodeType, nodeTypeOk := record["NodeType"].(string)
-		properties, propsOk := record["Properties"].([]interface{})
-
-		if nodeTypeOk && propsOk && nodeType != "" {
-			output.NodeTypes = append(output.NodeTypes, nodeType)
-
-			// Convert properties from []interface{} to []string
-			propStrings := make([]string, 0, len(properties))
-			for _, prop := range properties {
-				if propStr, ok := prop.(string); ok {
-					propStrings = append(propStrings, propStr)
-				}
-			}
-			output.NodeProperties[nodeType] = propStrings
+	for _, record := range labelsResult {
+		if label, ok := record["label"].(string); ok {
+			output.NodeTypes = append(output.NodeTypes, label)
 		}
 	}
 
-	// Query 2: Get all relationship types and their properties in a single query
-	relPropsQuery := `
-		MATCH ()-[r]->()
-		WITH type(r) AS RelationshipType, r
-		UNWIND keys(r) AS Property
-		RETURN RelationshipType, collect(DISTINCT Property) AS Properties
-		ORDER BY RelationshipType
-	`
-
-	relPropsResult, err := store.Query(ctx, relPropsQuery, nil)
+	// Get all relationship types using efficient Neo4j procedure
+	relTypesQuery := "CALL db.relationshipTypes() YIELD relationshipType RETURN relationshipType ORDER BY relationshipType"
+	relTypesResult, err := store.Query(ctx, relTypesQuery, nil)
 	if err != nil {
-		logger.Error("failed to fetch relationship types and properties", zap.Error(err))
-		return nil, fmt.Errorf("failed to fetch relationship types and properties: %w", err)
+		logger.Error("failed to fetch relationship types", zap.Error(err))
+		return nil, fmt.Errorf("failed to fetch relationship types: %w", err)
 	}
 
-	// Process relationship types and properties
-	for _, record := range relPropsResult {
-		relType, relTypeOk := record["RelationshipType"].(string)
-		properties, propsOk := record["Properties"].([]interface{})
-
-		if relTypeOk && propsOk {
+	for _, record := range relTypesResult {
+		if relType, ok := record["relationshipType"].(string); ok {
 			output.RelationshipTypes = append(output.RelationshipTypes, relType)
-
-			// Convert properties from []interface{} to []string
-			propStrings := make([]string, 0, len(properties))
-			for _, prop := range properties {
-				if propStr, ok := prop.(string); ok {
-					propStrings = append(propStrings, propStr)
-				}
-			}
-			output.RelationshipProperties[relType] = propStrings
 		}
 	}
 
-	// Query 3: Get schema triplets (from-relationship-to patterns)
-	tripletsQuery := `
-		MATCH (a)-[r]->(b)
-		RETURN DISTINCT labels(a)[0] AS FromNodeType, 
-			type(r) AS RelationshipType, 
-			labels(b)[0] AS ToNodeType
-		ORDER BY FromNodeType, RelationshipType, ToNodeType
-	`
+	// Get node properties for each label (sample first 100 nodes)
+	for _, label := range output.NodeTypes {
+		propsQuery := fmt.Sprintf(`
+			MATCH (n:%s)
+			WITH n LIMIT 100
+			UNWIND keys(n) AS key
+			RETURN DISTINCT key
+			ORDER BY key
+		`, label)
 
-	tripletsResult, err := store.Query(ctx, tripletsQuery, nil)
-	if err != nil {
-		logger.Error("failed to fetch schema triplets", zap.Error(err))
-		return nil, fmt.Errorf("failed to fetch schema triplets: %w", err)
+		propsResult, err := store.Query(ctx, propsQuery, nil)
+		if err != nil {
+			logger.Warn("failed to fetch properties for node type",
+				zap.String("node_type", label),
+				zap.Error(err))
+			continue
+		}
+
+		properties := make([]string, 0)
+		for _, record := range propsResult {
+			if key, ok := record["key"].(string); ok {
+				properties = append(properties, key)
+			}
+		}
+		output.NodeProperties[label] = properties
 	}
 
-	// Process schema triplets
-	for _, record := range tripletsResult {
-		fromNodeType, fromOk := record["FromNodeType"].(string)
-		relType, relOk := record["RelationshipType"].(string)
-		toNodeType, toOk := record["ToNodeType"].(string)
+	// Get relationship properties for each type (sample first 100 relationships)
+	for _, relType := range output.RelationshipTypes {
+		propsQuery := fmt.Sprintf(`
+			MATCH ()-[r:%s]->()
+			WITH r LIMIT 100
+			UNWIND keys(r) AS key
+			RETURN DISTINCT key
+			ORDER BY key
+		`, relType)
 
-		if fromOk && relOk && toOk && fromNodeType != "" && toNodeType != "" {
-			output.SchemaTriplets = append(output.SchemaTriplets, SchemaTriplet{
-				From:         fromNodeType,
-				Relationship: relType,
-				To:           toNodeType,
-			})
+		propsResult, err := store.Query(ctx, propsQuery, nil)
+		if err != nil {
+			logger.Warn("failed to fetch properties for relationship type",
+				zap.String("relationship_type", relType),
+				zap.Error(err))
+			continue
+		}
+
+		properties := make([]string, 0)
+		for _, record := range propsResult {
+			if key, ok := record["key"].(string); ok {
+				properties = append(properties, key)
+			}
+		}
+		output.RelationshipProperties[relType] = properties
+	}
+
+	// Get schema triplets by checking specific combinations efficiently
+	// This is faster than a full graph scan on large databases
+	for _, nodeType := range output.NodeTypes {
+		for _, relType := range output.RelationshipTypes {
+			// Check what target node types exist for this combination
+			tripletQuery := fmt.Sprintf(`
+				MATCH (a:%s)-[r:%s]->(b)
+				RETURN DISTINCT labels(b)[0] AS toLabel
+				LIMIT 10
+			`, nodeType, relType)
+
+			tripletResult, err := store.Query(ctx, tripletQuery, nil)
+			if err != nil {
+				logger.Debug("failed to fetch triplet",
+					zap.String("from", nodeType),
+					zap.String("rel", relType),
+					zap.Error(err))
+				continue
+			}
+
+			for _, record := range tripletResult {
+				if toLabel, ok := record["toLabel"].(string); ok && toLabel != "" {
+					output.SchemaTriplets = append(output.SchemaTriplets, SchemaTriplet{
+						From:         nodeType,
+						Relationship: relType,
+						To:           toLabel,
+					})
+				}
+			}
 		}
 	}
 

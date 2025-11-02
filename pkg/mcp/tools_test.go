@@ -112,47 +112,109 @@ func TestStructureTool(t *testing.T) {
 	t.Run("successful structure fetch", func(t *testing.T) {
 		mockStore := kktesting.NewMockGraphStore()
 
-		// Mock Query 1: Node types and their properties
+		// Mock Query 1: Get node labels
 		mockStore.AddQueryResponse(
-			"MATCH (n)",
+			"CALL db.labels()",
 			[]map[string]interface{}{
-				{
-					"NodeType":   "Pod",
-					"Properties": []interface{}{"name", "namespace", "status"},
-				},
-				{
-					"NodeType":   "Service",
-					"Properties": []interface{}{"name", "namespace", "type"},
-				},
-				{
-					"NodeType":   "Node",
-					"Properties": []interface{}{"name", "status"},
-				},
+				{"label": "Pod"},
+				{"label": "Service"},
+				{"label": "Node"},
 			},
 		)
 
-		// Mock Query 2: Relationship types and their properties
+		// Mock Query 2: Get relationship types
 		mockStore.AddQueryResponse(
-			"MATCH ()-[r]->()",
+			"CALL db.relationshipTypes()",
 			[]map[string]interface{}{
-				{
-					"RelationshipType": "SCHEDULED_ON",
-					"Properties":       []interface{}{"created_at"},
-				},
-				{
-					"RelationshipType": "EXPOSES",
-					"Properties":       []interface{}{"port"},
-				},
+				{"relationshipType": "SCHEDULED_ON"},
+				{"relationshipType": "EXPOSES"},
 			},
 		)
 
-		// Mock Query 3: Schema triplets (from-relationship-to patterns)
+		// Mock Query 3: Get properties for Pod
 		mockStore.AddQueryResponse(
-			"MATCH (a)-[r]->(b)",
+			"MATCH (n:Pod)",
 			[]map[string]interface{}{
-				{"FromNodeType": "Pod", "RelationshipType": "SCHEDULED_ON", "ToNodeType": "Node"},
-				{"FromNodeType": "Service", "RelationshipType": "EXPOSES", "ToNodeType": "Pod"},
+				{"key": "name"},
+				{"key": "namespace"},
+				{"key": "status"},
 			},
+		)
+
+		// Mock Query 4: Get properties for Service
+		mockStore.AddQueryResponse(
+			"MATCH (n:Service)",
+			[]map[string]interface{}{
+				{"key": "name"},
+				{"key": "namespace"},
+				{"key": "type"},
+			},
+		)
+
+		// Mock Query 5: Get properties for Node
+		mockStore.AddQueryResponse(
+			"MATCH (n:Node)",
+			[]map[string]interface{}{
+				{"key": "name"},
+				{"key": "status"},
+			},
+		)
+
+		// Mock Query 6: Get properties for SCHEDULED_ON relationship
+		mockStore.AddQueryResponse(
+			"MATCH ()-[r:SCHEDULED_ON]->()",
+			[]map[string]interface{}{
+				{"key": "created_at"},
+			},
+		)
+
+		// Mock Query 7: Get properties for EXPOSES relationship
+		mockStore.AddQueryResponse(
+			"MATCH ()-[r:EXPOSES]->()",
+			[]map[string]interface{}{
+				{"key": "port"},
+			},
+		)
+
+		// Mock Query 8-13: Schema triplets for each node-relationship combination
+		// Pod-SCHEDULED_ON
+		mockStore.AddQueryResponse(
+			"MATCH (a:Pod)-[r:SCHEDULED_ON]->(b)",
+			[]map[string]interface{}{
+				{"toLabel": "Node"},
+			},
+		)
+
+		// Pod-EXPOSES
+		mockStore.AddQueryResponse(
+			"MATCH (a:Pod)-[r:EXPOSES]->(b)",
+			[]map[string]interface{}{},
+		)
+
+		// Service-SCHEDULED_ON
+		mockStore.AddQueryResponse(
+			"MATCH (a:Service)-[r:SCHEDULED_ON]->(b)",
+			[]map[string]interface{}{},
+		)
+
+		// Service-EXPOSES
+		mockStore.AddQueryResponse(
+			"MATCH (a:Service)-[r:EXPOSES]->(b)",
+			[]map[string]interface{}{
+				{"toLabel": "Pod"},
+			},
+		)
+
+		// Node-SCHEDULED_ON
+		mockStore.AddQueryResponse(
+			"MATCH (a:Node)-[r:SCHEDULED_ON]->(b)",
+			[]map[string]interface{}{},
+		)
+
+		// Node-EXPOSES
+		mockStore.AddQueryResponse(
+			"MATCH (a:Node)-[r:EXPOSES]->(b)",
+			[]map[string]interface{}{},
 		)
 
 		output, err := StructureTool(ctx, mockStore, logger)
