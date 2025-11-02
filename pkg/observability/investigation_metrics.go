@@ -3,6 +3,7 @@ package observability
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/kagenti/kkbase/pkg/graph"
@@ -103,6 +104,7 @@ func (imp *InvestigationMetricsProcessor) pullMetricsForInvestigation(
 		StartTime:    startTime,
 		EndTime:      endTime,
 		StepDuration: 1 * time.Minute, // 1-minute aggregation
+		Labels:       extractResourceLabels(session.ResourceType, session.ResourceID),
 	}
 
 	// Query metrics provider
@@ -237,17 +239,26 @@ func (imp *InvestigationMetricsProcessor) storeMetric(
 	// Correlate metric to K8s resource
 	correlatedResourceType, correlatedResourceID := imp.correlator.FindResourceFromLabels(ctx, metric.Labels)
 	if correlatedResourceID != "" {
-		if err := imp.graphStore.UpsertEdge(ctx,
-			"Metric", metricID,
-			"EMITTED_BY",
-			correlatedResourceType, correlatedResourceID,
-			nil,
-		); err != nil {
-			imp.logger.Debug("failed to create EMITTED_BY edge",
-				zap.String("metric_id", metricID),
-				zap.String("resource_type", correlatedResourceType),
-				zap.String("resource_id", correlatedResourceID),
-				zap.Error(err))
+		// SAFETY CHECK: Only create edge if it matches the investigation resource or its children
+		if shouldCorrelate(session.ResourceType, session.ResourceID, correlatedResourceType, correlatedResourceID) {
+			if err := imp.graphStore.UpsertEdge(ctx,
+				"Metric", metricID,
+				"EMITTED_BY",
+				correlatedResourceType, correlatedResourceID,
+				nil,
+			); err != nil {
+				imp.logger.Debug("failed to create EMITTED_BY edge",
+					zap.String("metric_id", metricID),
+					zap.String("resource_type", correlatedResourceType),
+					zap.String("resource_id", correlatedResourceID),
+					zap.Error(err))
+			}
+		} else {
+			imp.logger.Debug("skipped EMITTED_BY edge - not related to investigation",
+				zap.String("investigation_resource_type", session.ResourceType),
+				zap.String("investigation_resource_id", session.ResourceID),
+				zap.String("metric_resource_type", correlatedResourceType),
+				zap.String("metric_resource_id", correlatedResourceID))
 		}
 	}
 
@@ -373,4 +384,67 @@ func (imp *InvestigationMetricsProcessor) createInvestigationNode(
 
 func generateInvestigationID() string {
 	return fmt.Sprintf("inv_%d", time.Now().UnixNano())
+}
+
+// extractResourceLabels converts a resource ID to Prometheus label filters
+func extractResourceLabels(resourceType, resourceID string) map[string]string {
+	labels := make(map[string]string)
+
+	parts := strings.Split(resourceID, "/")
+
+	switch resourceType {
+	case "Pod":
+		if len(parts) >= 3 {
+			// Pod/namespace/podname
+			labels["namespace"] = parts[1]
+			labels["pod"] = parts[2]
+		}
+	case "Container":
+		if len(parts) >= 3 {
+			labels["namespace"] = parts[1]
+			if len(parts) == 4 {
+				// Container/namespace/podname/containername
+				labels["pod"] = parts[2]
+				labels["container"] = parts[3]
+			}
+		}
+	case "Node":
+		if len(parts) >= 2 {
+			// Node/nodename
+			labels["node"] = parts[1]
+		}
+	case "Service":
+		if len(parts) >= 3 {
+			// Service/namespace/servicename
+			labels["namespace"] = parts[1]
+			labels["service"] = parts[2]
+		}
+	}
+
+	return labels
+}
+
+// shouldCorrelate checks if a metric-resource correlation is valid for the investigation
+func shouldCorrelate(investigationResourceType, investigationResourceID, metricResourceType, metricResourceID string) bool {
+	// Direct match
+	if investigationResourceType == metricResourceType && investigationResourceID == metricResourceID {
+		return true
+	}
+
+	// Pod investigation can include its containers
+	if investigationResourceType == "Pod" && metricResourceType == "Container" {
+		// Container IDs look like: Container/namespace/podname/containername
+		// Pod IDs look like: Pod/namespace/podname
+		// Check if the container belongs to the pod being investigated
+		return strings.HasPrefix(metricResourceID, strings.Replace(investigationResourceID, "Pod/", "Container/", 1))
+	}
+
+	// Node investigation can include pods running on it
+	if investigationResourceType == "Node" && metricResourceType == "Pod" {
+		// This would require checking the pod's node assignment, which isn't encoded in the ID
+		// For now, we'll rely on Prometheus label filtering to handle this
+		return false
+	}
+
+	return false
 }

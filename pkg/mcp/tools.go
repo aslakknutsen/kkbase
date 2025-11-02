@@ -53,10 +53,10 @@ func StructureTool(ctx context.Context, store graph.GraphStore, logger *zap.Logg
 
 	// Query 1: Get all node types and their properties in a single query
 	nodePropsQuery := `
-		MATCH (n) 
-		WITH labels(n)[0] AS NodeType, n 
-		UNWIND keys(n) AS Property 
-		RETURN NodeType, collect(DISTINCT Property) AS Properties 
+		MATCH (n)
+		WITH labels(n)[0] AS NodeType, n
+		UNWIND keys(n) AS Property
+		RETURN NodeType, collect(DISTINCT Property) AS Properties
 		ORDER BY NodeType
 	`
 
@@ -123,8 +123,8 @@ func StructureTool(ctx context.Context, store graph.GraphStore, logger *zap.Logg
 	tripletsQuery := `
 		MATCH (a)-[r]->(b)
 		RETURN DISTINCT labels(a)[0] AS FromNodeType, 
-		       type(r) AS RelationshipType, 
-		       labels(b)[0] AS ToNodeType
+			type(r) AS RelationshipType, 
+			labels(b)[0] AS ToNodeType
 		ORDER BY FromNodeType, RelationshipType, ToNodeType
 	`
 
