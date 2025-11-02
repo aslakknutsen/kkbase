@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kagenti/kkbase/pkg/graph"
+	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/observability"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
@@ -254,7 +255,7 @@ func (s *Server) registerTools() error {
 				RETURN i.status as status, i.metrics_purged as metrics_purged
 			`
 			results, err := s.store.Query(ctx, query, map[string]interface{}{
-				"investigation_id": input.InvestigationID,
+				"investigation_id": models.GetNodeID("Investigation", "", input.InvestigationID),
 			})
 
 			metricsPurged := 0
@@ -309,7 +310,7 @@ func (s *Server) registerTools() error {
 				       i.lookback_duration as lookback_duration
 			`
 			results, err := s.store.Query(ctx, query, map[string]interface{}{
-				"investigation_id": input.InvestigationID,
+				"investigation_id": models.GetNodeID("Investigation", "", input.InvestigationID),
 			})
 			if err != nil {
 				s.logger.Error("failed to query investigation status",
