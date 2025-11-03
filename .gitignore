@@ -1,6 +1,6 @@
 # Binaries
-watcher
-mcp-server
+/watcher
+/mcp-server
 *.exe
 *.exe~
 *.dll
