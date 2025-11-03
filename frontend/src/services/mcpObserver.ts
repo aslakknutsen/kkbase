@@ -1,20 +1,112 @@
 // MCP Observer Service for read-only dashboard access
-// Uses Server-Sent Events (SSE) for push notifications + fallback polling
+// Uses MCP SDK for tool calls and SSE for push notifications
 
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { ActiveSessionInfo, SessionDetail } from '../types/agentSession';
 import type { BlastZoneSnapshot } from '../types/blastZone';
 import type { TimelineEvent } from '../types/timeline';
 
+// Custom HTTP transport for MCP client (browser-compatible)
+class BrowserHTTPTransport implements Transport {
+  private url: string;
+  private oncloseCallback?: () => void;
+  private onerrorCallback?: (error: Error) => void;
+
+  constructor(url: string) {
+    this.url = url;
+  }
+
+  async start(): Promise<void> {
+    // No connection setup needed for HTTP
+  }
+
+  async close(): Promise<void> {
+    if (this.oncloseCallback) {
+      this.oncloseCallback();
+    }
+  }
+
+  async send(message: any): Promise<void> {
+    try {
+      const response = await fetch(this.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(message),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      // For HTTP transport, we handle the response in the transport layer
+      const result = await response.json();
+      
+      // Call the message handler if we received a response
+      if (this.onmessage && result) {
+        this.onmessage(result);
+      }
+    } catch (error) {
+      if (this.onerrorCallback) {
+        this.onerrorCallback(error as Error);
+      }
+      throw error;
+    }
+  }
+
+  onclose?: () => void;
+  onerror?: (error: Error) => void;
+  onmessage?: (message: any) => void;
+}
+
 export class MCPObserver {
-  private baseURL: string;
+  private mcpClient: Client;
+  private transport: BrowserHTTPTransport;
   private eventsURL: string;
   private eventSource: EventSource | null = null;
   private pollInterval: number = 10000; // 10 seconds (fallback only)
   private notificationHandlers: Map<string, ((data: any) => void)[]> = new Map();
+  private isConnected: boolean = false;
 
   constructor(baseURL: string = '/mcp', eventsURL: string = '/events') {
-    this.baseURL = baseURL;
+    this.transport = new BrowserHTTPTransport(baseURL);
+    this.mcpClient = new Client(
+      {
+        name: 'kkbase-dashboard',
+        version: '1.0.0',
+      },
+      {
+        capabilities: {},
+      }
+    );
     this.eventsURL = eventsURL;
+  }
+
+  // Initialize MCP client connection
+  async connect(): Promise<void> {
+    if (this.isConnected) {
+      return;
+    }
+
+    try {
+      await this.mcpClient.connect(this.transport);
+      this.isConnected = true;
+      console.log('MCP client connected');
+    } catch (error) {
+      console.error('Failed to connect MCP client:', error);
+      throw error;
+    }
+  }
+
+  // Disconnect MCP client
+  async disconnect(): Promise<void> {
+    if (this.isConnected) {
+      await this.mcpClient.close();
+      this.isConnected = false;
+      console.log('MCP client disconnected');
+    }
   }
 
   // Connect to SSE stream for push notifications
@@ -95,36 +187,40 @@ export class MCPObserver {
     }
   }
 
-  // Call MCP tool via HTTP POST
+  // Call MCP tool using the SDK
   private async callTool<T = any>(toolName: string, params: any = {}): Promise<T> {
-    const response = await fetch(this.baseURL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: Date.now(),
-        method: 'tools/call',
-        params: {
-          name: toolName,
-          arguments: params,
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`MCP request failed: ${response.statusText}`);
+    if (!this.isConnected) {
+      await this.connect();
     }
 
-    const data = await response.json();
-    
-    if (data.error) {
-      throw new Error(`MCP error: ${data.error.message}`);
-    }
+    try {
+      const result = await this.mcpClient.callTool({
+        name: toolName,
+        arguments: params,
+      });
 
-    // The result contains the structured output from the tool
-    return data.result;
+      // The MCP SDK returns the tool result in a structured format
+      // Extract the actual data from the result
+      if (result.content && Array.isArray(result.content) && result.content.length > 0) {
+        // If the result contains content items, parse the first text item
+        const textContent = result.content.find((item: any) => item.type === 'text');
+        if (textContent && textContent.text) {
+          try {
+            // Try to parse as JSON if the tool returns JSON data
+            return JSON.parse(textContent.text) as T;
+          } catch {
+            // If not JSON, return the text as-is
+            return textContent.text as T;
+          }
+        }
+      }
+
+      // Fallback: return the whole result
+      return result as T;
+    } catch (error: any) {
+      console.error(`MCP tool call failed (${toolName}):`, error);
+      throw new Error(`MCP tool call failed: ${error.message || error}`);
+    }
   }
 
   // Get list of active sessions

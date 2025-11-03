@@ -12,9 +12,23 @@ export function App() {
   const [isConnecting, setIsConnecting] = useState(true);
 
   useEffect(() => {
-    // Connect to SSE for push notifications
-    observer.connectSSE();
-    setIsConnecting(false);
+    // Initialize MCP client and SSE connection
+    const initializeConnections = async () => {
+      try {
+        // Connect MCP client
+        await observer.connect();
+        
+        // Connect to SSE for push notifications
+        observer.connectSSE();
+        
+        setIsConnecting(false);
+      } catch (error) {
+        console.error('Failed to initialize connections:', error);
+        setIsConnecting(false);
+      }
+    };
+
+    initializeConnections();
 
     // Start polling for active sessions (with SSE notifications)
     const cleanup = observer.startSessionsPolling((sessions) => {
@@ -34,6 +48,7 @@ export function App() {
     return () => {
       cleanup();
       observer.disconnectSSE();
+      observer.disconnect();
     };
   }, [observer, selectedSession]);
 
