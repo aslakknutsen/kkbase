@@ -1,0 +1,36 @@
+# Fast local development Dockerfile for mcp-server
+# Uses pre-built binary from local context (no Go compilation)
+#
+# Usage:
+#   make build-mcp-server  # Build binary + frontend first
+#   docker build -f Dockerfile.mcp-server.fast -t kkbase-mcp-server:latest .
+#
+# This skips the entire Go build stage, making it ~10x faster for local iteration.
+# The binary already has the frontend embedded via go:embed.
+
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+# Install ca-certificates for HTTPS connections
+RUN microdnf install -y ca-certificates && \
+    microdnf clean all
+
+WORKDIR /app
+
+# Copy pre-built binary from local context (includes embedded frontend)
+COPY mcp-server .
+
+# Create non-root user
+RUN useradd -u 1000 -r -s /sbin/nologin kkbase
+
+# Set ownership and permissions
+RUN chown -R kkbase:kkbase /app && \
+    chmod +x /app/mcp-server
+
+# Switch to non-root user
+USER 1000
+
+# Expose HTTP port
+EXPOSE 8080
+
+ENTRYPOINT ["./mcp-server"]
+

@@ -21,7 +21,6 @@ data:
   ENABLE_LOGS: "false"
   ENABLE_TRACES: "true"
 
-  MCP_ENABLED: "true"
   MCP_PORT: "8081"
 
   PROMETHEUS_URL: "http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090"

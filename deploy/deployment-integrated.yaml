@@ -1,32 +1,49 @@
 ---
-# Watcher Deployment with Integrated MCP Server
-# Use this for integrated mode (watcher + MCP in one pod)
+# Integrated Deployment: Watcher + MCP Server in one pod (2 containers)
+# Recommended deployment for production
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: kkbase-watcher
+  name: kkbase-integrated
   labels:
-    app: kkbase-watcher
+    app: kkbase-integrated
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: kkbase-watcher
+      app: kkbase-integrated
   template:
     metadata:
       labels:
-        app: kkbase-watcher
+        app: kkbase-integrated
     spec:
       serviceAccountName: kkbase-watcher
+      
+      # Container 1: Watcher (K8s resource watching)
       containers:
         - name: watcher
           image: quay.io/aslakknutsen/kkbase-watcher:latest
           imagePullPolicy: Always
+          # No ports - watcher has no HTTP server
+          envFrom:
+            - configMapRef:
+                name: kkbase-watcher-config
+            - secretRef:
+                name: kkbase-watcher-secret
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+        
+        # Container 2: MCP Server (HTTP + Frontend + Agent Tools)
+        - name: mcp-server
+          image: quay.io/aslakknutsen/kkbase-mcp-server:latest
+          imagePullPolicy: Always
           ports:
-            - name: health
-              containerPort: 8080
-              protocol: TCP
-            - name: mcp
+            - name: http
               containerPort: 8081
               protocol: TCP
           envFrom:
@@ -34,29 +51,23 @@ spec:
                 name: kkbase-watcher-config
             - secretRef:
                 name: kkbase-watcher-secret
-          env:
-            # Enable MCP server in integrated mode
-            - name: MCP_ENABLED
-              value: "true"
-            - name: MCP_PORT
-              value: "8081"
           resources:
             requests:
-              cpu: 150m
-              memory: 256Mi
+              cpu: 100m
+              memory: 128Mi
             limits:
-              cpu: 1000m
-              memory: 1Gi
+              cpu: 500m
+              memory: 256Mi
           livenessProbe:
             httpGet:
-              path: /healthz
-              port: 8080
-            initialDelaySeconds: 30
+              path: /health
+              port: 8081
+            initialDelaySeconds: 10
             periodSeconds: 10
           readinessProbe:
             httpGet:
-              path: /ready
-              port: 8080
+              path: /health
+              port: 8081
             initialDelaySeconds: 5
             periodSeconds: 5
 

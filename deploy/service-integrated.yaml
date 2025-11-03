@@ -1,23 +1,24 @@
 ---
-# Service for Integrated Mode (Watcher + MCP)
-# Use this when deploying with deployment-integrated.yaml
+# Service for Integrated Deployment (Watcher + MCP Server in one pod)
+# Exposes only the MCP server port
 apiVersion: v1
 kind: Service
 metadata:
-  name: kkbase-watcher
+  name: kkbase-integrated
   labels:
-    app: kkbase-watcher
+    app: kkbase-integrated
 spec:
+  type: ClusterIP
   selector:
-    app: kkbase-watcher
+    app: kkbase-integrated
+  # Session affinity for SSE connections
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600  # 1 hour for long-lived SSE connections
   ports:
-    - name: health
-      port: 8080
-      targetPort: 8080
-      protocol: TCP
-    - name: mcp
+    - name: http
       port: 8081
       targetPort: 8081
       protocol: TCP
-  type: ClusterIP
 

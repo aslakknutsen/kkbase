@@ -23,6 +23,7 @@ vendor/
 # Build artifacts
 dist/
 bin/
+cmd/mcp-server/frontend/
 
 # OS
 .DS_Store

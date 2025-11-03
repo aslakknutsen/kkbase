@@ -18,6 +18,8 @@ type Server struct {
 	store            graph.GraphStore
 	logger           *zap.Logger
 	metricsProcessor *observability.InvestigationMetricsProcessor
+	sessionManager   *observability.AgentSessionManager
+	broadcaster      *NotificationBroadcaster
 }
 
 // ServerOption is a function that configures the Server
@@ -27,6 +29,20 @@ type ServerOption func(*Server)
 func WithMetricsProcessor(processor *observability.InvestigationMetricsProcessor) ServerOption {
 	return func(s *Server) {
 		s.metricsProcessor = processor
+	}
+}
+
+// WithAgentSessionManager sets the agent session manager for the server
+func WithAgentSessionManager(manager *observability.AgentSessionManager) ServerOption {
+	return func(s *Server) {
+		s.sessionManager = manager
+	}
+}
+
+// WithBroadcaster sets the notification broadcaster for the server
+func WithBroadcaster(broadcaster *NotificationBroadcaster) ServerOption {
+	return func(s *Server) {
+		s.broadcaster = broadcaster
 	}
 }
 
@@ -514,6 +530,17 @@ func (s *Server) registerTools() error {
 		})
 
 		toolNames = append(toolNames, "start_investigation", "complete_investigation", "get_investigation_status")
+	}
+
+	// Register agent session tools (if session manager available)
+	if s.sessionManager != nil {
+		if err := s.registerAgentSessionTools(s.sessionManager, s.broadcaster); err != nil {
+			s.logger.Warn("failed to register agent session tools", zap.Error(err))
+		}
+
+		if err := s.registerAgentSessionResources(s.sessionManager); err != nil {
+			s.logger.Warn("failed to register agent session resources", zap.Error(err))
+		}
 	}
 
 	s.logger.Info("registered MCP tools",

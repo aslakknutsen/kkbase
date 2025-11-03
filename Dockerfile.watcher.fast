@@ -1,0 +1,32 @@
+# Fast local development Dockerfile for watcher
+# Uses pre-built binary from local context (no Go compilation)
+# 
+# Usage:
+#   make build-watcher  # Build binary first
+#   docker build -f Dockerfile.watcher.fast -t kkbase-watcher:latest .
+#
+# This skips the entire Go build stage, making it ~10x faster for local iteration.
+
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+# Install ca-certificates for HTTPS connections
+RUN microdnf install -y ca-certificates && \
+    microdnf clean all
+
+WORKDIR /app
+
+# Copy pre-built binary from local context
+COPY watcher .
+
+# Create non-root user
+RUN useradd -u 1000 -r -s /sbin/nologin kkbase
+
+# Set ownership and permissions
+RUN chown -R kkbase:kkbase /app && \
+    chmod +x /app/watcher
+
+# Switch to non-root user
+USER 1000
+
+ENTRYPOINT ["./watcher"]
+
