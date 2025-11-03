@@ -12,10 +12,8 @@ import (
 	"github.com/kagenti/kkbase/pkg/config"
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/graph/neo4j"
-	"github.com/kagenti/kkbase/pkg/mcp"
 	"github.com/kagenti/kkbase/pkg/observability"
 	"github.com/kagenti/kkbase/pkg/observability/jaeger"
-	"github.com/kagenti/kkbase/pkg/observability/prometheus"
 	"github.com/kagenti/kkbase/pkg/watchers"
 	"github.com/kagenti/kkbase/pkg/watchers/handlers/core"
 	"github.com/kagenti/kkbase/pkg/watchers/handlers/extensions/gateway"
@@ -80,65 +78,6 @@ func run() error {
 	// Setup signal handling
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-	// Start MCP server if enabled
-	var mcpHTTPServer *http.Server
-	if cfg.MCPEnabled {
-		// Initialize metrics processor (optional)
-		var metricsProcessor *observability.InvestigationMetricsProcessor
-		if cfg.PrometheusURL != "" {
-			logger.Info("initializing metrics integration for MCP",
-				zap.String("prometheus_url", cfg.PrometheusURL))
-
-			// Create Prometheus provider
-			promProvider := prometheus.NewProvider(cfg.PrometheusURL, logger)
-
-			// Create investigation metrics processor
-			metricsProcessor = observability.NewInvestigationMetricsProcessor(
-				graphStore,
-				promProvider,
-				logger,
-			)
-
-			logger.Info("metrics integration enabled - investigation tools available")
-		} else {
-			logger.Info("PROMETHEUS_URL not set - metrics investigation tools disabled")
-		}
-
-		// Create MCP server with optional metrics processor
-		var mcpServer *mcp.Server
-		if metricsProcessor != nil {
-			mcpServer, err = mcp.NewServer(graphStore, logger, mcp.WithMetricsProcessor(metricsProcessor))
-		} else {
-			mcpServer, err = mcp.NewServer(graphStore, logger)
-		}
-		if err != nil {
-			return fmt.Errorf("failed to create MCP server: %w", err)
-		}
-		defer mcpServer.Close()
-
-		mcpHandler := mcp.CreateHTTPHandler(mcpServer.GetMCPServer(), logger)
-		mcpHTTPServer = &http.Server{
-			Addr:         fmt.Sprintf(":%d", cfg.MCPPort),
-			Handler:      mcpHandler,
-			ReadTimeout:  30 * time.Second,
-			WriteTimeout: 30 * time.Second,
-			IdleTimeout:  120 * time.Second,
-		}
-
-		go func() {
-			logger.Info("starting MCP server",
-				zap.Int("port", cfg.MCPPort),
-				zap.String("endpoint", fmt.Sprintf("http://localhost:%d/mcp", cfg.MCPPort)))
-
-			if err := mcpHTTPServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				logger.Error("MCP server failed", zap.Error(err))
-			}
-		}()
-
-		logger.Info("MCP server enabled and started",
-			zap.Int("port", cfg.MCPPort))
-	}
 
 	// Initialize observability registry
 	obsRegistry := observability.NewRegistry()
@@ -225,19 +164,6 @@ func run() error {
 	}
 
 	logger.Info("shutting down gracefully")
-
-	// Shutdown MCP server if it's running
-	if mcpHTTPServer != nil {
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer shutdownCancel()
-
-		logger.Info("shutting down MCP server")
-		if err := mcpHTTPServer.Shutdown(shutdownCtx); err != nil {
-			logger.Error("error shutting down MCP server", zap.Error(err))
-		} else {
-			logger.Info("MCP server shut down successfully")
-		}
-	}
 
 	return nil
 }
