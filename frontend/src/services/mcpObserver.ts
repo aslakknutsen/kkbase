@@ -99,6 +99,7 @@ export class MCPObserver {
       'agent_session/query_executed',
       'agent_session/hypothesis_updated',
       'agent_session/finding_discovered',
+      'agent_session/recommendation_recorded',
       'agent_session/blast_zone_updated',
       'agent_session/investigation_spawned',
       'agent_session/completed',
@@ -339,11 +340,19 @@ export class MCPObserver {
       }
     };
 
+    const recommendationHandler = async (data: any) => {
+      if (data.session_id === sessionId && callbacks.onSessionUpdate) {
+        const session = await this.getSessionDetails(sessionId);
+        callbacks.onSessionUpdate(session);
+      }
+    };
+
     // Subscribe to SSE notifications for this session
     this.onNotification('agent_session/query_executed', queryHandler);
     this.onNotification('agent_session/hypothesis_updated', hypothesisHandler);
     this.onNotification('agent_session/blast_zone_updated', blastZoneHandler);
     this.onNotification('agent_session/finding_discovered', findingHandler);
+    this.onNotification('agent_session/recommendation_recorded', recommendationHandler);
 
     // Return cleanup function that removes all handlers
     return () => {
@@ -351,6 +360,7 @@ export class MCPObserver {
       this.offNotification('agent_session/hypothesis_updated', hypothesisHandler);
       this.offNotification('agent_session/blast_zone_updated', blastZoneHandler);
       this.offNotification('agent_session/finding_discovered', findingHandler);
+      this.offNotification('agent_session/recommendation_recorded', recommendationHandler);
     };
   }
 
