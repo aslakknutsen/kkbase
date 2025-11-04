@@ -1,4 +1,6 @@
 import type { QueryExecution } from '../types/agentSession';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface QueryListProps {
   queries: QueryExecution[];
@@ -51,18 +53,40 @@ export function QueryList({ queries }: QueryListProps) {
             
             <div className="p-4 bg-gray-50 border-t border-gray-200">
               <div className="mb-3">
-                <h4 className="text-xs font-semibold text-gray-700 mb-1">Cypher Query</h4>
-                <pre className="text-xs bg-white p-3 rounded border border-gray-200 overflow-x-auto">
-                  {query.query}
-                </pre>
+                <h4 className="text-xs font-semibold text-gray-700 mb-2">Cypher Query</h4>
+                <div className="rounded border border-gray-200 overflow-hidden">
+                  <SyntaxHighlighter
+                    language="cypher"
+                    style={vscDarkPlus}
+                    customStyle={{
+                      margin: 0,
+                      fontSize: '0.75rem',
+                      lineHeight: '1.5',
+                    }}
+                    showLineNumbers={false}
+                  >
+                    {query.query}
+                  </SyntaxHighlighter>
+                </div>
               </div>
               
               {query.params && Object.keys(query.params).length > 0 && (
                 <div>
-                  <h4 className="text-xs font-semibold text-gray-700 mb-1">Parameters</h4>
-                  <pre className="text-xs bg-white p-3 rounded border border-gray-200 overflow-x-auto">
-                    {JSON.stringify(query.params, null, 2)}
-                  </pre>
+                  <h4 className="text-xs font-semibold text-gray-700 mb-2">Parameters</h4>
+                  <div className="rounded border border-gray-200 overflow-hidden">
+                    <SyntaxHighlighter
+                      language="json"
+                      style={vscDarkPlus}
+                      customStyle={{
+                        margin: 0,
+                        fontSize: '0.75rem',
+                        lineHeight: '1.5',
+                      }}
+                      showLineNumbers={false}
+                    >
+                      {JSON.stringify(query.params, null, 2)}
+                    </SyntaxHighlighter>
+                  </div>
                 </div>
               )}
             </div>
