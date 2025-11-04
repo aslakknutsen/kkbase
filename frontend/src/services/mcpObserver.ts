@@ -12,7 +12,6 @@ export class MCPObserver {
   private transport: StreamableHTTPClientTransport;
   private eventsURL: string;
   private eventSource: EventSource | null = null;
-  private pollInterval: number = 10000; // 10 seconds (fallback only)
   private notificationHandlers: Map<string, ((data: any) => void)[]> = new Map();
   private isConnected: boolean = false;
   private isConnecting: boolean = false;
@@ -144,6 +143,17 @@ export class MCPObserver {
       this.notificationHandlers.set(eventType, []);
     }
     this.notificationHandlers.get(eventType)!.push(handler);
+  }
+
+  // Unsubscribe from notifications
+  offNotification(eventType: string, handler: (data: any) => void): void {
+    const handlers = this.notificationHandlers.get(eventType);
+    if (handlers) {
+      const index = handlers.indexOf(handler);
+      if (index > -1) {
+        handlers.splice(index, 1);
+      }
+    }
   }
 
   // Trigger registered handlers for an event
@@ -285,7 +295,7 @@ export class MCPObserver {
     }
   }
 
-  // Start watching for updates (SSE + fallback polling)
+  // Start watching for updates via SSE
   startPolling(
     sessionId: string,
     callbacks: {
@@ -294,8 +304,8 @@ export class MCPObserver {
       onTimelineUpdate?: (timeline: TimelineEvent[]) => void;
     }
   ): () => void {
-    // Subscribe to SSE notifications for this session
-    this.onNotification('agent_session/query_executed', async (data) => {
+    // Create handler functions that we can reference for cleanup
+    const queryHandler = async (data: any) => {
       if (data.session_id === sessionId) {
         if (callbacks.onSessionUpdate) {
           const session = await this.getSessionDetails(sessionId);
@@ -306,83 +316,69 @@ export class MCPObserver {
           callbacks.onTimelineUpdate(timeline);
         }
       }
-    });
+    };
 
-    this.onNotification('agent_session/hypothesis_updated', async (data) => {
-      if (data.session_id === sessionId) {
-        if (callbacks.onSessionUpdate) {
-          const session = await this.getSessionDetails(sessionId);
-          callbacks.onSessionUpdate(session);
-        }
+    const hypothesisHandler = async (data: any) => {
+      if (data.session_id === sessionId && callbacks.onSessionUpdate) {
+        const session = await this.getSessionDetails(sessionId);
+        callbacks.onSessionUpdate(session);
       }
-    });
+    };
 
-    this.onNotification('agent_session/blast_zone_updated', async (data) => {
+    const blastZoneHandler = async (data: any) => {
       if (data.session_id === sessionId && callbacks.onBlastZoneUpdate) {
         const blastZone = await this.getBlastZone(sessionId);
         callbacks.onBlastZoneUpdate(blastZone);
       }
-    });
+    };
 
-    this.onNotification('agent_session/finding_discovered', async (data) => {
-      if (data.session_id === sessionId) {
-        if (callbacks.onSessionUpdate) {
-          const session = await this.getSessionDetails(sessionId);
-          callbacks.onSessionUpdate(session);
-        }
+    const findingHandler = async (data: any) => {
+      if (data.session_id === sessionId && callbacks.onSessionUpdate) {
+        const session = await this.getSessionDetails(sessionId);
+        callbacks.onSessionUpdate(session);
       }
-    });
+    };
 
-    // Fallback polling (less frequent now that we have SSE)
-    const interval = setInterval(async () => {
-      try {
-        const [session, blastZone, timeline] = await Promise.all([
-          callbacks.onSessionUpdate ? this.getSessionDetails(sessionId) : Promise.resolve(null),
-          callbacks.onBlastZoneUpdate ? this.getBlastZone(sessionId) : Promise.resolve(null),
-          callbacks.onTimelineUpdate ? this.getTimeline(sessionId) : Promise.resolve([]),
-        ]);
+    // Subscribe to SSE notifications for this session
+    this.onNotification('agent_session/query_executed', queryHandler);
+    this.onNotification('agent_session/hypothesis_updated', hypothesisHandler);
+    this.onNotification('agent_session/blast_zone_updated', blastZoneHandler);
+    this.onNotification('agent_session/finding_discovered', findingHandler);
 
-        if (callbacks.onSessionUpdate && session) {
-          callbacks.onSessionUpdate(session);
-        }
-        if (callbacks.onBlastZoneUpdate && blastZone) {
-          callbacks.onBlastZoneUpdate(blastZone);
-        }
-        if (callbacks.onTimelineUpdate) {
-          callbacks.onTimelineUpdate(timeline);
-        }
-      } catch (error) {
-        console.error('Polling error:', error);
-      }
-    }, this.pollInterval);
-
-    // Return cleanup function
-    return () => clearInterval(interval);
+    // Return cleanup function that removes all handlers
+    return () => {
+      this.offNotification('agent_session/query_executed', queryHandler);
+      this.offNotification('agent_session/hypothesis_updated', hypothesisHandler);
+      this.offNotification('agent_session/blast_zone_updated', blastZoneHandler);
+      this.offNotification('agent_session/finding_discovered', findingHandler);
+    };
   }
 
-  // Poll for new sessions (with SSE notifications)
+  // Watch for new sessions via SSE
   startSessionsPolling(callback: (sessions: ActiveSessionInfo[]) => void): () => void {
-    // Subscribe to new session notifications
-    this.onNotification('agent_session/created', async () => {
+    // Create named handler functions for cleanup
+    const createdHandler = async () => {
       const sessions = await this.getActiveSessions();
       callback(sessions);
-    });
+    };
 
-    this.onNotification('agent_session/completed', async () => {
+    const completedHandler = async () => {
       const sessions = await this.getActiveSessions();
       callback(sessions);
-    });
+    };
+
+    // Subscribe to new session notifications
+    this.onNotification('agent_session/created', createdHandler);
+    this.onNotification('agent_session/completed', completedHandler);
 
     // Initial fetch
     this.getActiveSessions().then(callback);
 
-    // Fallback polling (less frequent with SSE)
-    const interval = setInterval(async () => {
-      const sessions = await this.getActiveSessions();
-      callback(sessions);
-    }, this.pollInterval);
-
-    return () => clearInterval(interval);
+    // Return cleanup function that removes handlers
+    return () => {
+      this.offNotification('agent_session/created', createdHandler);
+      this.offNotification('agent_session/completed', completedHandler);
+    };
   }
 }
 
