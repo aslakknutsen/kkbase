@@ -807,7 +807,13 @@ func parseRecommendationFromResult(result map[string]interface{}) Recommendation
 		}
 	}
 
-	createdAt, _ := time.Parse(time.RFC3339, rMap["created_at"].(string))
+	// Parse created_at timestamp - handle both string and time.Time
+	var createdAt time.Time
+	if createdAtStr, ok := rMap["created_at"].(string); ok {
+		createdAt, _ = time.Parse(time.RFC3339, createdAtStr)
+	} else if createdAtTime, ok := rMap["created_at"].(time.Time); ok {
+		createdAt = createdAtTime
+	}
 
 	return Recommendation{
 		ID:              rMap["id"].(string),
