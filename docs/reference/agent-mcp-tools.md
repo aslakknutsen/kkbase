@@ -6,8 +6,37 @@ This document provides complete specifications for all MCP tools used in agent i
 
 ## Tool Categories
 
-- **Agent Tools** (6): Write operations for AI agents conducting investigations
+- **Agent Tools** (7): Write operations for AI agents conducting investigations
 - **Dashboard Tools** (4): Read-only operations for web dashboard observation
+
+---
+
+## Tool Execution Flow
+
+### Recommended Flow: Full RCA Investigation
+
+The standard workflow for complete root cause analysis:
+
+1. **`start_agent_session`** - Initialize investigation session with symptom description
+2. **`update_hypothesis`** - Record your current diagnostic theory (triggers blast zone calculation)
+3. **`query_with_session`** - Execute Cypher queries to explore the graph (repeat as needed)
+   - Findings are automatically extracted from results
+   - Use provided `reasoning` to explain what you're investigating
+4. **`spawn_investigation`** - (Optional) Launch metrics investigation for specific resources
+   - Can be spawned multiple times within a session for different resources
+   - Links metrics data to the session for deeper analysis
+5. **`record_finding`** - (Optional) Explicitly record synthesized insights
+6. **`record_recommendation`** - Record actionable next steps based on findings
+   - Can record multiple recommendations (root cause fixes, preventive actions, etc.)
+   - Link to related findings for evidence traceability
+7. **`complete_agent_session`** - Finalize investigation and generate summary
+
+### Key Points
+
+- **Investigations are a sub-flow**: `spawn_investigation` can be called multiple times within an agent session to gather metrics for different resources. It's not a separate investigation flow - it's a tool within the agent session workflow.
+- **Update hypothesis frequently**: Each time your understanding evolves, call `update_hypothesis` to trigger blast zone recalculation
+- **Record recommendations**: Near the end of investigation, use `record_recommendation` to provide actionable next steps
+- **Complete the session**: Always call `complete_agent_session` when done to finalize findings
 
 ---
 
@@ -297,7 +326,114 @@ This document provides complete specifications for all MCP tools used in agent i
 
 ---
 
-### 5. spawn_investigation
+### 5. record_recommendation
+
+**Purpose**: Record an actionable recommendation for resolving issues or improving the system based on investigation findings.
+
+**Input Schema**:
+```json
+{
+  "session_id": "string (required)",
+  "type": "root_cause_fix | preventive_action | optimization | monitoring_improvement | cleanup (required)",
+  "priority": "critical | high | medium | low (required)",
+  "title": "string (required)",
+  "description": "string (required)",
+  "rationale": "string (required)",
+  "related_findings": "array of finding IDs (optional)",
+  "action_items": "array of strings (required)",
+  "estimated_effort": "string (optional)",
+  "automation_hint": "string (optional)",
+  "tags": "array of strings (optional)",
+  "metadata": "object (optional)"
+}
+```
+
+**Input Example**:
+```json
+{
+  "session_id": "session-abc123",
+  "type": "root_cause_fix",
+  "priority": "critical",
+  "title": "Increase memory limit for order-service deployment",
+  "description": "The order-service pods are being OOMKilled due to insufficient memory allocation. Current limit of 512Mi is too low based on observed usage patterns.",
+  "rationale": "Memory usage analysis shows consistent growth pattern reaching 500-520Mi before OOMKill. The v2.3.5 deployment increased baseline memory usage by 30% compared to v2.3.4.",
+  "related_findings": ["finding-oomkilled-1", "finding-oomkilled-2", "finding-memory-trend-3"],
+  "action_items": [
+    "Update deployment manifest to increase memory limit from 512Mi to 1Gi",
+    "Update memory request to 768Mi for better pod scheduling",
+    "Monitor memory usage for 24 hours after deployment",
+    "Consider implementing memory profiling if issue persists"
+  ],
+  "estimated_effort": "15 minutes",
+  "automation_hint": "kubectl set resources deployment order-service -n production --limits=memory=1Gi --requests=memory=768Mi",
+  "tags": ["memory", "oomkilled", "production", "critical-path"],
+  "metadata": {
+    "deployment": "order-service",
+    "namespace": "production",
+    "current_limit": "512Mi",
+    "recommended_limit": "1Gi",
+    "confidence": 0.95
+  }
+}
+```
+
+**Output Schema**:
+```json
+{
+  "recommendation_id": "string",
+  "priority": "string",
+  "type": "string",
+  "created_at": "ISO8601 timestamp"
+}
+```
+
+**Output Example**:
+```json
+{
+  "recommendation_id": "recommendation-memory-fix-xyz",
+  "priority": "critical",
+  "type": "root_cause_fix",
+  "created_at": "2024-11-03T14:45:00Z"
+}
+```
+
+**Side Effects**:
+- Creates `Recommendation` node in Neo4j
+- Links to AgentSession via `HAS_RECOMMENDATION` relationship
+- Links to related Finding nodes via `BASED_ON` relationships
+- Emits notification: `agent_session/recommendation_recorded`
+
+**Recommendation Types**:
+- `root_cause_fix`: Direct fixes for identified root cause (highest priority typically)
+- `preventive_action`: Steps to prevent similar issues in the future
+- `optimization`: Performance or efficiency improvements discovered
+- `monitoring_improvement`: Enhanced observability to detect similar issues earlier
+- `cleanup`: Technical debt or cleanup tasks discovered
+
+**Priority Guidelines**:
+- `critical`: Immediate action required, system degraded or at risk
+- `high`: Important, should be addressed soon (within hours/days)
+- `medium`: Worthwhile improvement, schedule appropriately (within weeks)
+- `low`: Nice to have, can be deferred (backlog)
+
+**Best Practices**:
+1. Always link recommendations to related findings using `related_findings` array
+2. Provide specific, actionable steps in `action_items`
+3. Include automation hints (kubectl commands, scripts) when possible
+4. Estimate effort realistically to help prioritization
+5. Prioritize root cause fixes as "critical" or "high"
+6. Use tags for categorization and filtering
+7. Record recommendations near the end of investigation, before calling `complete_agent_session`
+
+**Errors**:
+- `SESSION_NOT_FOUND`: Invalid session_id
+- `INVALID_TYPE`: Type must be one of the enum values
+- `INVALID_PRIORITY`: Priority must be critical/high/medium/low
+- `MISSING_ACTION_ITEMS`: At least one action item required
+
+---
+
+### 6. spawn_investigation
 
 **Purpose**: Launch a metrics investigation for a specific resource (links to existing Investigation system).
 
@@ -371,7 +507,7 @@ This document provides complete specifications for all MCP tools used in agent i
 
 ---
 
-### 6. complete_agent_session
+### 7. complete_agent_session
 
 **Purpose**: Mark investigation session as complete and finalize blast zone snapshot.
 

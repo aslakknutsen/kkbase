@@ -153,6 +153,12 @@ See [Architecture > Resource Type Registry](../development/architecture.md#resou
 - Kubernetes API events
 - Properties: `name`, `namespace`, `uid`, `type`, `reason`, `message`, `involved_object_kind`, `involved_object_name`, `first_timestamp`, `last_timestamp`, `count`, `source`, `created`
 
+**Recommendation**
+- Actionable next steps identified during investigation
+- Properties: `id`, `type`, `priority`, `title`, `description`, `rationale`, `action_items` (JSON array), `estimated_effort`, `automation_hint`, `tags` (JSON array), `metadata` (JSON object), `created_at`
+- Type values: `root_cause_fix`, `preventive_action`, `optimization`, `monitoring_improvement`, `cleanup`
+- Priority values: `critical`, `high`, `medium`, `low`
+
 **Trace**
 - Distributed trace aggregation (one per trace)
 - Properties: `trace_id`, `start_time`, `duration_ms`, `root_operation`, `root_service`, `span_count`, `error_count`, `has_errors`, `services_involved`
@@ -307,6 +313,18 @@ See [Architecture > Resource Type Registry](../development/architecture.md#resou
 - From: `K8sEvent`
 - To: Any resource
 - Description: Event involves a specific resource
+- Properties: None
+
+**HAS_RECOMMENDATION**
+- From: `AgentSession`
+- To: `Recommendation`
+- Description: Session produced this recommendation
+- Properties: None
+
+**BASED_ON**
+- From: `Recommendation`
+- To: `Finding`
+- Description: Recommendation is based on these findings
 - Properties: None
 
 ### Trace Relationships

@@ -94,6 +94,16 @@ func (nb *NotificationBroadcaster) EmitFindingDiscovered(sessionID, findingID, f
 	})
 }
 
+// EmitRecommendationRecorded emits agent_session/recommendation_recorded notification
+func (nb *NotificationBroadcaster) EmitRecommendationRecorded(sessionID, recommendationID, priority, recType string) {
+	nb.Emit("agent_session/recommendation_recorded", map[string]interface{}{
+		"session_id":        sessionID,
+		"recommendation_id": recommendationID,
+		"priority":          priority,
+		"type":              recType,
+	})
+}
+
 // EmitBlastZoneUpdated emits agent_session/blast_zone_updated notification
 func (nb *NotificationBroadcaster) EmitBlastZoneUpdated(sessionID string, nodeCount, edgeCount int) {
 	nb.Emit("agent_session/blast_zone_updated", map[string]interface{}{

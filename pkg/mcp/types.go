@@ -152,6 +152,28 @@ type RecordFindingOutput struct {
 	Message   string `json:"message" jsonschema:"description:Human-readable status message"`
 }
 
+// RecordRecommendationInput defines the input for recording a recommendation
+type RecordRecommendationInput struct {
+	SessionID       string                 `json:"session_id" jsonschema:"required,description:Agent session ID"`
+	Type            string                 `json:"type" jsonschema:"description:Type of recommendation,required,enum=root_cause_fix,enum=preventive_action,enum=optimization,enum=monitoring_improvement,enum=cleanup"`
+	Priority        string                 `json:"priority" jsonschema:"description:Priority level,required,enum=critical,enum=high,enum=medium,enum=low"`
+	Title           string                 `json:"title" jsonschema:"required,description:Short title for the recommendation"`
+	Description     string                 `json:"description" jsonschema:"required,description:Detailed description of what should be done"`
+	Rationale       string                 `json:"rationale" jsonschema:"required,description:Why this recommendation is being made"`
+	RelatedFindings []string               `json:"related_findings" jsonschema:"description:Finding IDs that support this recommendation"`
+	ActionItems     []string               `json:"action_items" jsonschema:"required,description:Step-by-step action items"`
+	EstimatedEffort string                 `json:"estimated_effort,omitempty" jsonschema:"description:Estimated time to complete (e.g. '30 minutes' or '2 hours')"`
+	AutomationHint  string                 `json:"automation_hint,omitempty" jsonschema:"description:Commands or automation suggestions"`
+	Tags            []string               `json:"tags,omitempty" jsonschema:"description:Tags for categorization"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty" jsonschema:"description:Additional structured data"`
+}
+
+// RecordRecommendationOutput defines the output from recording a recommendation
+type RecordRecommendationOutput struct {
+	RecommendationID string `json:"recommendation_id" jsonschema:"description:Unique ID for the recorded recommendation"`
+	Message          string `json:"message" jsonschema:"description:Human-readable status message"`
+}
+
 // SpawnInvestigationInput defines the input for spawning a metrics investigation
 type SpawnInvestigationInput struct {
 	SessionID       string `json:"session_id" jsonschema:"description:Session ID to link investigation to"`

@@ -2,6 +2,7 @@ package observability
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -442,6 +443,15 @@ func (asm *AgentSessionManager) GetSession(ctx context.Context, sessionID string
 		}
 	}
 
+	// Get recommendations
+	recommendations, err := asm.GetRecommendations(ctx, sessionID)
+	if err != nil {
+		asm.logger.Warn("failed to get recommendations",
+			zap.String("session_id", sessionID),
+			zap.Error(err))
+		recommendations = []Recommendation{}
+	}
+
 	var currentHypothesis *Hypothesis
 	for i := range hypotheses {
 		if hypotheses[i].Status == "active" {
@@ -455,6 +465,7 @@ func (asm *AgentSessionManager) GetSession(ctx context.Context, sessionID string
 		Hypotheses:        hypotheses,
 		Queries:           queries,
 		Findings:          findings,
+		Recommendations:   recommendations,
 		Investigations:    investigations,
 		CurrentHypothesis: currentHypothesis,
 	}, nil
@@ -646,6 +657,181 @@ func (asm *AgentSessionManager) updateSessionFindingCount(ctx context.Context, s
 	_, _ = asm.graphStore.Query(ctx, query, map[string]interface{}{
 		"session_id": sessionID,
 	})
+}
+
+// RecordRecommendation stores a recommendation for a session
+func (asm *AgentSessionManager) RecordRecommendation(
+	ctx context.Context,
+	sessionID string,
+	recommendation *Recommendation,
+) error {
+	// Generate ID if not set
+	if recommendation.ID == "" {
+		recommendation.ID = generateRecommendationID()
+	}
+
+	if recommendation.CreatedAt.IsZero() {
+		recommendation.CreatedAt = time.Now()
+	}
+
+	asm.logger.Info("recording recommendation",
+		zap.String("session_id", sessionID),
+		zap.String("recommendation_id", recommendation.ID),
+		zap.String("type", recommendation.Type),
+		zap.String("priority", recommendation.Priority))
+
+	// Marshal arrays/objects to JSON
+	actionItemsJSON, _ := json.Marshal(recommendation.ActionItems)
+	tagsJSON, _ := json.Marshal(recommendation.Tags)
+	metadataJSON, _ := json.Marshal(recommendation.Metadata)
+
+	// Build query - handle empty related findings
+	query := `
+		MATCH (s:AgentSession {id: $session_id})
+		CREATE (r:Recommendation {
+			id: $id,
+			type: $type,
+			priority: $priority,
+			title: $title,
+			description: $description,
+			rationale: $rationale,
+			action_items: $action_items,
+			estimated_effort: $estimated_effort,
+			automation_hint: $automation_hint,
+			tags: $tags,
+			metadata: $metadata,
+			created_at: datetime($created_at)
+		})
+		CREATE (s)-[:HAS_RECOMMENDATION]->(r)
+	`
+
+	params := map[string]interface{}{
+		"session_id":       sessionID,
+		"id":               recommendation.ID,
+		"type":             recommendation.Type,
+		"priority":         recommendation.Priority,
+		"title":            recommendation.Title,
+		"description":      recommendation.Description,
+		"rationale":        recommendation.Rationale,
+		"action_items":     string(actionItemsJSON),
+		"estimated_effort": recommendation.EstimatedEffort,
+		"automation_hint":  recommendation.AutomationHint,
+		"tags":             string(tagsJSON),
+		"metadata":         string(metadataJSON),
+		"created_at":       recommendation.CreatedAt.Format(time.RFC3339),
+	}
+
+	// Add BASED_ON relationships if there are related findings
+	if len(recommendation.RelatedFindings) > 0 {
+		query += `
+		WITH r
+		UNWIND $related_findings AS finding_id
+		MATCH (f:Finding {id: finding_id})
+		CREATE (r)-[:BASED_ON]->(f)
+		`
+		params["related_findings"] = recommendation.RelatedFindings
+	}
+
+	query += `
+		RETURN r
+	`
+
+	_, err := asm.graphStore.Query(ctx, query, params)
+	if err != nil {
+		return fmt.Errorf("failed to create recommendation: %w", err)
+	}
+
+	asm.logger.Info("recommendation recorded", zap.String("recommendation_id", recommendation.ID))
+	return nil
+}
+
+// GetRecommendations retrieves all recommendations for a session
+func (asm *AgentSessionManager) GetRecommendations(ctx context.Context, sessionID string) ([]Recommendation, error) {
+	query := `
+		MATCH (s:AgentSession {id: $session_id})-[:HAS_RECOMMENDATION]->(r:Recommendation)
+		OPTIONAL MATCH (r)-[:BASED_ON]->(f:Finding)
+		WITH r, collect(f.id) AS related_findings
+		RETURN r, related_findings
+		ORDER BY 
+			CASE r.priority 
+				WHEN 'critical' THEN 1
+				WHEN 'high' THEN 2
+				WHEN 'medium' THEN 3
+				WHEN 'low' THEN 4
+				ELSE 5
+			END,
+			r.created_at DESC
+	`
+
+	results, err := asm.graphStore.Query(ctx, query, map[string]interface{}{
+		"session_id": sessionID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get recommendations: %w", err)
+	}
+
+	recommendations := make([]Recommendation, 0, len(results))
+	for _, result := range results {
+		rec := parseRecommendationFromResult(result)
+		recommendations = append(recommendations, rec)
+	}
+
+	return recommendations, nil
+}
+
+// parseRecommendationFromResult helper function
+func parseRecommendationFromResult(result map[string]interface{}) Recommendation {
+	rMap := result["r"].(map[string]interface{})
+
+	var actionItems []string
+	if aiStr, ok := rMap["action_items"].(string); ok && aiStr != "" {
+		json.Unmarshal([]byte(aiStr), &actionItems)
+	}
+
+	var tags []string
+	if tagsStr, ok := rMap["tags"].(string); ok && tagsStr != "" {
+		json.Unmarshal([]byte(tagsStr), &tags)
+	}
+
+	var metadata map[string]interface{}
+	if metaStr, ok := rMap["metadata"].(string); ok && metaStr != "" {
+		json.Unmarshal([]byte(metaStr), &metadata)
+	}
+
+	var relatedFindings []string
+	if rf, ok := result["related_findings"].([]interface{}); ok {
+		for _, f := range rf {
+			if fStr, ok := f.(string); ok && fStr != "" {
+				relatedFindings = append(relatedFindings, fStr)
+			}
+		}
+	}
+
+	createdAt, _ := time.Parse(time.RFC3339, rMap["created_at"].(string))
+
+	return Recommendation{
+		ID:              rMap["id"].(string),
+		Type:            rMap["type"].(string),
+		Priority:        rMap["priority"].(string),
+		Title:           rMap["title"].(string),
+		Description:     rMap["description"].(string),
+		Rationale:       rMap["rationale"].(string),
+		RelatedFindings: relatedFindings,
+		ActionItems:     actionItems,
+		EstimatedEffort: getStringOrEmpty(rMap, "estimated_effort"),
+		AutomationHint:  getStringOrEmpty(rMap, "automation_hint"),
+		Tags:            tags,
+		Metadata:        metadata,
+		CreatedAt:       createdAt,
+	}
+}
+
+// getStringOrEmpty helper function for optional string fields
+func getStringOrEmpty(m map[string]interface{}, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
 }
 
 // Parsing helpers

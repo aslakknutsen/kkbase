@@ -44,6 +44,22 @@ export interface Finding {
   discovered_at: string;
 }
 
+export interface Recommendation {
+  id: string;
+  type: 'root_cause_fix' | 'preventive_action' | 'optimization' | 'monitoring_improvement' | 'cleanup';
+  priority: 'critical' | 'high' | 'medium' | 'low';
+  title: string;
+  description: string;
+  rationale: string;
+  related_findings: string[]; // Finding IDs
+  action_items: string[];
+  estimated_effort?: string;
+  automation_hint?: string;
+  tags?: string[];
+  metadata?: Record<string, any>;
+  created_at: string;
+}
+
 export interface ActiveSessionInfo {
   id: string;
   initial_symptom: string;
@@ -60,6 +76,7 @@ export interface SessionDetail {
   hypotheses: Hypothesis[];
   queries: QueryExecution[];
   findings: Finding[];
+  recommendations: Recommendation[];
   investigations: string[]; // Investigation IDs
   current_hypothesis?: Hypothesis;
 }

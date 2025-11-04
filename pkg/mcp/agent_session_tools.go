@@ -243,7 +243,70 @@ func (s *Server) registerAgentSessionTools(sessionManager *observability.AgentSe
 		}, output, nil
 	})
 
-	// Tool 5: spawn_investigation
+	// Tool 5: record_recommendation
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name: "record_recommendation",
+		Description: "Record an actionable recommendation based on investigation findings. " +
+			"Use this to suggest concrete next steps for resolving the root cause or addressing " +
+			"other issues discovered during investigation. Recommendations should be specific, " +
+			"actionable, and prioritized. Include related finding IDs to show the evidence supporting this recommendation.",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, input RecordRecommendationInput) (*mcp.CallToolResult, any, error) {
+		s.logger.Info("recording recommendation",
+			zap.String("session_id", input.SessionID),
+			zap.String("type", input.Type),
+			zap.String("priority", input.Priority))
+
+		recommendation := &observability.Recommendation{
+			Type:            input.Type,
+			Priority:        input.Priority,
+			Title:           input.Title,
+			Description:     input.Description,
+			Rationale:       input.Rationale,
+			RelatedFindings: input.RelatedFindings,
+			ActionItems:     input.ActionItems,
+			EstimatedEffort: input.EstimatedEffort,
+			AutomationHint:  input.AutomationHint,
+			Tags:            input.Tags,
+			Metadata:        input.Metadata,
+		}
+
+		err := sessionManager.RecordRecommendation(ctx, input.SessionID, recommendation)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to record recommendation: %w", err)
+		}
+
+		// Emit notification
+		if broadcaster != nil {
+			broadcaster.EmitRecommendationRecorded(input.SessionID, recommendation.ID, recommendation.Priority, recommendation.Type)
+		}
+
+		output := RecordRecommendationOutput{
+			RecommendationID: recommendation.ID,
+			Message:          fmt.Sprintf("Recommendation recorded: %s", recommendation.Title),
+		}
+
+		// Format priority emoji
+		priorityEmoji := map[string]string{
+			"critical": "🔴",
+			"high":     "🟠",
+			"medium":   "🟡",
+			"low":      "🟢",
+		}[input.Priority]
+
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{
+					Text: fmt.Sprintf("%s Recommendation Recorded\n\nPriority: %s\nType: %s\nTitle: %s\n\nDescription: %s\n\nRationale: %s\n\nAction Items:\n%s\n\nThis recommendation has been linked to %d finding(s).",
+						priorityEmoji, input.Priority, input.Type, input.Title,
+						input.Description, input.Rationale,
+						formatActionItems(input.ActionItems),
+						len(input.RelatedFindings)),
+				},
+			},
+		}, output, nil
+	})
+
+	// Tool 6: spawn_investigation
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name: "spawn_investigation",
 		Description: "Spawn a metrics investigation session linked to the current agent session. " +
@@ -335,9 +398,22 @@ func (s *Server) registerAgentSessionTools(sessionManager *observability.AgentSe
 			"query_with_session",
 			"update_hypothesis",
 			"record_finding",
+			"record_recommendation",
 			"spawn_investigation",
 			"complete_agent_session",
 		}))
 
 	return nil
+}
+
+// formatActionItems formats action items as a numbered list
+func formatActionItems(items []string) string {
+	if len(items) == 0 {
+		return "  (none specified)"
+	}
+	result := ""
+	for i, item := range items {
+		result += fmt.Sprintf("  %d. %s\n", i+1, item)
+	}
+	return result
 }

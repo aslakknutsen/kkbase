@@ -53,6 +53,23 @@ type Finding struct {
 	DiscoveredAt    time.Time              `json:"discovered_at"`
 }
 
+// Recommendation represents an actionable next step identified during investigation
+type Recommendation struct {
+	ID              string                 `json:"id"`
+	Type            string                 `json:"type"`     // "root_cause_fix", "preventive_action", "optimization", "monitoring_improvement", "cleanup"
+	Priority        string                 `json:"priority"` // "critical", "high", "medium", "low"
+	Title           string                 `json:"title"`
+	Description     string                 `json:"description"`
+	Rationale       string                 `json:"rationale"`                  // Why this is recommended
+	RelatedFindings []string               `json:"related_findings"`           // Finding IDs that led to this recommendation
+	ActionItems     []string               `json:"action_items"`               // Step-by-step actions
+	EstimatedEffort string                 `json:"estimated_effort,omitempty"` // "minutes", "hours", "days"
+	AutomationHint  string                 `json:"automation_hint,omitempty"`  // Hints for automation (e.g., kubectl commands, scripts)
+	Tags            []string               `json:"tags,omitempty"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt       time.Time              `json:"created_at"`
+}
+
 // BlastZoneSnapshot represents a point-in-time view of the blast zone graph
 type BlastZoneSnapshot struct {
 	SessionID     string          `json:"session_id"`
@@ -99,6 +116,7 @@ type SessionSummary struct {
 	FinalHypothesis string             `json:"final_hypothesis"`
 	RootCause       string             `json:"root_cause,omitempty"`
 	BlastZone       *BlastZoneSnapshot `json:"blast_zone,omitempty"`
+	Recommendations []Recommendation   `json:"recommendations"`
 	CompletedAt     time.Time          `json:"completed_at"`
 }
 
@@ -120,6 +138,7 @@ type SessionDetail struct {
 	Hypotheses        []Hypothesis     `json:"hypotheses"`
 	Queries           []QueryExecution `json:"queries"`
 	Findings          []Finding        `json:"findings"`
+	Recommendations   []Recommendation `json:"recommendations"`
 	Investigations    []string         `json:"investigations"` // Investigation IDs
 	CurrentHypothesis *Hypothesis      `json:"current_hypothesis,omitempty"`
 }
@@ -142,4 +161,9 @@ func generateQueryID() string {
 // generateFindingID creates a unique finding identifier
 func generateFindingID() string {
 	return fmt.Sprintf("finding_%d", time.Now().UnixNano())
+}
+
+// generateRecommendationID creates a unique recommendation identifier
+func generateRecommendationID() string {
+	return fmt.Sprintf("recommendation_%d", time.Now().UnixNano())
 }

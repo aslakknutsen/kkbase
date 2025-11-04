@@ -8,6 +8,7 @@ import { HypothesisPanel } from './HypothesisPanel';
 import { FindingsList } from './FindingsList';
 import { QueryList } from './QueryList';
 import { Timeline } from './Timeline';
+import { RecommendationsList } from './RecommendationsList';
 
 interface SessionViewProps {
   sessionId: string;
@@ -158,6 +159,9 @@ export function SessionView({ sessionId, observer }: SessionViewProps) {
         hypothesis={sessionDetail.current_hypothesis}
         stage={sessionDetail.session.current_stage}
       />
+
+      {/* Recommendations */}
+      <RecommendationsList recommendations={sessionDetail.recommendations} />
 
       {/* Blast Zone */}
       <div className="bg-white rounded-lg shadow p-6">
