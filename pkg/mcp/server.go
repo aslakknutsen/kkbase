@@ -189,7 +189,7 @@ func (s *Server) registerTools() error {
 
 		// Show node types with properties (limit to first 15 for readability)
 		text += "=== NODE TYPES ===\n"
-		maxNodeTypes := 15
+		maxNodeTypes := 50
 		if len(output.NodeTypes) > maxNodeTypes {
 			text += fmt.Sprintf("Showing %d of %d node types:\n\n", maxNodeTypes, len(output.NodeTypes))
 		}
@@ -226,7 +226,7 @@ func (s *Server) registerTools() error {
 
 		// Show schema triplets (top 25)
 		text += "=== SCHEMA TRIPLETS (Graph Structure) ===\n"
-		maxTriplets := 25
+		maxTriplets := 50
 		if len(output.SchemaTriplets) > maxTriplets {
 			text += fmt.Sprintf("Showing %d of %d relationships:\n", maxTriplets, len(output.SchemaTriplets))
 		}
