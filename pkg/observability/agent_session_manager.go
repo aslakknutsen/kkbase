@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/kagenti/kkbase/pkg/config"
@@ -551,8 +552,10 @@ func (asm *AgentSessionManager) GetTimeline(ctx context.Context, sessionID strin
 		events = append(events, parseTimelineEvent(result))
 	}
 
-	// Sort by timestamp (would need proper time parsing and sorting)
-	// For now return unsorted - frontend can sort
+	// Sort events chronologically by timestamp
+	sort.Slice(events, func(i, j int) bool {
+		return events[i].Timestamp.Before(events[j].Timestamp)
+	})
 
 	return events, nil
 }
