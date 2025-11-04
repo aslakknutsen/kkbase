@@ -288,7 +288,18 @@ func (s *Store) Query(ctx context.Context, query string, params map[string]inter
 		for _, record := range records {
 			recordMap := make(map[string]interface{})
 			for i, key := range record.Keys {
-				recordMap[key] = record.Values[i]
+				value := record.Values[i]
+
+				// Convert Neo4j Node to property map
+				if node, ok := value.(neo4j.Node); ok {
+					recordMap[key] = node.Props
+				} else if rel, ok := value.(neo4j.Relationship); ok {
+					// Also handle relationships if returned
+					recordMap[key] = rel.Props
+				} else {
+					// For primitive values, lists, etc.
+					recordMap[key] = value
+				}
 			}
 			results = append(results, recordMap)
 		}
