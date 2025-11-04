@@ -368,6 +368,11 @@ func (asm *AgentSessionManager) CompleteSession(ctx context.Context, sessionID, 
 	return sessionSummary, nil
 }
 
+// CalculateBlastZone calculates the blast zone for a session
+func (asm *AgentSessionManager) CalculateBlastZone(ctx context.Context, sessionID string) (*BlastZoneSnapshot, error) {
+	return asm.blastZoneCalc.Calculate(ctx, sessionID)
+}
+
 // GetSession retrieves complete session details
 func (asm *AgentSessionManager) GetSession(ctx context.Context, sessionID string) (*SessionDetail, error) {
 	// Get session

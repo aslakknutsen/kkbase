@@ -210,36 +210,21 @@ func (s *Server) registerAgentSessionResources(sessionManager *observability.Age
 	return nil
 }
 
-// calculateBlastZone is a helper to calculate blast zone (delegates to session manager's calculator)
+// calculateBlastZone delegates to the BlastZoneCalculator via session manager
 func (s *Server) calculateBlastZone(ctx context.Context, sessionID string) (*observability.BlastZoneSnapshot, error) {
-	// Query Neo4j for affected resources and build blast zone
-	// This is a simplified version - full implementation would use the BlastZoneCalculator
-	query := `
-		MATCH (session:AgentSession {id: $session_id})
-		OPTIONAL MATCH (session)-[:HAS_FINDING]->(f:Finding)
-		RETURN session, count(f) as finding_count
-	`
-
-	results, err := s.store.Query(ctx, query, map[string]interface{}{
-		"session_id": sessionID,
-	})
-	if err != nil {
-		return nil, err
+	// Check if session manager is available
+	if s.sessionManager == nil {
+		s.logger.Warn("session manager not available for blast zone calculation",
+			zap.String("session_id", sessionID))
+		return &observability.BlastZoneSnapshot{
+			SessionID:     sessionID,
+			Nodes:         []observability.BlastZoneNode{},
+			Edges:         []observability.BlastZoneEdge{},
+			ImpactRadius:  0,
+			AffectedCount: 0,
+		}, nil
 	}
 
-	if len(results) == 0 {
-		return nil, fmt.Errorf("session not found: %s", sessionID)
-	}
-
-	// For now, return basic blast zone structure
-	// Full implementation would use BlastZoneCalculator
-	blastZone := &observability.BlastZoneSnapshot{
-		SessionID:     sessionID,
-		Nodes:         []observability.BlastZoneNode{},
-		Edges:         []observability.BlastZoneEdge{},
-		ImpactRadius:  0,
-		AffectedCount: 0,
-	}
-
-	return blastZone, nil
+	// Delegate to session manager's blast zone calculator
+	return s.sessionManager.CalculateBlastZone(ctx, sessionID)
 }

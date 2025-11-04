@@ -149,7 +149,7 @@ func (bzc *BlastZoneCalculator) calculateWithoutAPOC(ctx context.Context, sessio
 	bzc.logger.Debug("calculating blast zone without APOC",
 		zap.String("session_id", sessionID))
 
-	// Manual multi-hop expansion
+	// Manual multi-hop expansion with proper edge deduplication
 	query := `
 		MATCH (s:AgentSession {id: $session_id})-[:HAS_FINDING]->(f:Finding)-[:AFFECTS]->(affected)
 		
@@ -158,34 +158,42 @@ func (bzc *BlastZoneCalculator) calculateWithoutAPOC(ctx context.Context, sessio
 		WHERE ALL(rel IN relationships(path) WHERE 
 			type(rel) IN ['CALLS', 'FAILED_CALL_TO', 'MANAGES', 'SELECTS_PODS', 'FORWARDS_TO', 'IN_NAMESPACE', 'IMPLEMENTED_BY'])
 		
-		WITH DISTINCT connected as node, relationships(path) as rels
+		WITH DISTINCT connected as node
 		LIMIT $max_nodes
 		
 		// Determine status
 		OPTIONAL MATCH (node)-[fail:FAILED_CALL_TO]->()
 		OPTIONAL MATCH (f2:Finding)-[:AFFECTS]->(node)
 		
-		WITH node, fail, f2, rels,
-			 CASE 
+		WITH collect(DISTINCT {
+			id: node.id,
+			label: coalesce(node.name, node.id),
+			type: labels(node)[0],
+			status: CASE 
 			   WHEN f2 IS NOT NULL THEN 'failed'
 			   WHEN fail IS NOT NULL THEN 'degraded'
 			   WHEN (node:Pod AND node.status <> 'Running') THEN 'degraded'
 			   ELSE 'healthy'
-			 END as status
-		
-		RETURN collect(DISTINCT {
-			id: node.id,
-			label: coalesce(node.name, node.id),
-			type: labels(node)[0],
-			status: status,
+			 END,
 			properties: properties(node)
-		}) as nodes,
-		collect(DISTINCT [rel IN rels | {
+		}) as nodes
+		
+		// Now collect edges between the nodes we found
+		MATCH (s:AgentSession {id: $session_id})-[:HAS_FINDING]->(f:Finding)-[:AFFECTS]->(affected)
+		MATCH path = (affected)-[r*0..3]-(connected)
+		WHERE ALL(rel IN relationships(path) WHERE 
+			type(rel) IN ['CALLS', 'FAILED_CALL_TO', 'MANAGES', 'SELECTS_PODS', 'FORWARDS_TO', 'IN_NAMESPACE', 'IMPLEMENTED_BY'])
+		
+		UNWIND relationships(path) as rel
+		WITH DISTINCT rel, nodes
+		
+		RETURN nodes,
+		       collect(DISTINCT {
 			source: startNode(rel).id,
 			target: endNode(rel).id,
 			type: type(rel),
 			status: CASE WHEN type(rel) = 'FAILED_CALL_TO' THEN 'failing' ELSE 'ok' END
-		}]) as edge_lists
+		}) as edges
 	`
 
 	results, err := bzc.graphStore.Query(ctx, query, map[string]interface{}{
@@ -210,20 +218,7 @@ func (bzc *BlastZoneCalculator) calculateWithoutAPOC(ctx context.Context, sessio
 
 	result := results[0]
 	nodes := parseBlastZoneNodes(result["nodes"])
-
-	// Flatten edge lists
-	edges := []BlastZoneEdge{}
-	if edgeLists, ok := result["edge_lists"].([]interface{}); ok {
-		for _, edgeList := range edgeLists {
-			if list, ok := edgeList.([]interface{}); ok {
-				for _, edgeData := range list {
-					if edgeMap, ok := edgeData.(map[string]interface{}); ok {
-						edges = append(edges, parseBlastZoneEdge(edgeMap))
-					}
-				}
-			}
-		}
-	}
+	edges := parseBlastZoneEdges(result["edges"])
 
 	snapshot := &BlastZoneSnapshot{
 		SessionID:     sessionID,
