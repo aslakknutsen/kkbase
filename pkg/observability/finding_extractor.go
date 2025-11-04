@@ -77,13 +77,27 @@ func DefaultPatterns() []FindingPattern {
 				if resourceID == "" {
 					resourceID = source
 				}
-
-				description := fmt.Sprintf("Failed call from %s to %s", source, target)
-				if errorMsg != "" {
-					description += fmt.Sprintf(": %s", errorMsg)
+				if resourceID == "" {
+					resourceID = "unknown"
 				}
+
+				// Build description with proper fallbacks
+				var description string
+				if source != "" && target != "" {
+					description = fmt.Sprintf("Failed call from %s to %s", source, target)
+				} else if source != "" {
+					description = fmt.Sprintf("Failed call from %s", source)
+				} else if target != "" {
+					description = fmt.Sprintf("Failed call to %s", target)
+				} else {
+					description = "Failed service call"
+				}
+
 				if statusCode > 0 {
 					description += fmt.Sprintf(" (HTTP %d)", statusCode)
+				}
+				if errorMsg != "" {
+					description += fmt.Sprintf(": %s", errorMsg)
 				}
 
 				return &Finding{
@@ -243,12 +257,24 @@ func DefaultPatterns() []FindingPattern {
 				statusCode := extractIntField(r, "status_code", "r.status_code")
 				errorMsg := extractStringField(r, "error_message", "r.error_message")
 
+				if serviceName == "" {
+					serviceName = "unknown"
+				}
+
+				description := fmt.Sprintf("HTTP %d error", statusCode)
+				if serviceName != "unknown" {
+					description += fmt.Sprintf(" from %s", serviceName)
+				}
+				if errorMsg != "" {
+					description += fmt.Sprintf(": %s", errorMsg)
+				}
+
 				return &Finding{
 					Type:         "http_error",
 					Severity:     "critical",
 					ResourceID:   fmt.Sprintf("Service/%s", serviceName),
 					ResourceType: "Service",
-					Description:  fmt.Sprintf("HTTP %d error from %s: %s", statusCode, serviceName, errorMsg),
+					Description:  description,
 					Evidence: map[string]interface{}{
 						"status_code": statusCode,
 						"error":       errorMsg,
