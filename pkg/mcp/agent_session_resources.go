@@ -40,12 +40,14 @@ func (s *Server) registerAgentSessionResources(sessionManager *observability.Age
 		s.logger.Debug("active sessions retrieved", zap.Int("count", len(sessions)))
 
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{
-					Text: fmt.Sprintf("Found %d active session(s):\n\n%s", len(sessions), string(data)),
+				Content: []mcp.Content{
+					&mcp.TextContent{
+						Text: fmt.Sprintf("Found %d active session(s):\n\n%s", len(sessions), string(data)),
+					},
 				},
-			},
-		}, sessions, nil
+			}, map[string]interface{}{
+				"sessions": sessions,
+			}, nil
 	})
 
 	// Resource 2: get_session_details (as a tool)
@@ -186,13 +188,15 @@ func (s *Server) registerAgentSessionResources(sessionManager *observability.Age
 			zap.Int("events", len(timeline)))
 
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				&mcp.TextContent{
-					Text: fmt.Sprintf("Timeline for session %s: %d event(s)\n\n%s",
-						sessionID, len(timeline), string(data)),
+				Content: []mcp.Content{
+					&mcp.TextContent{
+						Text: fmt.Sprintf("Timeline for session %s: %d event(s)\n\n%s",
+							sessionID, len(timeline), string(data)),
+					},
 				},
-			},
-		}, timeline, nil
+			}, map[string]interface{}{
+				"events": timeline,
+			}, nil
 	})
 
 	s.logger.Info("registered agent session read-only tools",

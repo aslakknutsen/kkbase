@@ -628,36 +628,276 @@ func (asm *AgentSessionManager) updateSessionFindingCount(ctx context.Context, s
 	})
 }
 
-// Parsing helpers (simplified - would need proper type conversion in production)
+// Parsing helpers
 
 func parseAgentSession(data interface{}) *AgentSession {
-	// Simplified parsing - would need proper implementation
-	return &AgentSession{
-		ID:             "session_id",
-		InitialSymptom: "symptom",
-		Status:         "active",
-		CreatedAt:      time.Now(),
+	props, ok := data.(map[string]interface{})
+	if !ok {
+		return &AgentSession{}
 	}
+
+	session := &AgentSession{}
+
+	if id, ok := props["id"].(string); ok {
+		session.ID = id
+	}
+	if symptom, ok := props["initial_symptom"].(string); ok {
+		session.InitialSymptom = symptom
+	}
+	if resource, ok := props["initial_resource"].(string); ok {
+		session.InitialResource = resource
+	}
+	if status, ok := props["status"].(string); ok {
+		session.Status = status
+	}
+	if stage, ok := props["current_stage"].(int64); ok {
+		session.CurrentStage = int(stage)
+	}
+	if queryCount, ok := props["query_count"].(int64); ok {
+		session.QueryCount = int(queryCount)
+	}
+	if findingCount, ok := props["finding_count"].(int64); ok {
+		session.FindingCount = int(findingCount)
+	}
+	if summary, ok := props["summary"].(string); ok {
+		session.Summary = summary
+	}
+
+	// Parse created_at
+	if createdAt, ok := props["created_at"].(string); ok {
+		if t, err := time.Parse(time.RFC3339, createdAt); err == nil {
+			session.CreatedAt = t
+		}
+	} else if createdAt, ok := props["created_at"].(time.Time); ok {
+		session.CreatedAt = createdAt
+	}
+
+	// Parse completed_at (optional)
+	if completedAt, ok := props["completed_at"].(string); ok {
+		if t, err := time.Parse(time.RFC3339, completedAt); err == nil {
+			session.CompletedAt = &t
+		}
+	} else if completedAt, ok := props["completed_at"].(time.Time); ok {
+		session.CompletedAt = &completedAt
+	}
+
+	return session
 }
 
 func parseHypotheses(results []map[string]interface{}) []Hypothesis {
-	return []Hypothesis{}
+	hypotheses := make([]Hypothesis, 0, len(results))
+
+	for _, result := range results {
+		var props map[string]interface{}
+
+		// Handle both direct map and nested "h" key
+		if h, ok := result["h"].(map[string]interface{}); ok {
+			props = h
+		} else {
+			props = result
+		}
+
+		hypothesis := Hypothesis{}
+
+		if id, ok := props["id"].(string); ok {
+			hypothesis.ID = id
+		}
+		if stage, ok := props["stage"].(int64); ok {
+			hypothesis.Stage = int(stage)
+		}
+		if text, ok := props["text"].(string); ok {
+			hypothesis.Text = text
+		}
+		if status, ok := props["status"].(string); ok {
+			hypothesis.Status = status
+		}
+
+		// Parse created_at
+		if createdAt, ok := props["created_at"].(string); ok {
+			if t, err := time.Parse(time.RFC3339, createdAt); err == nil {
+				hypothesis.CreatedAt = t
+			}
+		} else if createdAt, ok := props["created_at"].(time.Time); ok {
+			hypothesis.CreatedAt = createdAt
+		}
+
+		hypotheses = append(hypotheses, hypothesis)
+	}
+
+	return hypotheses
 }
 
 func parseQueryExecutions(results []map[string]interface{}) []QueryExecution {
-	return []QueryExecution{}
+	queries := make([]QueryExecution, 0, len(results))
+
+	for _, result := range results {
+		var props map[string]interface{}
+
+		// Handle both direct map and nested "q" key
+		if q, ok := result["q"].(map[string]interface{}); ok {
+			props = q
+		} else {
+			props = result
+		}
+
+		query := QueryExecution{}
+
+		if id, ok := props["id"].(string); ok {
+			query.ID = id
+		}
+		if queryText, ok := props["query"].(string); ok {
+			query.Query = queryText
+		}
+		if reasoning, ok := props["reasoning"].(string); ok {
+			query.Reasoning = reasoning
+		}
+		if resultCount, ok := props["result_count"].(int64); ok {
+			query.ResultCount = int(resultCount)
+		}
+
+		// Parse duration
+		if durationMs, ok := props["duration_ms"].(int64); ok {
+			query.Duration = time.Duration(durationMs) * time.Millisecond
+		}
+
+		// Parse executed_at
+		if executedAt, ok := props["executed_at"].(string); ok {
+			if t, err := time.Parse(time.RFC3339, executedAt); err == nil {
+				query.ExecutedAt = t
+			}
+		} else if executedAt, ok := props["executed_at"].(time.Time); ok {
+			query.ExecutedAt = executedAt
+		}
+
+		// Parse findings (array of finding IDs)
+		if findings, ok := props["findings"].([]interface{}); ok {
+			query.Findings = make([]string, 0, len(findings))
+			for _, f := range findings {
+				if fID, ok := f.(string); ok {
+					query.Findings = append(query.Findings, fID)
+				}
+			}
+		}
+
+		queries = append(queries, query)
+	}
+
+	return queries
 }
 
 func parseFindings(results []map[string]interface{}) []Finding {
-	return []Finding{}
+	findings := make([]Finding, 0, len(results))
+
+	for _, result := range results {
+		var props map[string]interface{}
+
+		// Handle both direct map and nested "f" key
+		if f, ok := result["f"].(map[string]interface{}); ok {
+			props = f
+		} else {
+			props = result
+		}
+
+		finding := Finding{}
+
+		if id, ok := props["id"].(string); ok {
+			finding.ID = id
+		}
+		if findingType, ok := props["type"].(string); ok {
+			finding.Type = findingType
+		}
+		if severity, ok := props["severity"].(string); ok {
+			finding.Severity = severity
+		}
+		if resourceID, ok := props["resource_id"].(string); ok {
+			finding.ResourceID = resourceID
+		}
+		if resourceType, ok := props["resource_type"].(string); ok {
+			finding.ResourceType = resourceType
+		}
+		if description, ok := props["description"].(string); ok {
+			finding.Description = description
+		}
+		if detectionMethod, ok := props["detection_method"].(string); ok {
+			finding.DetectionMethod = detectionMethod
+		}
+
+		// Parse evidence (optional map)
+		if evidence, ok := props["evidence"].(map[string]interface{}); ok {
+			finding.Evidence = evidence
+		}
+
+		// Parse discovered_at
+		if discoveredAt, ok := props["discovered_at"].(string); ok {
+			if t, err := time.Parse(time.RFC3339, discoveredAt); err == nil {
+				finding.DiscoveredAt = t
+			}
+		} else if discoveredAt, ok := props["discovered_at"].(time.Time); ok {
+			finding.DiscoveredAt = discoveredAt
+		}
+
+		findings = append(findings, finding)
+	}
+
+	return findings
 }
 
 func parseActiveSessionInfo(result map[string]interface{}) ActiveSessionInfo {
-	return ActiveSessionInfo{}
+	info := ActiveSessionInfo{}
+
+	if id, ok := result["id"].(string); ok {
+		info.ID = id
+	}
+	if symptom, ok := result["symptom"].(string); ok {
+		info.InitialSymptom = symptom
+	}
+	if queryCount, ok := result["query_count"].(int64); ok {
+		info.QueryCount = int(queryCount)
+	}
+	if findingCount, ok := result["finding_count"].(int64); ok {
+		info.FindingCount = int(findingCount)
+	}
+	if currentStage, ok := result["current_stage"].(int64); ok {
+		info.CurrentStage = int(currentStage)
+	}
+
+	// Parse created_at timestamp
+	if createdAt, ok := result["created_at"].(string); ok {
+		if t, err := time.Parse(time.RFC3339, createdAt); err == nil {
+			info.CreatedAt = t
+		}
+	} else if createdAt, ok := result["created_at"].(time.Time); ok {
+		info.CreatedAt = createdAt
+	}
+
+	return info
 }
 
 func parseTimelineEvent(result map[string]interface{}) TimelineEvent {
-	return TimelineEvent{}
+	event := TimelineEvent{
+		Data: make(map[string]interface{}),
+	}
+
+	// Get event type
+	if eventType, ok := result["type"].(string); ok {
+		event.Type = eventType
+	}
+
+	// Parse timestamp
+	if timestamp, ok := result["timestamp"].(string); ok {
+		if t, err := time.Parse(time.RFC3339, timestamp); err == nil {
+			event.Timestamp = t
+		}
+	} else if timestamp, ok := result["timestamp"].(time.Time); ok {
+		event.Timestamp = timestamp
+	}
+
+	// Parse data (the actual event content)
+	if data, ok := result["data"].(map[string]interface{}); ok {
+		event.Data = data
+	}
+
+	return event
 }
 
 // Helper functions for hypothesis analysis
@@ -665,10 +905,9 @@ func parseTimelineEvent(result map[string]interface{}) TimelineEvent {
 func shouldSpawnInvestigation(hypothesisText string) bool {
 	// Simple keyword matching - would be more sophisticated in production
 	keywords := []string{"memory", "cpu", "oom", "resource", "metrics", "performance"}
-	text := fmt.Sprintf("%s", hypothesisText)
 	for _, keyword := range keywords {
-		for i := 0; i <= len(text)-len(keyword); i++ {
-			if text[i:i+len(keyword)] == keyword {
+		for i := 0; i <= len(hypothesisText)-len(keyword); i++ {
+			if hypothesisText[i:i+len(keyword)] == keyword {
 				return true
 			}
 		}
