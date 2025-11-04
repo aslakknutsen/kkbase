@@ -23,14 +23,15 @@ export function SessionView({ sessionId, observer }: SessionViewProps) {
   useEffect(() => {
     let cleanup: (() => void) | undefined;
 
-    // Initial load
-    Promise.all([
-      observer.getSessionDetails(sessionId),
-      observer.getBlastZone(sessionId),
-      observer.getTimeline(sessionId),
-    ])
-      .then(([detail, zone, events]) => {
-        // Ensure arrays are never null
+    // Reset states for new session
+    setSessionDetail(null);
+    setBlastZone(null);
+    setTimeline([]);
+    setIsLoading(true);
+
+    // Load session details first (critical data, usually fast)
+    observer.getSessionDetails(sessionId)
+      .then((detail) => {
         if (detail) {
           detail.hypotheses = detail.hypotheses || [];
           detail.queries = detail.queries || [];
@@ -38,13 +39,29 @@ export function SessionView({ sessionId, observer }: SessionViewProps) {
           detail.investigations = detail.investigations || [];
         }
         setSessionDetail(detail);
-        setBlastZone(zone);
-        setTimeline(events || []);
-        setIsLoading(false);
+        setIsLoading(false); // UI renders here
       })
       .catch((error) => {
         console.error('Failed to load session:', error);
         setIsLoading(false);
+      });
+
+    // Load timeline independently (fast, non-blocking)
+    observer.getTimeline(sessionId)
+      .then((events) => {
+        setTimeline(events || []);
+      })
+      .catch((error) => {
+        console.error('Failed to load timeline:', error);
+      });
+
+    // Load blast zone independently (slow, non-blocking)
+    observer.getBlastZone(sessionId)
+      .then((zone) => {
+        setBlastZone(zone);
+      })
+      .catch((error) => {
+        console.error('Failed to load blast zone:', error);
       });
 
     // Start polling for updates
