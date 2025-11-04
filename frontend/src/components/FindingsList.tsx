@@ -5,7 +5,7 @@ interface FindingsListProps {
 }
 
 export function FindingsList({ findings }: FindingsListProps) {
-  if (findings.length === 0) {
+  if (!findings || findings.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Findings</h2>

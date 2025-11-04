@@ -30,9 +30,16 @@ export function SessionView({ sessionId, observer }: SessionViewProps) {
       observer.getTimeline(sessionId),
     ])
       .then(([detail, zone, events]) => {
+        // Ensure arrays are never null
+        if (detail) {
+          detail.hypotheses = detail.hypotheses || [];
+          detail.queries = detail.queries || [];
+          detail.findings = detail.findings || [];
+          detail.investigations = detail.investigations || [];
+        }
         setSessionDetail(detail);
         setBlastZone(zone);
-        setTimeline(events);
+        setTimeline(events || []);
         setIsLoading(false);
       })
       .catch((error) => {
@@ -42,9 +49,18 @@ export function SessionView({ sessionId, observer }: SessionViewProps) {
 
     // Start polling for updates
     cleanup = observer.startPolling(sessionId, {
-      onSessionUpdate: setSessionDetail,
+      onSessionUpdate: (detail) => {
+        // Ensure arrays are never null
+        if (detail) {
+          detail.hypotheses = detail.hypotheses || [];
+          detail.queries = detail.queries || [];
+          detail.findings = detail.findings || [];
+          detail.investigations = detail.investigations || [];
+        }
+        setSessionDetail(detail);
+      },
       onBlastZoneUpdate: setBlastZone,
-      onTimelineUpdate: setTimeline,
+      onTimelineUpdate: (events) => setTimeline(events || []),
     });
 
     return () => {
@@ -154,7 +170,7 @@ export function SessionView({ sessionId, observer }: SessionViewProps) {
       <Timeline events={timeline} />
 
       {/* Linked Investigations */}
-      {sessionDetail.investigations.length > 0 && (
+      {sessionDetail.investigations && sessionDetail.investigations.length > 0 && (
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
             Linked Investigations ({sessionDetail.investigations.length})

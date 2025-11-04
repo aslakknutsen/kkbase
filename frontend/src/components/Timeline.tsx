@@ -5,7 +5,7 @@ interface TimelineProps {
 }
 
 export function Timeline({ events }: TimelineProps) {
-  if (events.length === 0) {
+  if (!events || events.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Timeline</h2>
@@ -75,15 +75,15 @@ export function Timeline({ events }: TimelineProps) {
                   <div className="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
                     <div>
                       <p className="text-sm font-medium text-gray-900">
-                        {event.type.charAt(0).toUpperCase() + event.type.slice(1)}
+                        {event.type ? event.type.charAt(0).toUpperCase() + event.type.slice(1) : 'Unknown'}
                       </p>
                       <p className="mt-0.5 text-xs text-gray-500">
-                        {JSON.stringify(event.data).slice(0, 100)}
-                        {JSON.stringify(event.data).length > 100 ? '...' : ''}
+                        {event.data ? JSON.stringify(event.data).slice(0, 100) : 'No data'}
+                        {event.data && JSON.stringify(event.data).length > 100 ? '...' : ''}
                       </p>
                     </div>
                     <div className="whitespace-nowrap text-right text-xs text-gray-500">
-                      {new Date(event.timestamp).toLocaleTimeString()}
+                      {event.timestamp ? new Date(event.timestamp).toLocaleTimeString() : 'Unknown time'}
                     </div>
                   </div>
                 </div>

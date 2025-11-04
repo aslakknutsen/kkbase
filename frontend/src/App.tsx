@@ -11,8 +11,8 @@ export function App() {
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(true);
 
+  // Effect 1: Initialize connections once on mount
   useEffect(() => {
-    // Initialize MCP client and SSE connection
     const initializeConnections = async () => {
       try {
         // Connect MCP client
@@ -30,27 +30,34 @@ export function App() {
 
     initializeConnections();
 
-    // Start polling for active sessions (with SSE notifications)
-    const cleanup = observer.startSessionsPolling((sessions) => {
-      setActiveSessions(sessions);
-      
-      // Auto-select first session if none selected
-      if (sessions.length > 0 && !selectedSession) {
-        setSelectedSession(sessions[0].id);
-      }
-      
-      // Clear selection if selected session is no longer active
-      if (selectedSession && !sessions.find(s => s.id === selectedSession)) {
-        setSelectedSession(sessions.length > 0 ? sessions[0].id : null);
-      }
-    });
-
+    // Cleanup on unmount only
     return () => {
-      cleanup();
       observer.disconnectSSE();
       observer.disconnect();
     };
-  }, [observer, selectedSession]);
+  }, [observer]);
+
+  // Effect 2: Poll for sessions (start once on mount)
+  useEffect(() => {
+    const cleanup = observer.startSessionsPolling((sessions) => {
+      setActiveSessions(sessions);
+    });
+
+    return cleanup;
+  }, [observer]);
+
+  // Effect 3: Handle auto-selection when sessions change
+  useEffect(() => {
+    // Auto-select first session if none selected
+    if (activeSessions.length > 0 && !selectedSession) {
+      setSelectedSession(activeSessions[0].id);
+    }
+    
+    // Clear selection if selected session is no longer active
+    if (selectedSession && !activeSessions.find(s => s.id === selectedSession)) {
+      setSelectedSession(activeSessions.length > 0 ? activeSessions[0].id : null);
+    }
+  }, [activeSessions, selectedSession]);
 
   if (isConnecting) {
     return (

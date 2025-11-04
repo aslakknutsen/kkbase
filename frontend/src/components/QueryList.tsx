@@ -5,7 +5,7 @@ interface QueryListProps {
 }
 
 export function QueryList({ queries }: QueryListProps) {
-  if (queries.length === 0) {
+  if (!queries || queries.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Query History</h2>
@@ -39,7 +39,7 @@ export function QueryList({ queries }: QueryListProps) {
                     {new Date(query.executed_at).toLocaleString()} • 
                     {query.result_count} results • 
                     {query.duration}ms
-                    {query.findings.length > 0 && (
+                    {query.findings && query.findings.length > 0 && (
                       <span className="ml-2 text-orange-600 font-medium">
                         → {query.findings.length} findings
                       </span>

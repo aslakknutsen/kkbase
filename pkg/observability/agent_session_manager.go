@@ -740,7 +740,9 @@ func parseQueryExecutions(results []map[string]interface{}) []QueryExecution {
 			props = result
 		}
 
-		query := QueryExecution{}
+		query := QueryExecution{
+			Findings: make([]string, 0), // Initialize to empty slice, never nil
+		}
 
 		if id, ok := props["id"].(string); ok {
 			query.ID = id
@@ -875,7 +877,7 @@ func parseActiveSessionInfo(result map[string]interface{}) ActiveSessionInfo {
 
 func parseTimelineEvent(result map[string]interface{}) TimelineEvent {
 	event := TimelineEvent{
-		Data: make(map[string]interface{}),
+		Data: make(map[string]interface{}), // Always initialize to empty map, never nil
 	}
 
 	// Get event type
@@ -896,6 +898,7 @@ func parseTimelineEvent(result map[string]interface{}) TimelineEvent {
 	if data, ok := result["data"].(map[string]interface{}); ok {
 		event.Data = data
 	}
+	// If data parsing fails, Data remains as the empty map initialized above
 
 	return event
 }

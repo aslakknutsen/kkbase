@@ -2,76 +2,27 @@
 // Uses MCP SDK for tool calls and SSE for push notifications
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { ActiveSessionInfo, SessionDetail } from '../types/agentSession';
 import type { BlastZoneSnapshot } from '../types/blastZone';
 import type { TimelineEvent } from '../types/timeline';
 
-// Custom HTTP transport for MCP client (browser-compatible)
-class BrowserHTTPTransport implements Transport {
-  private url: string;
-  private oncloseCallback?: () => void;
-  private onerrorCallback?: (error: Error) => void;
-
-  constructor(url: string) {
-    this.url = url;
-  }
-
-  async start(): Promise<void> {
-    // No connection setup needed for HTTP
-  }
-
-  async close(): Promise<void> {
-    if (this.oncloseCallback) {
-      this.oncloseCallback();
-    }
-  }
-
-  async send(message: any): Promise<void> {
-    try {
-      const response = await fetch(this.url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(message),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      // For HTTP transport, we handle the response in the transport layer
-      const result = await response.json();
-      
-      // Call the message handler if we received a response
-      if (this.onmessage && result) {
-        this.onmessage(result);
-      }
-    } catch (error) {
-      if (this.onerrorCallback) {
-        this.onerrorCallback(error as Error);
-      }
-      throw error;
-    }
-  }
-
-  onclose?: () => void;
-  onerror?: (error: Error) => void;
-  onmessage?: (message: any) => void;
-}
-
 export class MCPObserver {
   private mcpClient: Client;
-  private transport: BrowserHTTPTransport;
+  private transport: StreamableHTTPClientTransport;
   private eventsURL: string;
   private eventSource: EventSource | null = null;
   private pollInterval: number = 10000; // 10 seconds (fallback only)
   private notificationHandlers: Map<string, ((data: any) => void)[]> = new Map();
   private isConnected: boolean = false;
+  private isConnecting: boolean = false;
+  private connectPromise: Promise<void> | null = null;
 
   constructor(baseURL: string = '/mcp', eventsURL: string = '/events') {
-    this.transport = new BrowserHTTPTransport(baseURL);
+    // Create absolute URL from relative path
+    const mcpUrl = new URL(baseURL, window.location.origin);
+    
+    this.transport = new StreamableHTTPClientTransport(mcpUrl);
     this.mcpClient = new Client(
       {
         name: 'kkbase-dashboard',
@@ -86,18 +37,32 @@ export class MCPObserver {
 
   // Initialize MCP client connection
   async connect(): Promise<void> {
+    // If already connected, return immediately
     if (this.isConnected) {
       return;
     }
 
-    try {
-      await this.mcpClient.connect(this.transport);
-      this.isConnected = true;
-      console.log('MCP client connected');
-    } catch (error) {
-      console.error('Failed to connect MCP client:', error);
-      throw error;
+    // If already connecting, return the existing promise to prevent double connection
+    if (this.isConnecting && this.connectPromise) {
+      return this.connectPromise;
     }
+
+    // Set connecting flag and create promise
+    this.isConnecting = true;
+    this.connectPromise = (async () => {
+      try {
+        await this.mcpClient.connect(this.transport);
+        this.isConnected = true;
+        console.log('MCP client connected');
+      } catch (error) {
+        console.error('Failed to connect MCP client:', error);
+        throw error;
+      } finally {
+        this.isConnecting = false;
+      }
+    })();
+
+    return this.connectPromise;
   }
 
   // Disconnect MCP client
@@ -105,6 +70,8 @@ export class MCPObserver {
     if (this.isConnected) {
       await this.mcpClient.close();
       this.isConnected = false;
+      this.isConnecting = false;
+      this.connectPromise = null;
       console.log('MCP client disconnected');
     }
   }
@@ -199,23 +166,47 @@ export class MCPObserver {
         arguments: params,
       });
 
-      // The MCP SDK returns the tool result in a structured format
-      // Extract the actual data from the result
+      console.log(`Tool ${toolName} raw result:`, result);
+
+      // Priority 1: Check for structuredContent (direct JSON object from Go handler's second return value)
+      // Note: SDK expects structuredContent to be an object, not an array
+      if (result.structuredContent && typeof result.structuredContent === 'object') {
+        console.log(`Tool ${toolName} returned structuredContent:`, result.structuredContent);
+        return result.structuredContent as T;
+      }
+
+      // Priority 2: Parse content array for text content
       if (result.content && Array.isArray(result.content) && result.content.length > 0) {
-        // If the result contains content items, parse the first text item
         const textContent = result.content.find((item: any) => item.type === 'text');
         if (textContent && textContent.text) {
+          console.log(`Tool ${toolName} text content:`, textContent.text.substring(0, 200));
           try {
-            // Try to parse as JSON if the tool returns JSON data
-            return JSON.parse(textContent.text) as T;
-          } catch {
+            // The backend may include descriptive text before JSON
+            // Try to extract JSON array or object from the text
+            const text = textContent.text;
+            
+            // Look for JSON array or object in the text
+            const jsonMatch = text.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
+            if (jsonMatch) {
+              const parsed = JSON.parse(jsonMatch[1]);
+              console.log(`Tool ${toolName} parsed from text:`, parsed);
+              return parsed as T;
+            }
+            
+            // Try to parse the whole text as JSON
+            const parsed = JSON.parse(text);
+            console.log(`Tool ${toolName} parsed whole text:`, parsed);
+            return parsed as T;
+          } catch (parseError) {
             // If not JSON, return the text as-is
+            console.warn(`Tool ${toolName} returned non-JSON text content:`, parseError);
             return textContent.text as T;
           }
         }
       }
 
       // Fallback: return the whole result
+      console.warn(`Tool ${toolName} returned unexpected format, using raw result:`, result);
       return result as T;
     } catch (error: any) {
       console.error(`MCP tool call failed (${toolName}):`, error);
@@ -226,8 +217,13 @@ export class MCPObserver {
   // Get list of active sessions
   async getActiveSessions(): Promise<ActiveSessionInfo[]> {
     try {
-      const result = await this.callTool<ActiveSessionInfo[]>('get_active_sessions', {});
-      return result || [];
+      const result = await this.callTool<any>('get_active_sessions', {});
+      // Backend wraps array in object: { sessions: [...] }
+      if (result && typeof result === 'object' && 'sessions' in result) {
+        return result.sessions || [];
+      }
+      // Fallback for direct array (backwards compatibility)
+      return Array.isArray(result) ? result : [];
     } catch (error) {
       console.error('Failed to get active sessions:', error);
       return [];
@@ -237,9 +233,11 @@ export class MCPObserver {
   // Get complete session details
   async getSessionDetails(sessionId: string): Promise<SessionDetail | null> {
     try {
+      console.log('Fetching session details for:', sessionId);
       const result = await this.callTool<SessionDetail>('get_session_details', {
         session_id: sessionId,
       });
+      console.log('Session details received:', result);
       return result;
     } catch (error) {
       console.error('Failed to get session details:', error);
@@ -250,9 +248,11 @@ export class MCPObserver {
   // Get blast zone for a session
   async getBlastZone(sessionId: string): Promise<BlastZoneSnapshot | null> {
     try {
+      console.log('Fetching blast zone for:', sessionId);
       const result = await this.callTool<BlastZoneSnapshot>('get_blast_zone', {
         session_id: sessionId,
       });
+      console.log('Blast zone received:', result);
       return result;
     } catch (error) {
       console.error('Failed to get blast zone:', error);
@@ -263,10 +263,22 @@ export class MCPObserver {
   // Get timeline for a session
   async getTimeline(sessionId: string): Promise<TimelineEvent[]> {
     try {
-      const result = await this.callTool<TimelineEvent[]>('get_session_timeline', {
+      console.log('Fetching timeline for:', sessionId);
+      const result = await this.callTool<any>('get_session_timeline', {
         session_id: sessionId,
       });
-      return result || [];
+      console.log('Timeline result:', result);
+      
+      // Backend wraps array in object: { events: [...] }
+      if (result && typeof result === 'object' && 'events' in result) {
+        const events = result.events || [];
+        console.log('Timeline events extracted:', events);
+        return Array.isArray(events) ? events : [];
+      }
+      // Fallback for direct array (backwards compatibility)
+      const events = Array.isArray(result) ? result : [];
+      console.log('Timeline fallback:', events);
+      return events;
     } catch (error) {
       console.error('Failed to get timeline:', error);
       return [];

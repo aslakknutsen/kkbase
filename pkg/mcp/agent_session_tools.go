@@ -321,7 +321,7 @@ func (s *Server) registerAgentSessionTools(sessionManager *observability.AgentSe
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{
-					Text: fmt.Sprintf("✅ Investigation Complete\n\nSession ID: %s\nDuration: %s\nQueries Executed: %d\nFindings Discovered: %d\n\nInitial Symptom: %s\nFinal Hypothesis: %s\n\nRoot Cause: %s",
+					Text: fmt.Sprintf("Investigation Complete\n\nSession ID: %s\nDuration: %s\nQueries Executed: %d\nFindings Discovered: %d\n\nInitial Symptom: %s\nFinal Hypothesis: %s\n\nRoot Cause: %s",
 						summary.SessionID, summary.Duration, summary.TotalQueries, summary.TotalFindings,
 						summary.InitialSymptom, summary.FinalHypothesis, summary.RootCause),
 				},
