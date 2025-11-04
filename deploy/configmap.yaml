@@ -30,4 +30,7 @@ data:
   JAEGER_POLL_INTERVAL: "30s"
   JAEGER_LOOKBACK_WINDOW: "5m"
   JAEGER_SPAN_RETENTION: "1h"
+  
+  # Agent session retention (how long completed sessions remain visible in UI)
+  COMPLETED_SESSION_RETENTION_MINUTES: "1440"  # 24 hours
 

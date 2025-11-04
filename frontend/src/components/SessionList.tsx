@@ -17,21 +17,34 @@ export function SessionList({ sessions, selected, onSelect }: SessionListProps) 
 
   return (
     <div className="space-y-2">
-      {sessions.map((session) => (
-        <button
-          key={session.id}
-          onClick={() => onSelect(session.id)}
-          className={`w-full text-left p-4 rounded-lg border transition-all ${
-            selected === session.id
-              ? 'bg-blue-50 border-blue-500 shadow-sm'
-              : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm'
-          }`}
-        >
-          <div className="flex items-start justify-between mb-2">
-            <h3 className="text-sm font-semibold text-gray-900 line-clamp-2">
-              {session.initial_symptom}
-            </h3>
-          </div>
+      {sessions.map((session) => {
+        const isCompleted = session.status === 'completed';
+        const isSelected = selected === session.id;
+        
+        return (
+          <button
+            key={session.id}
+            onClick={() => onSelect(session.id)}
+            className={`w-full text-left p-4 rounded-lg border transition-all ${
+              isSelected
+                ? isCompleted
+                  ? 'bg-green-50 border-green-500 shadow-sm'
+                  : 'bg-blue-50 border-blue-500 shadow-sm'
+                : isCompleted
+                ? 'bg-green-50 border-green-200 hover:border-green-300 hover:shadow-sm'
+                : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm'
+            }`}
+          >
+            <div className="flex items-start justify-between mb-2">
+              <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 flex-1 pr-2">
+                {session.initial_symptom}
+              </h3>
+              {isCompleted && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 whitespace-nowrap">
+                  ✓ Complete
+                </span>
+              )}
+            </div>
           
           <div className="flex items-center gap-3 text-xs text-gray-500 mb-2">
             <span className="inline-flex items-center">
@@ -57,8 +70,9 @@ export function SessionList({ sessions, selected, onSelect }: SessionListProps) 
               Stage {session.current_stage}
             </span>
           </div>
-        </button>
-      ))}
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -93,7 +93,7 @@ func run() error {
 	}
 
 	// Create agent session manager for investigation tracking
-	sessionManager := observability.NewAgentSessionManager(graphStore, metricsProcessor, logger)
+	sessionManager := observability.NewAgentSessionManager(graphStore, metricsProcessor, cfg, logger)
 
 	// Create notification broadcaster
 	broadcaster := mcp.NewNotificationBroadcaster(logger)

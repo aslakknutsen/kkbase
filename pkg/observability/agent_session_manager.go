@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kagenti/kkbase/pkg/config"
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
 	"go.uber.org/zap"
@@ -16,6 +17,7 @@ type AgentSessionManager struct {
 	findingExtractor *FindingExtractor
 	blastZoneCalc    *BlastZoneCalculator
 	invProcessor     *InvestigationMetricsProcessor // Link to existing metrics system
+	config           *config.Config
 	logger           *zap.Logger
 }
 
@@ -23,6 +25,7 @@ type AgentSessionManager struct {
 func NewAgentSessionManager(
 	graphStore graph.GraphStore,
 	invProcessor *InvestigationMetricsProcessor,
+	cfg *config.Config,
 	logger *zap.Logger,
 ) *AgentSessionManager {
 	return &AgentSessionManager{
@@ -30,6 +33,7 @@ func NewAgentSessionManager(
 		findingExtractor: NewFindingExtractor(),
 		blastZoneCalc:    NewBlastZoneCalculator(graphStore, logger),
 		invProcessor:     invProcessor,
+		config:           cfg,
 		logger:           logger,
 	}
 }
@@ -456,20 +460,31 @@ func (asm *AgentSessionManager) GetSession(ctx context.Context, sessionID string
 	}, nil
 }
 
-// GetActiveSessions retrieves all active sessions
+// GetActiveSessions retrieves all active sessions and recently completed ones
 func (asm *AgentSessionManager) GetActiveSessions(ctx context.Context) ([]ActiveSessionInfo, error) {
+	retentionMinutes := asm.config.CompletedSessionRetentionMinutes
+
 	query := `
-		MATCH (s:AgentSession {status: 'active'})
+		MATCH (s:AgentSession)
+		WHERE s.status = 'active' 
+		   OR (s.status = 'completed' 
+		       AND datetime(s.completed_at) > datetime() - duration({minutes: $retention_minutes}))
 		RETURN s.id as id,
 			   s.initial_symptom as symptom,
+			   s.status as status,
 			   s.created_at as created_at,
+			   s.completed_at as completed_at,
 			   s.query_count as query_count,
 			   s.finding_count as finding_count,
 			   s.current_stage as current_stage
-		ORDER BY s.created_at DESC
+		ORDER BY 
+			CASE WHEN s.status = 'active' THEN 0 ELSE 1 END,
+			COALESCE(s.completed_at, s.created_at) DESC
 	`
 
-	results, err := asm.graphStore.Query(ctx, query, nil)
+	results, err := asm.graphStore.Query(ctx, query, map[string]interface{}{
+		"retention_minutes": retentionMinutes,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active sessions: %w", err)
 	}
@@ -858,6 +873,9 @@ func parseActiveSessionInfo(result map[string]interface{}) ActiveSessionInfo {
 	if symptom, ok := result["symptom"].(string); ok {
 		info.InitialSymptom = symptom
 	}
+	if status, ok := result["status"].(string); ok {
+		info.Status = status
+	}
 	if queryCount, ok := result["query_count"].(int64); ok {
 		info.QueryCount = int(queryCount)
 	}
@@ -875,6 +893,15 @@ func parseActiveSessionInfo(result map[string]interface{}) ActiveSessionInfo {
 		}
 	} else if createdAt, ok := result["created_at"].(time.Time); ok {
 		info.CreatedAt = createdAt
+	}
+
+	// Parse completed_at timestamp (optional)
+	if completedAt, ok := result["completed_at"].(string); ok {
+		if t, err := time.Parse(time.RFC3339, completedAt); err == nil {
+			info.CompletedAt = &t
+		}
+	} else if completedAt, ok := result["completed_at"].(time.Time); ok {
+		info.CompletedAt = &completedAt
 	}
 
 	return info

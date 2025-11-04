@@ -40,6 +40,9 @@ type Config struct {
 	// MCP Server configuration
 	MCPPort    int
 	MCPEnabled bool
+
+	// Agent session configuration
+	CompletedSessionRetentionMinutes int
 }
 
 // LoadFromEnv loads configuration from environment variables
@@ -64,6 +67,8 @@ func LoadFromEnv() (*Config, error) {
 
 		MCPPort:    getIntEnv("MCP_PORT", 8080),
 		MCPEnabled: getBoolEnv("MCP_ENABLED", false),
+
+		CompletedSessionRetentionMinutes: getIntEnv("COMPLETED_SESSION_RETENTION_MINUTES", 1440),
 	}
 
 	// Parse resync period

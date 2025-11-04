@@ -104,12 +104,14 @@ type SessionSummary struct {
 
 // ActiveSessionInfo represents summary info for listing active sessions
 type ActiveSessionInfo struct {
-	ID             string    `json:"id"`
-	InitialSymptom string    `json:"initial_symptom"`
-	CreatedAt      time.Time `json:"created_at"`
-	QueryCount     int       `json:"query_count"`
-	FindingCount   int       `json:"finding_count"`
-	CurrentStage   int       `json:"current_stage"`
+	ID             string     `json:"id"`
+	InitialSymptom string     `json:"initial_symptom"`
+	Status         string     `json:"status"`
+	CreatedAt      time.Time  `json:"created_at"`
+	CompletedAt    *time.Time `json:"completed_at,omitempty"`
+	QueryCount     int        `json:"query_count"`
+	FindingCount   int        `json:"finding_count"`
+	CurrentStage   int        `json:"current_stage"`
 }
 
 // SessionDetail represents complete session data with all related entities

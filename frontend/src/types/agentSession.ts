@@ -47,7 +47,9 @@ export interface Finding {
 export interface ActiveSessionInfo {
   id: string;
   initial_symptom: string;
+  status: string;
   created_at: string;
+  completed_at?: string;
   query_count: number;
   finding_count: number;
   current_stage: number;
