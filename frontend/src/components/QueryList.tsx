@@ -40,7 +40,7 @@ export function QueryList({ queries }: QueryListProps) {
                   <div className="text-xs text-gray-500">
                     {new Date(query.executed_at).toLocaleString()} • 
                     {query.result_count} results • 
-                    {query.duration}ms
+                    {(query.duration / 1_000_000)}ms
                     {query.findings && query.findings.length > 0 && (
                       <span className="ml-2 text-orange-600 font-medium">
                         → {query.findings.length} findings

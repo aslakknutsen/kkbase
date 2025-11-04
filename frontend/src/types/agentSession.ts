@@ -27,7 +27,7 @@ export interface QueryExecution {
   reasoning: string;
   params?: Record<string, any>;
   result_count: number;
-  duration: number; // milliseconds
+  duration: number; // nanoseconds (from Go time.Duration JSON marshaling)
   executed_at: string;
   findings: string[]; // Finding IDs
 }
