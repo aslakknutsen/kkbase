@@ -56,19 +56,11 @@ func (c *GeminiClient) InvestigateWithTools(ctx context.Context, event agenttype
 	// Build initial prompt
 	prompt := c.buildEventPrompt(event)
 
-	// Build system instruction
-	systemContent := &genai.Content{
-		Parts: []*genai.Part{
-			{Text: SystemPrompt},
-		},
-		Role: "system",
-	}
-
 	// Build MCP tools as Gemini function declarations
 	tools := c.buildMCPTools()
 
 	// Run agentic loop
-	result, err := c.runAgenticLoop(ctx, systemContent, tools, prompt, event)
+	result, err := c.runAgenticLoop(ctx, tools, prompt, event)
 	if err != nil {
 		return &agenttypes.InvestigationResult{
 			Event:    event,
@@ -418,13 +410,15 @@ func (c *GeminiClient) buildMCPToolsStatic() []*genai.Tool {
 }
 
 // runAgenticLoop runs the agent loop allowing Gemini to call functions iteratively
-func (c *GeminiClient) runAgenticLoop(ctx context.Context, systemContent *genai.Content, tools []*genai.Tool, prompt string, event agenttypes.Event) (*agenttypes.InvestigationResult, error) {
-	maxIterations := 10
+func (c *GeminiClient) runAgenticLoop(ctx context.Context, tools []*genai.Tool, prompt string, event agenttypes.Event) (*agenttypes.InvestigationResult, error) {
+	maxIterations := c.config.MaxIterations
+	if maxIterations <= 0 {
+		maxIterations = 30 // Fallback default
+	}
 	var sessionID string // Track session ID throughout investigation
 
-	// Build conversation history
+	// Build conversation history (without system message - it goes in the config)
 	messages := []*genai.Content{
-		systemContent,
 		{
 			Parts: []*genai.Part{{Text: prompt}},
 			Role:  "user",
@@ -436,11 +430,19 @@ func (c *GeminiClient) runAgenticLoop(ctx context.Context, systemContent *genai.
 			zap.Int("iteration", i+1),
 			zap.Int("max", maxIterations))
 
-		// Call Gemini with tools
+		// Build system instruction (Gemini uses this instead of system role in messages)
+		systemInstruction := &genai.Content{
+			Parts: []*genai.Part{
+				{Text: SystemPrompt},
+			},
+		}
+
+		// Call Gemini with tools and system instruction
 		generateConfig := &genai.GenerateContentConfig{
-			Temperature:     &c.config.Temperature,
-			MaxOutputTokens: int32(c.config.MaxTokens),
-			Tools:           tools,
+			Temperature:       &c.config.Temperature,
+			MaxOutputTokens:   int32(c.config.MaxTokens),
+			Tools:             tools,
+			SystemInstruction: systemInstruction,
 		}
 
 		resp, err := c.client.Models.GenerateContent(ctx, c.model, messages, generateConfig)
@@ -468,13 +470,14 @@ func (c *GeminiClient) runAgenticLoop(ctx context.Context, systemContent *genai.
 			return c.extractAnalysis(candidate.Content, event, sessionID)
 		}
 
-		// Execute function calls via MCP
-		c.logger.Info("executing function calls",
-			zap.Int("count", len(functionCalls)))
-
 		// Build function response parts
 		responseParts := make([]*genai.Part, 0, len(functionCalls))
 		for _, fc := range functionCalls {
+			// Execute function calls via MCP
+			c.logger.Info("executing function call",
+				zap.String("name", fc.Name),
+			)
+
 			result := c.executeMCPTool(ctx, fc.Name, fc.Args)
 
 			// Capture session ID from start_agent_session
@@ -500,6 +503,54 @@ func (c *GeminiClient) runAgenticLoop(ctx context.Context, systemContent *genai.
 		})
 	}
 
+	// Max iterations reached - try to force a conclusion
+	c.logger.Warn("max iterations reached, forcing conclusion",
+		zap.Int("iterations", maxIterations),
+		zap.String("session_id", sessionID))
+
+	// If we have a session ID, try to complete it with timeout status
+	if sessionID != "" {
+		timeoutSummary := fmt.Sprintf(
+			"Investigation reached maximum iteration limit (%d) before full completion. "+
+				"Please review the findings and hypotheses recorded during the investigation. "+
+				"Additional manual investigation may be required.", maxIterations)
+
+		// Complete the session with timeout status using the existing tool
+		completeArgs := map[string]interface{}{
+			"session_id": sessionID,
+			"summary":    timeoutSummary,
+			"status":     "timeout",
+		}
+
+		c.logger.Info("attempting to complete session with timeout status",
+			zap.String("session_id", sessionID))
+
+		c.executeMCPTool(ctx, "complete_agent_session", completeArgs)
+
+		// Return a result indicating timeout
+		return &agenttypes.InvestigationResult{
+			Event: event,
+			Analysis: &agenttypes.Analysis{
+				RootCause: "Investigation timeout - max iterations reached",
+				ImpactAssessment: fmt.Sprintf(
+					"Investigation reached iteration limit after %d steps. "+
+						"Partial findings available in session %s.", maxIterations, sessionID),
+				Confidence: 0.5,
+			},
+			Recommendations: []agenttypes.Recommendation{
+				{
+					Priority:    "high",
+					Type:        "manual_investigation",
+					Title:       "Complete investigation manually",
+					Description: "The automated investigation reached its iteration limit. Review the session findings and complete the investigation manually.",
+					Rationale:   "Automated agent was unable to reach a definitive conclusion within the iteration limit.",
+				},
+			},
+			SessionID: sessionID,
+		}, nil
+	}
+
+	// No session ID - just return error as before
 	return nil, fmt.Errorf("exceeded maximum iterations (%d) without reaching conclusion", maxIterations)
 }
 

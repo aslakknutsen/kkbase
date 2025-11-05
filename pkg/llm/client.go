@@ -7,11 +7,12 @@ import (
 
 // Config holds LLM client configuration
 type Config struct {
-	Provider    string
-	APIKey      string
-	Model       string
-	Temperature float32
-	MaxTokens   int
+	Provider      string
+	APIKey        string
+	Model         string
+	Temperature   float32
+	MaxTokens     int
+	MaxIterations int
 }
 
 // NewGeminiClientFromConfig creates a Gemini client from config

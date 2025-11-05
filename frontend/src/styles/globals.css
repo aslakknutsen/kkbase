@@ -72,6 +72,14 @@ body {
   @apply bg-gray-100 text-gray-800 border border-gray-200;
 }
 
+.status-timeout {
+  @apply bg-yellow-100 text-yellow-800 border border-yellow-200;
+}
+
+.status-incomplete {
+  @apply bg-orange-100 text-orange-800 border border-orange-200;
+}
+
 .status-failed {
   @apply bg-red-100 text-red-800 border border-red-200;
 }

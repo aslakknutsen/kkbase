@@ -10,7 +10,7 @@ type AgentSession struct {
 	ID              string     `json:"id"`
 	InitialSymptom  string     `json:"initial_symptom"`
 	InitialResource string     `json:"initial_resource,omitempty"`
-	Status          string     `json:"status"` // "active", "completed", "abandoned"
+	Status          string     `json:"status"` // "active", "completed", "timeout", "incomplete", "abandoned"
 	CreatedAt       time.Time  `json:"created_at"`
 	CompletedAt     *time.Time `json:"completed_at,omitempty"`
 	CurrentStage    int        `json:"current_stage"`

@@ -42,9 +42,10 @@ data:
   
   # LLM configuration (Gemini)
   LLM_PROVIDER: "gemini"
-  LLM_MODEL: "gemini-2.0-flash-exp"
+  LLM_MODEL: "gemini-2.5-flash"
   LLM_TEMPERATURE: "0.2"
   LLM_MAX_TOKENS: "2048"
+  LLM_MAX_ITERATIONS: "30"  # Maximum agent loop iterations per investigation
   
   # Event filtering - configure which K8s event reasons to process
   # Empty means process all events that pass severity filter

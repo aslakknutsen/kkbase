@@ -19,6 +19,9 @@ export function SessionList({ sessions, selected, onSelect }: SessionListProps) 
     <div className="space-y-2">
       {sessions.map((session) => {
         const isCompleted = session.status === 'completed';
+        const isTimeout = session.status === 'timeout';
+        const isIncomplete = session.status === 'incomplete';
+        const isDone = isCompleted || isTimeout || isIncomplete;
         const isSelected = selected === session.id;
         
         return (
@@ -27,10 +30,10 @@ export function SessionList({ sessions, selected, onSelect }: SessionListProps) 
             onClick={() => onSelect(session.id)}
             className={`w-full text-left p-4 rounded-lg border transition-all ${
               isSelected
-                ? isCompleted
+                ? isDone
                   ? 'bg-green-50 border-green-500 shadow-sm'
                   : 'bg-blue-50 border-blue-500 shadow-sm'
-                : isCompleted
+                : isDone
                 ? 'bg-green-50 border-green-200 hover:border-green-300 hover:shadow-sm'
                 : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm'
             }`}
@@ -42,6 +45,16 @@ export function SessionList({ sessions, selected, onSelect }: SessionListProps) 
               {isCompleted && (
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 whitespace-nowrap">
                   ✓ Complete
+                </span>
+              )}
+              {isTimeout && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 whitespace-nowrap">
+                  ⏱️ Timeout
+                </span>
+              )}
+              {isIncomplete && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 whitespace-nowrap">
+                  ⚠️ Incomplete
                 </span>
               )}
             </div>

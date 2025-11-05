@@ -64,10 +64,14 @@ Additional Data:
 
 REQUIRED WORKFLOW - Follow these steps exactly:
 
+STEP 0: Read structure of the knowledge graph
+Call get_structure to understand the available data and relationships.
+
 STEP 1: Start Session
 Call start_agent_session with:
 - symptom: A clear description of the problem from the event above
 - initial_resource: The affected resource in format "Type/Namespace/Name"
+Create an initial hypothesis about the root cause of the problem
 
 STEP 2: Investigation
 Use query_with_session (with the session_id from step 1) to:
@@ -113,6 +117,8 @@ STEP 6: Complete Session
 Call complete_agent_session with:
 - session_id
 - summary: Brief summary including root cause, confidence level, and key findings
+
+Besides STEP 0, 1 and 6, you can call any tool as many times as needed and in any order you want.
 
 DO NOT output JSON - all data is stored via the tools above.
 After completing the session, provide a brief human-readable summary of your investigation.`

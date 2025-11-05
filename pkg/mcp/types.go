@@ -195,11 +195,13 @@ type SpawnInvestigationOutput struct {
 type CompleteAgentSessionInput struct {
 	SessionID string `json:"session_id" jsonschema:"description:Session ID to complete"`
 	Summary   string `json:"summary,omitempty" jsonschema:"description:Optional summary of findings and root cause"`
+	Status    string `json:"status,omitempty" jsonschema:"description:Optional completion status (defaults to 'completed'). Use 'timeout' if iteration limit reached, 'incomplete' for partial results"`
 }
 
 // CompleteAgentSessionOutput defines the output from completing a session
 type CompleteAgentSessionOutput struct {
 	SessionID    string `json:"session_id" jsonschema:"description:Completed session ID"`
+	Status       string `json:"status" jsonschema:"description:Completion status (completed, timeout, incomplete)"`
 	Duration     string `json:"duration" jsonschema:"description:Total investigation duration"`
 	QueryCount   int    `json:"query_count" jsonschema:"description:Total queries executed"`
 	FindingCount int    `json:"finding_count" jsonschema:"description:Total findings discovered"`

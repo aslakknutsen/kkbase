@@ -358,12 +358,15 @@ func (s *Server) registerAgentSessionTools(sessionManager *observability.AgentSe
 		Name: "complete_agent_session",
 		Description: "Mark an agent session as completed and generate final summary. " +
 			"Call this when the investigation is finished and you've identified the root cause. " +
-			"This finalizes the blast zone snapshot, completes any linked investigations, and generates a summary report.",
+			"This finalizes the blast zone snapshot, completes any linked investigations, and generates a summary report. " +
+			"Optionally specify a status (e.g., 'timeout' if iteration limit reached, 'incomplete' for partial results).",
 	}, func(ctx context.Context, request *mcp.CallToolRequest, input CompleteAgentSessionInput) (*mcp.CallToolResult, any, error) {
 		s.logger.Info("completing agent session",
-			zap.String("session_id", input.SessionID))
+			zap.String("session_id", input.SessionID),
+			zap.String("status", input.Status))
 
-		summary, err := sessionManager.CompleteSession(ctx, input.SessionID, input.Summary)
+		// Pass status to CompleteSession (defaults to "completed" if empty)
+		summary, err := sessionManager.CompleteSession(ctx, input.SessionID, input.Summary, input.Status)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to complete session: %w", err)
 		}
@@ -373,19 +376,33 @@ func (s *Server) registerAgentSessionTools(sessionManager *observability.AgentSe
 			broadcaster.EmitSessionCompleted(input.SessionID, summary.TotalFindings, summary.TotalQueries)
 		}
 
+		// Determine final status for display
+		finalStatus := input.Status
+		if finalStatus == "" {
+			finalStatus = "completed"
+		}
+
 		output := CompleteAgentSessionOutput{
 			SessionID:    summary.SessionID,
+			Status:       finalStatus,
 			Duration:     summary.Duration.String(),
 			QueryCount:   summary.TotalQueries,
 			FindingCount: summary.TotalFindings,
-			Message:      "Agent session completed successfully",
+			Message:      fmt.Sprintf("Agent session completed with status: %s", finalStatus),
+		}
+
+		statusEmoji := "✅"
+		if finalStatus == "timeout" {
+			statusEmoji = "⏱️"
+		} else if finalStatus == "incomplete" {
+			statusEmoji = "⚠️"
 		}
 
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{
-					Text: fmt.Sprintf("Investigation Complete\n\nSession ID: %s\nDuration: %s\nQueries Executed: %d\nFindings Discovered: %d\n\nInitial Symptom: %s\nFinal Hypothesis: %s\n\nRoot Cause: %s",
-						summary.SessionID, summary.Duration, summary.TotalQueries, summary.TotalFindings,
+					Text: fmt.Sprintf("%s Investigation Complete (%s)\n\nSession ID: %s\nDuration: %s\nQueries Executed: %d\nFindings Discovered: %d\n\nInitial Symptom: %s\nFinal Hypothesis: %s\n\nRoot Cause: %s",
+						statusEmoji, finalStatus, summary.SessionID, summary.Duration, summary.TotalQueries, summary.TotalFindings,
 						summary.InitialSymptom, summary.FinalHypothesis, summary.RootCause),
 				},
 			},

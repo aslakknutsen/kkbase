@@ -4,7 +4,7 @@ export interface AgentSession {
   id: string;
   initial_symptom: string;
   initial_resource?: string;
-  status: 'active' | 'completed' | 'abandoned';
+  status: 'active' | 'completed' | 'abandoned' | 'timeout' | 'incomplete';
   created_at: string;
   completed_at?: string;
   current_stage: number;

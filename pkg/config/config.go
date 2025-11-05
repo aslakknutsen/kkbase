@@ -51,11 +51,12 @@ type Config struct {
 	AgentMCPServerURL string
 
 	// LLM configuration
-	LLMProvider    string
-	LLMAPIKey      string
-	LLMModel       string
-	LLMTemperature float32
-	LLMMaxTokens   int
+	LLMProvider      string
+	LLMAPIKey        string
+	LLMModel         string
+	LLMTemperature   float32
+	LLMMaxTokens     int
+	LLMMaxIterations int
 
 	// Event filtering
 	EventFilterAllowlist []string
@@ -99,11 +100,12 @@ func LoadFromEnv() (*Config, error) {
 		AgentMCPServerURL: getEnv("AGENT_MCP_SERVER_URL", "http://localhost:8081/mcp"),
 
 		// LLM configuration
-		LLMProvider:    getEnv("LLM_PROVIDER", "gemini"),
-		LLMAPIKey:      getEnv("LLM_API_KEY", ""),
-		LLMModel:       getEnv("LLM_MODEL", "gemini-2.0-flash-exp"),
-		LLMTemperature: getFloat32Env("LLM_TEMPERATURE", 0.2),
-		LLMMaxTokens:   getIntEnv("LLM_MAX_TOKENS", 2048),
+		LLMProvider:      getEnv("LLM_PROVIDER", "gemini"),
+		LLMAPIKey:        getEnv("LLM_API_KEY", ""),
+		LLMModel:         getEnv("LLM_MODEL", "gemini-2.0-flash-exp"),
+		LLMTemperature:   getFloat32Env("LLM_TEMPERATURE", 0.2),
+		LLMMaxTokens:     getIntEnv("LLM_MAX_TOKENS", 2048),
+		LLMMaxIterations: getIntEnv("LLM_MAX_ITERATIONS", 30),
 
 		// Event filtering
 		EventFilterAllowlist: getStringSliceEnv("EVENT_FILTER_ALLOWLIST", []string{}),

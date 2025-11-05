@@ -316,13 +316,18 @@ func (asm *AgentSessionManager) SpawnInvestigation(
 }
 
 // CompleteSession marks a session as completed and generates summary
-func (asm *AgentSessionManager) CompleteSession(ctx context.Context, sessionID, summary string) (*SessionSummary, error) {
+func (asm *AgentSessionManager) CompleteSession(ctx context.Context, sessionID, summary, status string) (*SessionSummary, error) {
 	completedAt := time.Now()
+
+	// Default to "completed" if no status provided
+	if status == "" {
+		status = "completed"
+	}
 
 	// Update session status
 	updateQuery := `
 		MATCH (s:AgentSession {id: $session_id})
-		SET s.status = 'completed',
+		SET s.status = $status,
 			s.completed_at = datetime($completed_at),
 			s.summary = $summary
 		RETURN s.created_at as created_at, s.query_count as query_count, s.finding_count as finding_count
@@ -332,6 +337,7 @@ func (asm *AgentSessionManager) CompleteSession(ctx context.Context, sessionID, 
 		"session_id":   sessionID,
 		"completed_at": completedAt.Format(time.RFC3339),
 		"summary":      summary,
+		"status":       status,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to complete session: %w", err)
@@ -479,8 +485,7 @@ func (asm *AgentSessionManager) GetActiveSessions(ctx context.Context) ([]Active
 	query := `
 		MATCH (s:AgentSession)
 		WHERE s.status = 'active' 
-		   OR (s.status = 'completed' 
-		       AND datetime(s.completed_at) > datetime() - duration({minutes: $retention_minutes}))
+		   OR datetime(s.completed_at) > datetime() - duration({minutes: $retention_minutes})
 		RETURN s.id as id,
 			   s.initial_symptom as symptom,
 			   s.status as status,

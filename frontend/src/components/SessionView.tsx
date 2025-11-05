@@ -146,10 +146,17 @@ export function SessionView({ sessionId, observer }: SessionViewProps) {
             className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
               sessionDetail.session.status === 'active'
                 ? 'status-active'
+                : sessionDetail.session.status === 'timeout'
+                ? 'status-timeout'
+                : sessionDetail.session.status === 'incomplete'
+                ? 'status-incomplete'
                 : 'status-completed'
             }`}
           >
-            {sessionDetail.session.status}
+            {sessionDetail.session.status === 'timeout' && '⏱️ '}
+            {sessionDetail.session.status === 'incomplete' && '⚠️ '}
+            {sessionDetail.session.status === 'completed' && '✓ '}
+            {sessionDetail.session.status.charAt(0).toUpperCase() + sessionDetail.session.status.slice(1)}
           </span>
         </div>
       </div>
