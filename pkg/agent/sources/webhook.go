@@ -15,20 +15,15 @@ import (
 type CustomWebhook struct {
 	name   string
 	events chan agenttypes.Event
-	server *http.Server
 	logger *zap.Logger
 }
 
 // NewCustomWebhook creates a new custom webhook source
-func NewCustomWebhook(port int, logger *zap.Logger) *CustomWebhook {
-	mux := http.NewServeMux()
+// The mux parameter is used to register the webhook handler
+func NewCustomWebhook(mux *http.ServeMux, logger *zap.Logger) *CustomWebhook {
 	source := &CustomWebhook{
 		name:   "custom-webhook",
 		events: make(chan agenttypes.Event, 100),
-		server: &http.Server{
-			Addr:    fmt.Sprintf(":%d", port),
-			Handler: mux,
-		},
 		logger: logger,
 	}
 
@@ -44,15 +39,7 @@ func (w *CustomWebhook) Name() string {
 
 // Start starts the webhook server
 func (w *CustomWebhook) Start(ctx context.Context) error {
-	w.logger.Info("starting custom webhook",
-		zap.String("addr", w.server.Addr))
-
-	go func() {
-		if err := w.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			w.logger.Error("webhook server error", zap.Error(err))
-		}
-	}()
-
+	w.logger.Info("custom webhook ready")
 	return nil
 }
 
@@ -63,9 +50,8 @@ func (w *CustomWebhook) Events() <-chan agenttypes.Event {
 
 // Stop stops the webhook server
 func (w *CustomWebhook) Stop() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	return w.server.Shutdown(ctx)
+	close(w.events)
+	return nil
 }
 
 // CustomEventPayload represents a generic event payload

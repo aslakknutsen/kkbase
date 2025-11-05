@@ -2,13 +2,12 @@ package llm
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
-	"github.com/kagenti/kkbase/pkg/agent/mcp"
+	agentmcp "github.com/kagenti/kkbase/pkg/agent/mcp"
 	"github.com/kagenti/kkbase/pkg/agenttypes"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 	"google.golang.org/genai"
 )
@@ -18,12 +17,12 @@ type GeminiClient struct {
 	client    *genai.Client
 	model     string
 	config    Config
-	mcpClient *mcp.Client
+	mcpClient *agentmcp.Client
 	logger    *zap.Logger
 }
 
 // NewGeminiClient creates a new Gemini LLM client
-func NewGeminiClient(config Config, mcpClient *mcp.Client, logger *zap.Logger) (*GeminiClient, error) {
+func NewGeminiClient(config Config, mcpClient *agentmcp.Client, logger *zap.Logger) (*GeminiClient, error) {
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  config.APIKey,
@@ -116,34 +115,271 @@ func (c *GeminiClient) buildEventPrompt(event agenttypes.Event) string {
 	)
 }
 
-// buildMCPTools creates Gemini function declarations for MCP tools
+// buildMCPTools discovers available tools from MCP server and converts them to Gemini function declarations
 func (c *GeminiClient) buildMCPTools() []*genai.Tool {
+	ctx := context.Background()
+
+	// Discover tools from MCP server
+	mcpTools, err := c.mcpClient.ListTools(ctx)
+	if err != nil {
+		c.logger.Warn("failed to discover MCP tools, using empty list", zap.Error(err))
+		return []*genai.Tool{}
+	}
+
+	c.logger.Info("discovered tools from MCP server", zap.Int("count", len(mcpTools)))
+
+	// Convert MCP tools to Gemini function declarations
+	functionDeclarations := make([]*genai.FunctionDeclaration, 0, len(mcpTools))
+	for _, tool := range mcpTools {
+		funcDecl := c.convertMCPToolToGemini(tool)
+		if funcDecl != nil {
+			functionDeclarations = append(functionDeclarations, funcDecl)
+		}
+	}
+
+	return []*genai.Tool{{
+		FunctionDeclarations: functionDeclarations,
+	}}
+}
+
+// convertMCPToolToGemini converts an MCP tool definition to a Gemini function declaration
+func (c *GeminiClient) convertMCPToolToGemini(tool *mcp.Tool) *genai.FunctionDeclaration {
+	if tool == nil {
+		return nil
+	}
+
+	funcDecl := &genai.FunctionDeclaration{
+		Name:        tool.Name,
+		Description: tool.Description,
+	}
+
+	// Convert InputSchema to Gemini Parameters schema
+	if tool.InputSchema != nil {
+		if schemaMap, ok := tool.InputSchema.(map[string]interface{}); ok {
+			funcDecl.Parameters = c.convertJSONSchemaToGemini(schemaMap)
+		} else {
+			c.logger.Warn("tool InputSchema is not a map",
+				zap.String("tool", tool.Name),
+				zap.Any("schema_type", fmt.Sprintf("%T", tool.InputSchema)))
+		}
+	}
+
+	return funcDecl
+}
+
+// convertJSONSchemaToGemini converts a JSON Schema (map) to Gemini Schema
+func (c *GeminiClient) convertJSONSchemaToGemini(jsonSchema map[string]interface{}) *genai.Schema {
+	schema := &genai.Schema{}
+
+	// Extract type - Gemini SDK expects the type as a string field
+	if t, ok := jsonSchema["type"].(string); ok {
+		// Store as string in the Type field (SDK handles this)
+		schema.Type = genai.Type(t)
+	}
+
+	// Extract description
+	if desc, ok := jsonSchema["description"].(string); ok {
+		schema.Description = desc
+	}
+
+	// Extract properties
+	if props, ok := jsonSchema["properties"].(map[string]interface{}); ok {
+		schema.Properties = make(map[string]*genai.Schema)
+		for propName, propDef := range props {
+			if propDefMap, ok := propDef.(map[string]interface{}); ok {
+				schema.Properties[propName] = c.convertJSONSchemaToGemini(propDefMap)
+			}
+		}
+	}
+
+	// Extract required fields
+	if req, ok := jsonSchema["required"].([]interface{}); ok {
+		required := make([]string, 0, len(req))
+		for _, r := range req {
+			if s, ok := r.(string); ok {
+				required = append(required, s)
+			}
+		}
+		schema.Required = required
+	}
+
+	// Extract items (for arrays)
+	if items, ok := jsonSchema["items"].(map[string]interface{}); ok {
+		schema.Items = c.convertJSONSchemaToGemini(items)
+	}
+
+	// Extract enum values - convert to []string
+	if enumVals, ok := jsonSchema["enum"].([]interface{}); ok {
+		enumStrings := make([]string, 0, len(enumVals))
+		for _, v := range enumVals {
+			if s, ok := v.(string); ok {
+				enumStrings = append(enumStrings, s)
+			}
+		}
+		schema.Enum = enumStrings
+	}
+
+	return schema
+}
+
+// buildMCPToolsStatic is the old static implementation kept as fallback
+// This can be removed once dynamic discovery is proven stable
+func (c *GeminiClient) buildMCPToolsStatic() []*genai.Tool {
 	return []*genai.Tool{{
 		FunctionDeclarations: []*genai.FunctionDeclaration{
 			{
-				Name: "query_knowledge_graph",
-				Description: "Execute a read-only Cypher query against the Kubernetes knowledge graph stored in Neo4j. " +
-					"Use this to understand resource topology, relationships, and current state. " +
-					"Returns JSON results from the query.",
+				Name: "start_agent_session",
+				Description: "Start a new AI agent diagnostic session for tracking exploratory investigation. " +
+					"IMPORTANT: Call this FIRST before any other investigation tools. " +
+					"Returns a session ID that must be used in all subsequent query_with_session calls. " +
+					"The session automatically tracks hypotheses, queries, findings, and dynamically calculates blast zone.",
 				Parameters: &genai.Schema{
 					Type: "object",
 					Properties: map[string]*genai.Schema{
+						"symptom": {
+							Type:        "string",
+							Description: "Initial symptom being investigated (e.g., 'Orders failing for last 1m', 'Pod CrashLoopBackOff')",
+						},
+						"initial_resource": {
+							Type:        "string",
+							Description: "Optional initial resource to investigate (e.g., 'Service/namespace/service-name' or 'Pod/namespace/pod-name')",
+						},
+					},
+					Required: []string{"symptom"},
+				},
+			},
+			{
+				Name: "query_with_session",
+				Description: "Execute a Cypher query within an active agent session. This automatically: " +
+					"1. Records the query and your reasoning " +
+					"2. Executes the query against the knowledge graph " +
+					"3. Extracts findings from results (failed calls, unhealthy pods, errors) " +
+					"4. Links findings to affected resources " +
+					"5. Updates session state. " +
+					"Use this instead of query_knowledge_graph when working within an investigation session.",
+				Parameters: &genai.Schema{
+					Type: "object",
+					Properties: map[string]*genai.Schema{
+						"session_id": {
+							Type:        "string",
+							Description: "Session ID from start_agent_session",
+						},
 						"query": {
 							Type:        "string",
 							Description: "Cypher query to execute (read-only MATCH queries only)",
+						},
+						"reasoning": {
+							Type:        "string",
+							Description: "Explanation of why this query is being run and what it seeks to discover",
 						},
 						"params": {
 							Type:        "object",
 							Description: "Query parameters as key-value pairs (optional)",
 						},
 					},
-					Required: []string{"query"},
+					Required: []string{"session_id", "query", "reasoning"},
+				},
+			},
+			{
+				Name: "update_hypothesis",
+				Description: "Update the current diagnostic hypothesis for an investigation session. " +
+					"Call this at the end of each investigation round when you've refined your understanding of the problem. " +
+					"This marks the current investigation stage and triggers blast zone recalculation.",
+				Parameters: &genai.Schema{
+					Type: "object",
+					Properties: map[string]*genai.Schema{
+						"session_id": {
+							Type:        "string",
+							Description: "Session ID from start_agent_session",
+						},
+						"stage": {
+							Type:        "integer",
+							Description: "Investigation stage/round number (1, 2, 3, etc.)",
+						},
+						"text": {
+							Type:        "string",
+							Description: "Current hypothesis text explaining the suspected root cause",
+						},
+					},
+					Required: []string{"session_id", "stage", "text"},
+				},
+			},
+			{
+				Name: "record_recommendation",
+				Description: "Record an actionable recommendation based on investigation findings. " +
+					"Use this to suggest concrete next steps for resolving the root cause or addressing other issues. " +
+					"Recommendations should be specific, actionable, and prioritized.",
+				Parameters: &genai.Schema{
+					Type: "object",
+					Properties: map[string]*genai.Schema{
+						"session_id": {
+							Type:        "string",
+							Description: "Session ID from start_agent_session",
+						},
+						"type": {
+							Type:        "string",
+							Description: "Type of recommendation: root_cause_fix, preventive_action, optimization, monitoring_improvement, or cleanup",
+						},
+						"priority": {
+							Type:        "string",
+							Description: "Priority level: critical, high, medium, or low",
+						},
+						"title": {
+							Type:        "string",
+							Description: "Short title for the recommendation",
+						},
+						"description": {
+							Type:        "string",
+							Description: "Detailed description of what should be done",
+						},
+						"rationale": {
+							Type:        "string",
+							Description: "Why this recommendation is being made",
+						},
+						"related_findings": {
+							Type:        "array",
+							Description: "Finding IDs that support this recommendation",
+						},
+						"action_items": {
+							Type:        "array",
+							Description: "Step-by-step action items",
+						},
+						"estimated_effort": {
+							Type:        "string",
+							Description: "Estimated time to complete (e.g., '30 minutes', '2 hours')",
+						},
+						"automation_hint": {
+							Type:        "string",
+							Description: "Commands or automation suggestions",
+						},
+					},
+					Required: []string{"session_id", "type", "priority", "title", "description", "rationale", "action_items"},
+				},
+			},
+			{
+				Name: "complete_agent_session",
+				Description: "Mark an agent session as completed and generate final summary. " +
+					"IMPORTANT: Call this LAST when the investigation is finished and you've identified the root cause. " +
+					"This finalizes the blast zone snapshot and completes any linked investigations.",
+				Parameters: &genai.Schema{
+					Type: "object",
+					Properties: map[string]*genai.Schema{
+						"session_id": {
+							Type:        "string",
+							Description: "Session ID from start_agent_session",
+						},
+						"summary": {
+							Type:        "string",
+							Description: "Optional summary of findings and root cause",
+						},
+					},
+					Required: []string{"session_id"},
 				},
 			},
 			{
 				Name: "get_structure",
 				Description: "Get the complete graph database schema including all node types (labels), " +
-					"relationship types, and their properties. Use this first to understand what data " +
+					"relationship types, and their properties. Use this to understand what data " +
 					"is available before querying.",
 				Parameters: &genai.Schema{
 					Type: "object",
@@ -184,6 +420,7 @@ func (c *GeminiClient) buildMCPTools() []*genai.Tool {
 // runAgenticLoop runs the agent loop allowing Gemini to call functions iteratively
 func (c *GeminiClient) runAgenticLoop(ctx context.Context, systemContent *genai.Content, tools []*genai.Tool, prompt string, event agenttypes.Event) (*agenttypes.InvestigationResult, error) {
 	maxIterations := 10
+	var sessionID string // Track session ID throughout investigation
 
 	// Build conversation history
 	messages := []*genai.Content{
@@ -208,7 +445,7 @@ func (c *GeminiClient) runAgenticLoop(ctx context.Context, systemContent *genai.
 
 		resp, err := c.client.Models.GenerateContent(ctx, c.model, messages, generateConfig)
 		if err != nil {
-			return nil, fmt.Errorf("Gemini API error: %w", err)
+			return nil, fmt.Errorf("gemini API error: %w", err)
 		}
 
 		// Check response
@@ -227,8 +464,8 @@ func (c *GeminiClient) runAgenticLoop(ctx context.Context, systemContent *genai.
 		// Check for function calls
 		functionCalls := c.extractFunctionCalls(candidate.Content)
 		if len(functionCalls) == 0 {
-			// No function calls - extract final analysis
-			return c.extractAnalysis(candidate.Content, event)
+			// No function calls - investigation complete
+			return c.extractAnalysis(candidate.Content, event, sessionID)
 		}
 
 		// Execute function calls via MCP
@@ -239,6 +476,15 @@ func (c *GeminiClient) runAgenticLoop(ctx context.Context, systemContent *genai.
 		responseParts := make([]*genai.Part, 0, len(functionCalls))
 		for _, fc := range functionCalls {
 			result := c.executeMCPTool(ctx, fc.Name, fc.Args)
+
+			// Capture session ID from start_agent_session
+			if fc.Name == "start_agent_session" {
+				if sid, ok := result["session_id"].(string); ok {
+					sessionID = sid
+					c.logger.Info("captured session ID", zap.String("session_id", sessionID))
+				}
+			}
+
 			responseParts = append(responseParts, &genai.Part{
 				FunctionResponse: &genai.FunctionResponse{
 					Name:     fc.Name,
@@ -280,61 +526,76 @@ func (c *GeminiClient) extractFunctionCalls(content *genai.Content) []functionCa
 }
 
 // executeMCPTool executes an MCP tool and returns the result
+// Now handles all tools generically via dynamic discovery
 func (c *GeminiClient) executeMCPTool(ctx context.Context, name string, args map[string]interface{}) map[string]interface{} {
 	c.logger.Debug("executing MCP tool",
 		zap.String("tool", name),
 		zap.Any("args", args))
 
-	var result map[string]interface{}
-	var err error
-
-	switch name {
-	case "query_knowledge_graph":
-		query, _ := args["query"].(string)
-		params, _ := args["params"].(map[string]interface{})
-		results, err := c.mcpClient.Query(ctx, query, params)
-		if err != nil {
-			result = map[string]interface{}{
-				"error": err.Error(),
-			}
-		} else {
-			result = map[string]interface{}{
-				"results": results,
-				"count":   len(results),
-			}
-		}
-
-	case "get_structure":
-		result, err = c.mcpClient.GetStructure(ctx)
-		if err != nil {
-			result = map[string]interface{}{
-				"error": err.Error(),
-			}
-		}
-
-	case "start_investigation":
-		result, err = c.mcpClient.StartInvestigation(ctx, args)
-		if err != nil {
-			result = map[string]interface{}{
-				"error": err.Error(),
-			}
-		}
-
-	default:
-		result = map[string]interface{}{
-			"error": fmt.Sprintf("unknown tool: %s", name),
+	// Call the MCP server generically for any tool
+	mcpResult, err := c.mcpClient.CallTool(ctx, name, args)
+	if err != nil {
+		c.logger.Warn("MCP tool execution failed",
+			zap.String("tool", name),
+			zap.Error(err))
+		return map[string]interface{}{
+			"error": err.Error(),
 		}
 	}
 
-	c.logger.Debug("MCP tool result",
+	// Try to extract structured content
+	var result map[string]interface{}
+	if mcpResult.StructuredContent != nil {
+		if data, ok := mcpResult.StructuredContent.(map[string]interface{}); ok {
+			result = data
+		} else {
+			// Structured content exists but not in expected format
+			result = map[string]interface{}{
+				"raw_content": mcpResult.StructuredContent,
+			}
+		}
+	} else {
+		// No structured content, try to extract from text content
+		result = map[string]interface{}{
+			"success": true,
+		}
+
+		// Include text content if available
+		if len(mcpResult.Content) > 0 {
+			textParts := []string{}
+			for _, content := range mcpResult.Content {
+				if textContent, ok := content.(*mcp.TextContent); ok {
+					textParts = append(textParts, textContent.Text)
+				}
+			}
+			if len(textParts) > 0 {
+				result["message"] = textParts[0] // Use first text part as message
+				if len(textParts) > 1 {
+					result["details"] = textParts
+				}
+			}
+		}
+	}
+
+	c.logger.Debug("MCP tool executed successfully",
 		zap.String("tool", name),
-		zap.Bool("success", err == nil))
+		zap.Any("result_keys", getKeys(result)))
 
 	return result
 }
 
+// getKeys returns the keys from a map for logging purposes
+func getKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 // extractAnalysis extracts the final analysis from Gemini's response
-func (c *GeminiClient) extractAnalysis(content *genai.Content, event agenttypes.Event) (*agenttypes.InvestigationResult, error) {
+// In the new workflow, recommendations are already stored via MCP tools during investigation
+func (c *GeminiClient) extractAnalysis(content *genai.Content, event agenttypes.Event, sessionID string) (*agenttypes.InvestigationResult, error) {
 	// Extract text from content
 	var text string
 	for _, part := range content.Parts {
@@ -344,100 +605,26 @@ func (c *GeminiClient) extractAnalysis(content *genai.Content, event agenttypes.
 	}
 
 	if text == "" {
-		return nil, fmt.Errorf("no text content in final response")
+		text = "Investigation completed. See session details for findings and recommendations."
 	}
 
-	// Try to extract JSON from the text
-	jsonStr := extractJSON(text)
-	if jsonStr == "" {
-		// If no JSON found, create a basic analysis from the text
-		return &agenttypes.InvestigationResult{
-			Event: event,
-			Analysis: &agenttypes.Analysis{
-				RootCause:        text,
-				ImpactAssessment: "Unable to assess",
-				Confidence:       0.5,
-				RelatedResources: []string{},
-			},
-			Recommendations: []agenttypes.Recommendation{},
-		}, nil
-	}
+	c.logger.Info("investigation completed",
+		zap.String("session_id", sessionID),
+		zap.String("summary", text))
 
-	// Parse JSON
-	var analysisData struct {
-		RootCause        string   `json:"root_cause"`
-		ImpactAssessment string   `json:"impact_assessment"`
-		Confidence       float32  `json:"confidence"`
-		RelatedResources []string `json:"related_resources"`
-		Recommendations  []struct {
-			Action       string `json:"action"`
-			Description  string `json:"description"`
-			RiskLevel    string `json:"risk_level"`
-			AutoApproved bool   `json:"auto_approved"`
-		} `json:"recommendations"`
-	}
-
-	if err := json.Unmarshal([]byte(jsonStr), &analysisData); err != nil {
-		c.logger.Warn("failed to parse analysis JSON, using text as-is", zap.Error(err))
-		return &agenttypes.InvestigationResult{
-			Event: event,
-			Analysis: &agenttypes.Analysis{
-				RootCause:        text,
-				ImpactAssessment: "Unable to assess",
-				Confidence:       0.5,
-				RelatedResources: []string{},
-			},
-			Recommendations: []agenttypes.Recommendation{},
-		}, nil
-	}
-
-	// Convert to result
-	recommendations := make([]agenttypes.Recommendation, len(analysisData.Recommendations))
-	for i, rec := range analysisData.Recommendations {
-		recommendations[i] = agenttypes.Recommendation{
-			Action:       rec.Action,
-			Description:  rec.Description,
-			RiskLevel:    rec.RiskLevel,
-			AutoApproved: rec.AutoApproved,
-		}
-	}
-
+	// In the new workflow, all analysis data and recommendations are stored in the session
+	// Return a simplified result with the session ID
 	return &agenttypes.InvestigationResult{
 		Event: event,
 		Analysis: &agenttypes.Analysis{
-			RootCause:        analysisData.RootCause,
-			ImpactAssessment: analysisData.ImpactAssessment,
-			Confidence:       analysisData.Confidence,
-			RelatedResources: analysisData.RelatedResources,
+			RootCause:        text,
+			ImpactAssessment: "See session details",
+			Confidence:       1.0, // Session tracks actual confidence
+			RelatedResources: []string{},
 		},
-		Recommendations: recommendations,
+		Recommendations: []agenttypes.Recommendation{}, // Stored in session via record_recommendation
+		SessionID:       sessionID,
 	}, nil
-}
-
-// extractJSON attempts to extract JSON from text (handling markdown code blocks)
-func extractJSON(text string) string {
-	// Try to find JSON in markdown code blocks
-	if strings.Contains(text, "```json") {
-		start := strings.Index(text, "```json")
-		if start != -1 {
-			start += 7 // len("```json")
-			end := strings.Index(text[start:], "```")
-			if end != -1 {
-				return strings.TrimSpace(text[start : start+end])
-			}
-		}
-	}
-
-	// Try to find JSON object directly
-	start := strings.Index(text, "{")
-	if start != -1 {
-		end := strings.LastIndex(text, "}")
-		if end != -1 && end > start {
-			return text[start : end+1]
-		}
-	}
-
-	return ""
 }
 
 // Close closes the Gemini client (no-op for new SDK)

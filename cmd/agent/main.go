@@ -7,18 +7,17 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/kagenti/kkbase/pkg/agent"
 	"github.com/kagenti/kkbase/pkg/agent/mcp"
 	"github.com/kagenti/kkbase/pkg/agent/sources"
 	"github.com/kagenti/kkbase/pkg/config"
-	"github.com/kagenti/kkbase/pkg/graph"
-	"github.com/kagenti/kkbase/pkg/graph/neo4j"
 	"github.com/kagenti/kkbase/pkg/llm"
-	"github.com/kagenti/kkbase/pkg/observability"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 func main() {
@@ -29,7 +28,7 @@ func main() {
 }
 
 func run() error {
-	// 1. Load configuration
+	// Load configuration
 	cfg, err := config.LoadFromEnv()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -41,7 +40,7 @@ func run() error {
 		return nil
 	}
 
-	// 2. Initialize logger
+	// Initialize logger
 	logger, err := initLogger(cfg.LogLevel)
 	if err != nil {
 		return fmt.Errorf("failed to init logger: %w", err)
@@ -59,20 +58,14 @@ func run() error {
 		return fmt.Errorf("LLM_API_KEY is required when agent is enabled")
 	}
 
-	// 3. Connect to Neo4j
-	logger.Info("connecting to Neo4j", zap.String("uri", cfg.Neo4jURI))
-	graphStore, err := neo4j.NewStore(neo4j.Config{
-		URI:      cfg.Neo4jURI,
-		Username: cfg.Neo4jUsername,
-		Password: cfg.Neo4jPassword,
-		Database: cfg.Neo4jDatabase,
-	}, logger)
+	// Create Kubernetes client
+	logger.Info("initializing Kubernetes client")
+	clientset, k8sConfig, err := createKubernetesClient(cfg.KubeConfigPath)
 	if err != nil {
-		return fmt.Errorf("failed to connect to Neo4j: %w", err)
+		return fmt.Errorf("failed to create Kubernetes client: %w", err)
 	}
-	defer graphStore.Close()
 
-	// 4. Create MCP client
+	// Create MCP client
 	logger.Info("connecting to MCP server", zap.String("url", cfg.AgentMCPServerURL))
 	mcpClient, err := mcp.NewClient(cfg.AgentMCPServerURL, logger)
 	if err != nil {
@@ -80,7 +73,7 @@ func run() error {
 	}
 	defer mcpClient.Close()
 
-	// 5. Create LLM client
+	// Create LLM client
 	logger.Info("initializing LLM client",
 		zap.String("provider", cfg.LLMProvider),
 		zap.String("model", cfg.LLMModel))
@@ -100,16 +93,8 @@ func run() error {
 	}
 	defer geminiClient.Close()
 
-	// 6. Create agent session manager
-	logger.Info("initializing agent session manager")
-	sessionManager := observability.NewAgentSessionManager(
-		graphStore,
-		nil, // No metrics processor for now
-		cfg,
-		logger,
-	)
-
-	// 7. Create agents (one per worker)
+	// Create agents (one per worker)
+	// Agents now use MCP Server for all database operations
 	logger.Info("creating agent workers", zap.Int("count", cfg.AgentWorkers))
 	agents := make([]*agent.Agent, cfg.AgentWorkers)
 	for i := 0; i < cfg.AgentWorkers; i++ {
@@ -117,40 +102,84 @@ func run() error {
 			fmt.Sprintf("agent-%d", i),
 			geminiClient,
 			mcpClient,
-			graphStore,
-			sessionManager,
 			logger,
 		)
 	}
 
-	// 8. Create event router
+	// Create event router
 	logger.Info("initializing event router",
 		zap.Strings("allowlist", cfg.EventFilterAllowlist),
 		zap.Strings("denylist", cfg.EventFilterDenylist))
 	router := agent.NewEventRouter(cfg, logger)
 
-	// 9. Create worker pool
+	// Create worker pool
 	logger.Info("initializing worker pool", zap.Int("workers", cfg.AgentWorkers))
 	workerPool := agent.NewWorkerPool(cfg.AgentWorkers, agents, logger)
 
-	// 10. Create event sources
+	// Create unified HTTP server with mux
+	logger.Info("initializing unified webhook server", zap.Int("port", cfg.AgentPort))
+	mux := http.NewServeMux()
+
+	// Register health endpoints
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
+		// Agent is ready if it can reach the MCP server
+		// MCP server handles Neo4j connectivity
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ready"))
+	})
+
+	// Create event sources (conditionally based on config)
 	logger.Info("initializing event sources")
-	eventSources := []sources.EventSource{
-		sources.NewK8sEventsSource(graphStore, logger),
-		sources.NewAlertmanagerWebhook(cfg.AgentPort, logger),
-		sources.NewCustomWebhook(cfg.AgentPort, logger),
+	eventSources := []sources.EventSource{}
+
+	if cfg.K8sEventsEnabled {
+		logger.Info("enabling K8s events source")
+		eventSources = append(eventSources, sources.NewK8sEventsSource(
+			clientset, k8sConfig, cfg.Namespace, cfg.ResyncPeriod, logger))
 	}
 
-	// 11. Create context for lifecycle management
+	if cfg.AlertmanagerWebhookEnabled {
+		logger.Info("enabling Alertmanager webhook source")
+		eventSources = append(eventSources, sources.NewAlertmanagerWebhook(mux, logger))
+	}
+
+	if cfg.CustomWebhookEnabled {
+		logger.Info("enabling custom webhook source")
+		eventSources = append(eventSources, sources.NewCustomWebhook(mux, logger))
+	}
+
+	if len(eventSources) == 0 {
+		logger.Warn("no event sources enabled - agent will not receive any events")
+	}
+
+	// Start unified HTTP server
+	unifiedServer := &http.Server{
+		Addr:    fmt.Sprintf(":%d", cfg.AgentPort),
+		Handler: mux,
+	}
+	go func() {
+		logger.Info("unified server listening", zap.Int("port", cfg.AgentPort))
+		if err := unifiedServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("unified server error", zap.Error(err))
+		}
+	}()
+	defer unifiedServer.Shutdown(context.Background())
+
+	// Create context for lifecycle management
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// 12. Start worker pool
+	// Start worker pool
 	if err := workerPool.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start worker pool: %w", err)
 	}
 
-	// 13. Start event sources
+	// Start event sources (K8sEventsSource starts its informer here)
 	for _, source := range eventSources {
 		if err := source.Start(ctx); err != nil {
 			logger.Error("failed to start event source",
@@ -161,27 +190,23 @@ func run() error {
 		logger.Info("event source started", zap.String("source", source.Name()))
 	}
 
-	// 14. Start event processing loops (one per source)
+	// Start event processing loops (one per source)
 	for _, source := range eventSources {
 		go processEventSource(ctx, source, router, workerPool, logger)
 	}
-
-	// 15. Start health server
-	healthServer := startHealthServer(cfg.AgentPort, logger, graphStore)
-	defer healthServer.Shutdown(context.Background())
 
 	logger.Info("agent service started successfully",
 		zap.Int("port", cfg.AgentPort),
 		zap.Int("workers", cfg.AgentWorkers))
 
-	// 16. Wait for shutdown signal
+	// Wait for shutdown signal
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	<-sigChan
 
 	logger.Info("shutting down gracefully...")
 
-	// 17. Stop event sources
+	// Stop event sources
 	for _, source := range eventSources {
 		if err := source.Stop(); err != nil {
 			logger.Warn("error stopping event source",
@@ -190,7 +215,7 @@ func run() error {
 		}
 	}
 
-	// 18. Stop worker pool
+	// Stop worker pool
 	workerPool.Stop()
 
 	logger.Info("shutdown complete")
@@ -237,47 +262,6 @@ func processEventSource(ctx context.Context, source sources.EventSource, router 
 	}
 }
 
-// startHealthServer starts the health check HTTP server
-func startHealthServer(port int, logger *zap.Logger, graphStore graph.GraphStore) *http.Server {
-	mux := http.NewServeMux()
-
-	// Liveness probe
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
-	})
-
-	// Readiness probe - checks Neo4j connectivity
-	mux.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-		defer cancel()
-
-		// Simple health check by running a query
-		_, err := graphStore.Query(ctx, "RETURN 1", nil)
-		if err != nil {
-			logger.Warn("health check failed", zap.Error(err))
-			http.Error(w, "not ready", http.StatusServiceUnavailable)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ready"))
-	})
-
-	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
-		Handler: mux,
-	}
-
-	go func() {
-		logger.Info("health server listening", zap.Int("port", port))
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Error("health server error", zap.Error(err))
-		}
-	}()
-
-	return server
-}
-
 // initLogger initializes the zap logger
 func initLogger(level string) (*zap.Logger, error) {
 	var zapLevel zapcore.Level
@@ -291,4 +275,31 @@ func initLogger(level string) (*zap.Logger, error) {
 	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 
 	return config.Build()
+}
+
+// createKubernetesClient creates a Kubernetes clientset and returns the config
+func createKubernetesClient(kubeconfigPath string) (*kubernetes.Clientset, *rest.Config, error) {
+	var config *rest.Config
+	var err error
+
+	if kubeconfigPath != "" {
+		// Use kubeconfig file
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to build config from kubeconfig: %w", err)
+		}
+	} else {
+		// Use in-cluster config
+		config, err = rest.InClusterConfig()
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get in-cluster config: %w", err)
+		}
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create clientset: %w", err)
+	}
+
+	return clientset, config, nil
 }

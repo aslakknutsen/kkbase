@@ -50,4 +50,9 @@ data:
   # Empty means process all events that pass severity filter
   EVENT_FILTER_ALLOWLIST: ""
   EVENT_FILTER_DENYLIST: ""
+  
+  # Event source configuration - enable/disable individual event sources
+  K8S_EVENTS_ENABLED: "false"                # Watch Kubernetes events from API
+  ALERTMANAGER_WEBHOOK_ENABLED: "true"      # Receive Prometheus Alertmanager webhooks
+  CUSTOM_WEBHOOK_ENABLED: "true"            # Receive custom webhook events
 

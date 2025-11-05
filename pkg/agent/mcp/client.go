@@ -134,6 +134,18 @@ func (c *Client) CompleteInvestigation(ctx context.Context, investigationID stri
 	return err
 }
 
+// ListTools retrieves the list of available tools from the MCP server
+func (c *Client) ListTools(ctx context.Context) ([]*mcp.Tool, error) {
+	result, err := c.session.ListTools(ctx, &mcp.ListToolsParams{})
+	if err != nil {
+		c.logger.Error("failed to list tools", zap.Error(err))
+		return nil, fmt.Errorf("failed to list tools: %w", err)
+	}
+
+	c.logger.Debug("tools listed successfully", zap.Int("count", len(result.Tools)))
+	return result.Tools, nil
+}
+
 // Close closes the MCP client connection
 func (c *Client) Close() error {
 	if c.session != nil {

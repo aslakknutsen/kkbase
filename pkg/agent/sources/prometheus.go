@@ -15,20 +15,15 @@ import (
 type AlertmanagerWebhook struct {
 	name   string
 	events chan agenttypes.Event
-	server *http.Server
 	logger *zap.Logger
 }
 
 // NewAlertmanagerWebhook creates a new Alertmanager webhook source
-func NewAlertmanagerWebhook(port int, logger *zap.Logger) *AlertmanagerWebhook {
-	mux := http.NewServeMux()
+// The mux parameter is used to register the webhook handler
+func NewAlertmanagerWebhook(mux *http.ServeMux, logger *zap.Logger) *AlertmanagerWebhook {
 	source := &AlertmanagerWebhook{
 		name:   "prometheus-alertmanager",
 		events: make(chan agenttypes.Event, 100),
-		server: &http.Server{
-			Addr:    fmt.Sprintf(":%d", port),
-			Handler: mux,
-		},
 		logger: logger,
 	}
 
@@ -44,15 +39,7 @@ func (a *AlertmanagerWebhook) Name() string {
 
 // Start starts the webhook server
 func (a *AlertmanagerWebhook) Start(ctx context.Context) error {
-	a.logger.Info("starting Alertmanager webhook",
-		zap.String("addr", a.server.Addr))
-
-	go func() {
-		if err := a.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			a.logger.Error("webhook server error", zap.Error(err))
-		}
-	}()
-
+	a.logger.Info("alertmanager webhook ready")
 	return nil
 }
 
@@ -63,9 +50,8 @@ func (a *AlertmanagerWebhook) Events() <-chan agenttypes.Event {
 
 // Stop stops the webhook server
 func (a *AlertmanagerWebhook) Stop() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	return a.server.Shutdown(ctx)
+	close(a.events)
+	return nil
 }
 
 // AlertmanagerPayload represents the Alertmanager webhook payload

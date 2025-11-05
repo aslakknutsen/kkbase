@@ -60,6 +60,11 @@ type Config struct {
 	// Event filtering
 	EventFilterAllowlist []string
 	EventFilterDenylist  []string
+
+	// Event source configuration
+	K8sEventsEnabled           bool
+	AlertmanagerWebhookEnabled bool
+	CustomWebhookEnabled       bool
 }
 
 // LoadFromEnv loads configuration from environment variables
@@ -103,6 +108,11 @@ func LoadFromEnv() (*Config, error) {
 		// Event filtering
 		EventFilterAllowlist: getStringSliceEnv("EVENT_FILTER_ALLOWLIST", []string{}),
 		EventFilterDenylist:  getStringSliceEnv("EVENT_FILTER_DENYLIST", []string{}),
+
+		// Event source configuration (all enabled by default)
+		K8sEventsEnabled:           getBoolEnv("K8S_EVENTS_ENABLED", false),
+		AlertmanagerWebhookEnabled: getBoolEnv("ALERTMANAGER_WEBHOOK_ENABLED", true),
+		CustomWebhookEnabled:       getBoolEnv("CUSTOM_WEBHOOK_ENABLED", true),
 	}
 
 	// Parse resync period

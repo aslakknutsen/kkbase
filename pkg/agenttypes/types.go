@@ -67,10 +67,17 @@ type Analysis struct {
 	RelatedResources []string
 }
 
-// Recommendation represents an actionable recommendation
+// Recommendation represents an actionable recommendation with rich metadata
 type Recommendation struct {
-	Action       string
-	Description  string
-	RiskLevel    string
-	AutoApproved bool
+	Type            string                 // root_cause_fix, preventive_action, optimization, monitoring_improvement, cleanup
+	Priority        string                 // critical, high, medium, low
+	Title           string                 // Short title for the recommendation
+	Description     string                 // Detailed description of what should be done
+	Rationale       string                 // Why this recommendation is being made
+	RelatedFindings []string               // Finding IDs that support this recommendation
+	ActionItems     []string               // Step-by-step action items
+	EstimatedEffort string                 // Estimated time to complete (e.g., "30 minutes", "2 hours")
+	AutomationHint  string                 // Commands or automation suggestions
+	Tags            []string               // Tags for categorization
+	Metadata        map[string]interface{} // Additional structured data
 }
