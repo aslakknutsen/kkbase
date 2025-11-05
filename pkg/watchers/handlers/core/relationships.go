@@ -270,6 +270,43 @@ func (rb *RelationshipBuilder) CreateServicePodEdges(ctx context.Context, servic
 	return nil
 }
 
+// CreatePodToServiceEdges creates SELECTS_PODS edges from matching Services to this Pod
+func (rb *RelationshipBuilder) CreatePodToServiceEdges(ctx context.Context, pod *corev1.Pod) error {
+	podID := models.GetNodeID("Pod", pod.Namespace, pod.Name)
+
+	// List all services in the same namespace
+	services, err := rb.Clientset.CoreV1().Services(pod.Namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list services for pod %s: %w", pod.Name, err)
+	}
+
+	// Check each service to see if its selector matches this pod
+	for _, service := range services.Items {
+		if len(service.Spec.Selector) == 0 {
+			continue
+		}
+
+		selector := labels.SelectorFromSet(service.Spec.Selector)
+		if selector.Matches(labels.Set(pod.Labels)) {
+			serviceID := models.GetNodeID("Service", service.Namespace, service.Name)
+
+			if err := rb.GraphStore.UpsertEdge(
+				ctx,
+				string(NodeTypeService),
+				serviceID,
+				string(EdgeTypeSelectsPods),
+				string(NodeTypePod),
+				podID,
+				nil,
+			); err != nil {
+				return fmt.Errorf("failed to create SELECTS_PODS edge from service %s: %w", service.Name, err)
+			}
+		}
+	}
+
+	return nil
+}
+
 // CreatePVCPVEdge creates BOUND_TO edge from PVC to PV
 func (rb *RelationshipBuilder) CreatePVCPVEdge(ctx context.Context, pvc *corev1.PersistentVolumeClaim) error {
 	if pvc.Spec.VolumeName == "" {

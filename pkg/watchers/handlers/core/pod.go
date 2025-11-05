@@ -100,6 +100,11 @@ func (h *PodHandler) HandleAdd(obj interface{}) {
 		h.Logger.Error("failed to create pod volume edges", zap.Error(err))
 	}
 
+	// Create edges to matching Services
+	if err := h.relationshipBuilder.CreatePodToServiceEdges(ctx, pod); err != nil {
+		h.Logger.Error("failed to create pod-service edges", zap.Error(err))
+	}
+
 	// Create owner reference edges
 	if ownerRef := models.GetOwnerReference(pod.OwnerReferences); ownerRef != nil {
 		if err := h.relationshipBuilder.CreateOwnerEdge(ctx, NodeTypePod, podNode.ID, *ownerRef, pod.Namespace); err != nil {
