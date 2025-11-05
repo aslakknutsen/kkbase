@@ -33,4 +33,21 @@ data:
   
   # Agent session retention (how long completed sessions remain visible in UI)
   COMPLETED_SESSION_RETENTION_MINUTES: "1440"  # 24 hours
+  
+  # Agent configuration
+  AGENT_ENABLED: "true"
+  AGENT_PORT: "8082"
+  AGENT_WORKERS: "1"
+  AGENT_MCP_SERVER_URL: "http://localhost:8081/mcp"  # Overridden in deployment for pod-local access
+  
+  # LLM configuration (Gemini)
+  LLM_PROVIDER: "gemini"
+  LLM_MODEL: "gemini-2.0-flash-exp"
+  LLM_TEMPERATURE: "0.2"
+  LLM_MAX_TOKENS: "2048"
+  
+  # Event filtering - configure which K8s event reasons to process
+  # Empty means process all events that pass severity filter
+  EVENT_FILTER_ALLOWLIST: ""
+  EVENT_FILTER_DENYLIST: ""
 

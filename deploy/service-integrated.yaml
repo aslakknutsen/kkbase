@@ -1,6 +1,6 @@
 ---
-# Service for Integrated Deployment (Watcher + MCP Server in one pod)
-# Exposes only the MCP server port
+# Service for Integrated Deployment (Watcher + MCP Server + Agent in one pod)
+# Exposes MCP server port (8081) and Agent port (8082)
 apiVersion: v1
 kind: Service
 metadata:
@@ -17,8 +17,12 @@ spec:
     clientIP:
       timeoutSeconds: 3600  # 1 hour for long-lived SSE connections
   ports:
-    - name: http
+    - name: http-mcp
       port: 8081
       targetPort: 8081
+      protocol: TCP
+    - name: http-agent
+      port: 8082
+      targetPort: 8082
       protocol: TCP
 

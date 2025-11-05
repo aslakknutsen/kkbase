@@ -1,0 +1,45 @@
+# Build stage - Red Hat UBI9 with Go toolset
+FROM registry.access.redhat.com/ubi9/go-toolset:1.21 AS builder
+
+# Switch to root for build operations
+USER root
+
+WORKDIR /build
+
+# Copy go mod files
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build agent binary
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o agent ./cmd/agent
+
+# Runtime stage - Red Hat UBI9 Minimal
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+# Install ca-certificates for HTTPS connections (required for Gemini API)
+RUN microdnf install -y ca-certificates && \
+    microdnf clean all
+
+WORKDIR /app
+
+# Copy binary from builder
+COPY --from=builder /build/agent .
+
+# Create non-root user
+RUN useradd -u 1000 -r -s /sbin/nologin kkbase
+
+# Set ownership and permissions
+RUN chown -R kkbase:kkbase /app && \
+    chmod +x /app/agent
+
+# Switch to non-root user
+USER 1000
+
+# Expose HTTP port for webhooks and health checks
+EXPOSE 8082
+
+ENTRYPOINT ["./agent"]
+

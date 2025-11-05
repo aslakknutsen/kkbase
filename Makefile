@@ -1,13 +1,14 @@
-.PHONY: build build-watcher build-mcp-server build-frontend all run run-mcp-server test clean clean-frontend \
-	docker-build-all docker-build-watcher docker-build-mcp-server \
-	docker-build-fast docker-build-watcher-fast docker-build-mcp-server-fast \
-	docker-push-all docker-push-watcher docker-push-mcp-server \
+.PHONY: build build-watcher build-mcp-server build-agent build-frontend all run run-mcp-server test clean clean-frontend \
+	docker-build-all docker-build-watcher docker-build-mcp-server docker-build-agent \
+	docker-build-fast docker-build-watcher-fast docker-build-mcp-server-fast docker-build-agent-fast \
+	docker-push-all docker-push-watcher docker-push-mcp-server docker-push-agent \
 	docker-release docker-release-fast \
 	deploy deploy-mcp-standalone deploy-integrated deploy-all undeploy fmt vet deps logs help
 
 # Variables
 BINARY_NAME=watcher
 MCP_BINARY_NAME=mcp-server
+AGENT_BINARY_NAME=agent
 DOCKER_REGISTRY=quay.io/aslakknutsen
 DOCKER_TAG=latest
 FRONTEND_DIR=frontend
@@ -15,9 +16,10 @@ FRONTEND_DIR=frontend
 # Docker image names
 WATCHER_IMAGE=$(DOCKER_REGISTRY)/kkbase-watcher
 MCP_SERVER_IMAGE=$(DOCKER_REGISTRY)/kkbase-mcp-server
+AGENT_IMAGE=$(DOCKER_REGISTRY)/kkbase-agent
 
 # Build all binaries (includes frontend)
-all: build-watcher build-mcp-server
+all: build-watcher build-mcp-server build-agent
 
 # Build the watcher application
 build: build-watcher
@@ -32,6 +34,10 @@ build-mcp-server: build-frontend
 	mkdir -p cmd/mcp-server/frontend
 	cp -r $(FRONTEND_DIR)/dist cmd/mcp-server/frontend/
 	go build -o $(MCP_BINARY_NAME) ./cmd/mcp-server
+
+# Build the agent application
+build-agent:
+	go build -o $(AGENT_BINARY_NAME) ./cmd/agent
 
 # Build the frontend
 build-frontend:
@@ -52,7 +58,7 @@ test:
 
 # Clean build artifacts
 clean: clean-frontend
-	rm -f $(BINARY_NAME) $(MCP_BINARY_NAME)
+	rm -f $(BINARY_NAME) $(MCP_BINARY_NAME) $(AGENT_BINARY_NAME)
 	rm -rf cmd/mcp-server/frontend
 	go clean
 
@@ -62,7 +68,7 @@ clean-frontend:
 	rm -rf $(FRONTEND_DIR)/node_modules
 
 # Docker: Build all images (full rebuild in container)
-docker-build-all: docker-build-watcher docker-build-mcp-server
+docker-build-all: docker-build-watcher docker-build-mcp-server docker-build-agent
 
 # Docker: Build watcher image (full rebuild)
 docker-build-watcher:
@@ -74,8 +80,13 @@ docker-build-mcp-server:
 	@echo "Building MCP server image (full rebuild)..."
 	docker build -f Dockerfile.mcp-server -t $(MCP_SERVER_IMAGE):$(DOCKER_TAG) .
 
+# Docker: Build agent image (full rebuild)
+docker-build-agent:
+	@echo "Building agent image (full rebuild)..."
+	docker build -f Dockerfile.agent -t $(AGENT_IMAGE):$(DOCKER_TAG) .
+
 # Docker: Fast build - uses pre-built binaries (LOCAL DEV ONLY)
-docker-build-fast: docker-build-watcher-fast docker-build-mcp-server-fast
+docker-build-fast: docker-build-watcher-fast docker-build-mcp-server-fast docker-build-agent-fast
 
 # Docker: Fast build watcher (uses pre-built binary)
 docker-build-watcher-fast: build-watcher
@@ -87,8 +98,13 @@ docker-build-mcp-server-fast: build-mcp-server
 	@echo "Building MCP server image (fast - using pre-built binary)..."
 	docker build -f Dockerfile.mcp-server.fast -t $(MCP_SERVER_IMAGE):$(DOCKER_TAG) .
 
+# Docker: Fast build agent (uses pre-built binary)
+docker-build-agent-fast: build-agent
+	@echo "Building agent image (fast - using pre-built binary)..."
+	docker build -f Dockerfile.agent.fast -t $(AGENT_IMAGE):$(DOCKER_TAG) .
+
 # Docker: Push all images
-docker-push-all: docker-push-watcher docker-push-mcp-server
+docker-push-all: docker-push-watcher docker-push-mcp-server docker-push-agent
 
 # Docker: Push watcher image
 docker-push-watcher:
@@ -99,6 +115,11 @@ docker-push-watcher:
 docker-push-mcp-server:
 	@echo "Pushing MCP server image..."
 	docker push $(MCP_SERVER_IMAGE):$(DOCKER_TAG)
+
+# Docker: Push agent image
+docker-push-agent:
+	@echo "Pushing agent image..."
+	docker push $(AGENT_IMAGE):$(DOCKER_TAG)
 
 # Docker: Build and push all (full rebuild)
 docker-release: docker-build-all docker-push-all
@@ -174,10 +195,11 @@ help:
 	@echo "Available targets:"
 	@echo ""
 	@echo "Build:"
-	@echo "  all                        - Build all binaries (watcher + mcp-server)"
+	@echo "  all                        - Build all binaries (watcher + mcp-server + agent)"
 	@echo "  build                      - Build the watcher binary (default)"
 	@echo "  build-watcher              - Build the watcher binary"
 	@echo "  build-mcp-server           - Build the MCP server binary (includes frontend)"
+	@echo "  build-agent                - Build the agent binary"
 	@echo "  build-frontend             - Build the React frontend only"
 	@echo ""
 	@echo "Run Locally:"
@@ -193,19 +215,22 @@ help:
 	@echo "  deps                       - Download and tidy dependencies"
 	@echo ""
 	@echo "Docker (Full Build - for CI/CD):"
-	@echo "  docker-build-all           - Build both images (full rebuild in container)"
+	@echo "  docker-build-all           - Build all images (full rebuild in container)"
 	@echo "  docker-build-watcher       - Build watcher image (full rebuild)"
 	@echo "  docker-build-mcp-server    - Build MCP server image (full rebuild)"
+	@echo "  docker-build-agent         - Build agent image (full rebuild)"
 	@echo ""
 	@echo "Docker (Fast Build - for local dev):"
-	@echo "  docker-build-fast          - Build both images using pre-built binaries"
+	@echo "  docker-build-fast          - Build all images using pre-built binaries"
 	@echo "  docker-build-watcher-fast  - Build watcher image using pre-built binary"
 	@echo "  docker-build-mcp-server-fast - Build MCP server using pre-built binary"
+	@echo "  docker-build-agent-fast    - Build agent image using pre-built binary"
 	@echo ""
 	@echo "Docker (Push):"
-	@echo "  docker-push-all            - Push both images to registry"
+	@echo "  docker-push-all            - Push all images to registry"
 	@echo "  docker-push-watcher        - Push watcher image"
 	@echo "  docker-push-mcp-server     - Push MCP server image"
+	@echo "  docker-push-agent          - Push agent image"
 	@echo ""
 	@echo "Docker (Combined):"
 	@echo "  docker-release             - Build (full) and push all images"
@@ -214,7 +239,7 @@ help:
 	@echo "Kubernetes Deployment:"
 	@echo "  deploy                     - Deploy watcher only"
 	@echo "  deploy-mcp-standalone      - Deploy standalone MCP server"
-	@echo "  deploy-integrated          - Deploy watcher + MCP integrated (RECOMMENDED)"
+	@echo "  deploy-integrated          - Deploy watcher + MCP + agent integrated (RECOMMENDED)"
 	@echo "  deploy-all                 - Deploy watcher + standalone MCP"
 	@echo "  undeploy                   - Remove all deployments"
 	@echo "  logs                       - Show application logs"

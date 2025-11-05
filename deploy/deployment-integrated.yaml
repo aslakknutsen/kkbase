@@ -1,5 +1,5 @@
 ---
-# Integrated Deployment: Watcher + MCP Server in one pod (2 containers)
+# Integrated Deployment: Watcher + MCP Server + Agent in one pod (3 containers)
 # Recommended deployment for production
 apiVersion: apps/v1
 kind: Deployment
@@ -43,7 +43,7 @@ spec:
           image: quay.io/aslakknutsen/kkbase-mcp-server:latest
           imagePullPolicy: Always
           ports:
-            - name: http
+            - name: http-mcp
               containerPort: 8081
               protocol: TCP
           envFrom:
@@ -68,6 +68,43 @@ spec:
             httpGet:
               path: /ready
               port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 5
+        
+        # Container 3: Agent (Autonomous Investigation with Gemini LLM)
+        - name: agent
+          image: quay.io/aslakknutsen/kkbase-agent:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http-agent
+              containerPort: 8082
+              protocol: TCP
+          env:
+            # Agent connects to MCP server on localhost since they're in the same pod
+            - name: AGENT_MCP_SERVER_URL
+              value: "http://localhost:8081/mcp"
+          envFrom:
+            - configMapRef:
+                name: kkbase-watcher-config
+            - secretRef:
+                name: kkbase-watcher-secret
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8082
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8082
             initialDelaySeconds: 5
             periodSeconds: 5
 

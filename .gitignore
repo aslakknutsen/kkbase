@@ -1,4 +1,5 @@
 # Binaries
+/agent
 /watcher
 /mcp-server
 *.exe
@@ -33,4 +34,4 @@ Thumbs.db
 *.key
 *.pem
 .env
-
+deploy/secret.yaml

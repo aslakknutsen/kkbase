@@ -43,6 +43,23 @@ type Config struct {
 
 	// Agent session configuration
 	CompletedSessionRetentionMinutes int
+
+	// Agent configuration
+	AgentEnabled      bool
+	AgentPort         int
+	AgentWorkers      int
+	AgentMCPServerURL string
+
+	// LLM configuration
+	LLMProvider    string
+	LLMAPIKey      string
+	LLMModel       string
+	LLMTemperature float32
+	LLMMaxTokens   int
+
+	// Event filtering
+	EventFilterAllowlist []string
+	EventFilterDenylist  []string
 }
 
 // LoadFromEnv loads configuration from environment variables
@@ -69,6 +86,23 @@ func LoadFromEnv() (*Config, error) {
 		MCPEnabled: getBoolEnv("MCP_ENABLED", false),
 
 		CompletedSessionRetentionMinutes: getIntEnv("COMPLETED_SESSION_RETENTION_MINUTES", 1440),
+
+		// Agent configuration
+		AgentEnabled:      getBoolEnv("AGENT_ENABLED", true),
+		AgentPort:         getIntEnv("AGENT_PORT", 8082),
+		AgentWorkers:      getIntEnv("AGENT_WORKERS", 1),
+		AgentMCPServerURL: getEnv("AGENT_MCP_SERVER_URL", "http://localhost:8081/mcp"),
+
+		// LLM configuration
+		LLMProvider:    getEnv("LLM_PROVIDER", "gemini"),
+		LLMAPIKey:      getEnv("LLM_API_KEY", ""),
+		LLMModel:       getEnv("LLM_MODEL", "gemini-2.0-flash-exp"),
+		LLMTemperature: getFloat32Env("LLM_TEMPERATURE", 0.2),
+		LLMMaxTokens:   getIntEnv("LLM_MAX_TOKENS", 2048),
+
+		// Event filtering
+		EventFilterAllowlist: getStringSliceEnv("EVENT_FILTER_ALLOWLIST", []string{}),
+		EventFilterDenylist:  getStringSliceEnv("EVENT_FILTER_DENYLIST", []string{}),
 	}
 
 	// Parse resync period
@@ -141,4 +175,74 @@ func getIntEnv(key string, defaultValue int) int {
 		return intValue
 	}
 	return defaultValue
+}
+
+// getFloat32Env gets a float32 environment variable with a default value
+func getFloat32Env(key string, defaultValue float32) float32 {
+	if value := os.Getenv(key); value != "" {
+		floatValue, err := strconv.ParseFloat(value, 32)
+		if err != nil {
+			return defaultValue
+		}
+		return float32(floatValue)
+	}
+	return defaultValue
+}
+
+// getStringSliceEnv gets a comma-separated string environment variable as a slice
+func getStringSliceEnv(key string, defaultValue []string) []string {
+	if value := os.Getenv(key); value != "" {
+		// Split by comma and trim spaces
+		parts := []string{}
+		for _, part := range splitAndTrim(value, ",") {
+			if part != "" {
+				parts = append(parts, part)
+			}
+		}
+		if len(parts) > 0 {
+			return parts
+		}
+	}
+	return defaultValue
+}
+
+// splitAndTrim splits a string by separator and trims spaces from each part
+func splitAndTrim(s, sep string) []string {
+	parts := []string{}
+	for _, part := range splitString(s, sep) {
+		trimmed := trimSpace(part)
+		parts = append(parts, trimmed)
+	}
+	return parts
+}
+
+// splitString splits a string by separator
+func splitString(s, sep string) []string {
+	if s == "" {
+		return []string{}
+	}
+	result := []string{}
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if i+len(sep) <= len(s) && s[i:i+len(sep)] == sep {
+			result = append(result, s[start:i])
+			start = i + len(sep)
+			i += len(sep) - 1
+		}
+	}
+	result = append(result, s[start:])
+	return result
+}
+
+// trimSpace removes leading and trailing whitespace
+func trimSpace(s string) string {
+	start := 0
+	end := len(s)
+	for start < end && (s[start] == ' ' || s[start] == '\t' || s[start] == '\n' || s[start] == '\r') {
+		start++
+	}
+	for end > start && (s[end-1] == ' ' || s[end-1] == '\t' || s[end-1] == '\n' || s[end-1] == '\r') {
+		end--
+	}
+	return s[start:end]
 }
