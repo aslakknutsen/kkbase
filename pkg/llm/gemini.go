@@ -9,16 +9,18 @@ import (
 	"github.com/kagenti/kkbase/pkg/agenttypes"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
+	"golang.org/x/time/rate"
 	"google.golang.org/genai"
 )
 
 // GeminiClient implements the Client interface using Google Gemini
 type GeminiClient struct {
-	client    *genai.Client
-	model     string
-	config    Config
-	mcpClient *agentmcp.Client
-	logger    *zap.Logger
+	client      *genai.Client
+	model       string
+	config      Config
+	mcpClient   *agentmcp.Client
+	logger      *zap.Logger
+	rateLimiter *rate.Limiter
 }
 
 // NewGeminiClient creates a new Gemini LLM client
@@ -36,16 +38,33 @@ func NewGeminiClient(config Config, mcpClient *agentmcp.Client, logger *zap.Logg
 		config.Model = "gemini-2.0-flash-exp"
 	}
 
+	// Create rate limiter if configured
+	var rateLimiter *rate.Limiter
+	if config.RateLimitRPS > 0 {
+		burst := config.RateLimitBurst
+		if burst < 1 {
+			burst = 1
+		}
+		rateLimiter = rate.NewLimiter(rate.Limit(config.RateLimitRPS), burst)
+		logger.Info("rate limiter enabled",
+			zap.Float64("rps", config.RateLimitRPS),
+			zap.Int("burst", burst),
+			zap.Float64("rpm_approx", config.RateLimitRPS*60))
+	} else {
+		logger.Warn("rate limiter disabled - may hit API quota limits")
+	}
+
 	logger.Info("created Gemini client",
 		zap.String("model", config.Model),
 		zap.Float32("temperature", config.Temperature))
 
 	return &GeminiClient{
-		client:    client,
-		model:     config.Model,
-		config:    config,
-		mcpClient: mcpClient,
-		logger:    logger,
+		client:      client,
+		model:       config.Model,
+		config:      config,
+		mcpClient:   mcpClient,
+		logger:      logger,
+		rateLimiter: rateLimiter,
 	}, nil
 }
 
@@ -443,6 +462,20 @@ func (c *GeminiClient) runAgenticLoop(ctx context.Context, tools []*genai.Tool, 
 			MaxOutputTokens:   int32(c.config.MaxTokens),
 			Tools:             tools,
 			SystemInstruction: systemInstruction,
+		}
+
+		// Apply rate limiting before API call
+		if c.rateLimiter != nil {
+			waitStart := time.Now()
+			if err := c.rateLimiter.Wait(ctx); err != nil {
+				return nil, fmt.Errorf("rate limiter cancelled: %w", err)
+			}
+			waitDuration := time.Since(waitStart)
+			if waitDuration > 100*time.Millisecond {
+				c.logger.Info("rate limited - waiting for quota",
+					zap.Duration("wait_duration", waitDuration),
+					zap.Int("iteration", i+1))
+			}
 		}
 
 		resp, err := c.client.Models.GenerateContent(ctx, c.model, messages, generateConfig)

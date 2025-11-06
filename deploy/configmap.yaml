@@ -47,6 +47,12 @@ data:
   LLM_MAX_TOKENS: "2048"
   LLM_MAX_ITERATIONS: "30"  # Maximum agent loop iterations per investigation
   
+  # LLM rate limiting - prevent hitting API quota limits
+  # Gemini free tier: 10 requests per minute
+  # Using 0.15 RPS = 9 req/min for safety margin
+  LLM_RATE_LIMIT_RPS: "0.15"     # Requests per second (9 per minute)
+  LLM_RATE_LIMIT_BURST: "2"      # Allow up to 2 burst requests
+  
   # Event filtering - configure which K8s event reasons to process
   # Empty means process all events that pass severity filter
   EVENT_FILTER_ALLOWLIST: ""

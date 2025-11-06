@@ -13,6 +13,10 @@ type Config struct {
 	Temperature   float32
 	MaxTokens     int
 	MaxIterations int
+
+	// Rate limiting
+	RateLimitRPS   float64 // Requests per second
+	RateLimitBurst int     // Burst capacity
 }
 
 // NewGeminiClientFromConfig creates a Gemini client from config

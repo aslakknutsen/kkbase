@@ -79,12 +79,14 @@ func run() error {
 		zap.String("model", cfg.LLMModel))
 	geminiClient, err := llm.NewGeminiClientFromConfig(
 		llm.Config{
-			Provider:      cfg.LLMProvider,
-			APIKey:        cfg.LLMAPIKey,
-			Model:         cfg.LLMModel,
-			Temperature:   cfg.LLMTemperature,
-			MaxTokens:     cfg.LLMMaxTokens,
-			MaxIterations: cfg.LLMMaxIterations,
+			Provider:       cfg.LLMProvider,
+			APIKey:         cfg.LLMAPIKey,
+			Model:          cfg.LLMModel,
+			Temperature:    cfg.LLMTemperature,
+			MaxTokens:      cfg.LLMMaxTokens,
+			MaxIterations:  cfg.LLMMaxIterations,
+			RateLimitRPS:   cfg.LLMRateLimitRPS,
+			RateLimitBurst: cfg.LLMRateLimitBurst,
 		},
 		mcpClient,
 		logger,

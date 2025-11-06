@@ -58,6 +58,10 @@ type Config struct {
 	LLMMaxTokens     int
 	LLMMaxIterations int
 
+	// LLM rate limiting
+	LLMRateLimitRPS   float64 // Requests per second (e.g., 0.15 for 9 per minute)
+	LLMRateLimitBurst int     // Burst capacity
+
 	// Event filtering
 	EventFilterAllowlist []string
 	EventFilterDenylist  []string
@@ -106,6 +110,10 @@ func LoadFromEnv() (*Config, error) {
 		LLMTemperature:   getFloat32Env("LLM_TEMPERATURE", 0.2),
 		LLMMaxTokens:     getIntEnv("LLM_MAX_TOKENS", 2048),
 		LLMMaxIterations: getIntEnv("LLM_MAX_ITERATIONS", 30),
+
+		// LLM rate limiting (default to Gemini free tier: 9 req/min with safety margin)
+		LLMRateLimitRPS:   getFloat64Env("LLM_RATE_LIMIT_RPS", 0.15),
+		LLMRateLimitBurst: getIntEnv("LLM_RATE_LIMIT_BURST", 2),
 
 		// Event filtering
 		EventFilterAllowlist: getStringSliceEnv("EVENT_FILTER_ALLOWLIST", []string{}),
@@ -257,4 +265,16 @@ func trimSpace(s string) string {
 		end--
 	}
 	return s[start:end]
+}
+
+// getFloat64Env gets a float64 environment variable with a default value
+func getFloat64Env(key string, defaultValue float64) float64 {
+	if value := os.Getenv(key); value != "" {
+		floatValue, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return defaultValue
+		}
+		return floatValue
+	}
+	return defaultValue
 }
