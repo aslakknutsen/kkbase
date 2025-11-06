@@ -183,7 +183,7 @@ func (w *CRDWatcher) handleCRDAdd(obj interface{}) {
 	w.availableCRDs[key] = crdInfo
 	w.availableMu.Unlock()
 
-	w.logger.Info("CRD became available",
+	w.logger.Debug("CRD became available",
 		zap.String("name", crd.Name),
 		zap.String("group", group),
 		zap.String("kind", kind),
