@@ -255,6 +255,153 @@ subjects:
 EOF
 ```
 
+### Step 3b: Deploy Istio (Optional - Service Mesh)
+
+Istio provides advanced traffic management, security, and observability for your Kubernetes cluster. kkbase automatically discovers and tracks Istio resources in the knowledge graph.
+
+#### Prerequisites
+
+- Kubernetes cluster with at least 4GB of memory available
+- kubectl configured to access your cluster
+
+#### Install Istio CLI (istioctl)
+
+```bash
+# Download and install istioctl
+curl -L https://istio.io/downloadIstio | sh -
+
+# Add istioctl to PATH (adjust version as needed)
+cd istio-*
+export PATH=$PWD/bin:$PATH
+
+# Verify installation
+istioctl version
+```
+
+#### Install Istio using istioctl (Recommended)
+
+```bash
+# Install Istio with the demo profile (good for testing)
+istioctl install --set profile=demo -y
+
+# For production, use the default profile:
+# istioctl install --set profile=default -y
+
+# Wait for Istio components to be ready
+kubectl wait --for=condition=available deployment \
+  -l app=istiod \
+  -n istio-system \
+  --timeout=300s
+```
+
+#### Alternative: Install Istio using Helm
+
+```bash
+# Add Istio Helm repository
+helm repo add istio https://istio-release.storage.googleapis.com/charts
+helm repo update
+
+# Create istio-system namespace
+kubectl create namespace istio-system
+
+# Install Istio base
+helm install istio-base istio/base -n istio-system
+
+# Install Istio discovery (istiod)
+helm install istiod istio/istiod -n istio-system --wait
+
+# Optional: Install Istio ingress gateway
+helm install istio-ingress istio/gateway -n istio-system --wait
+```
+
+#### Verify Istio Installation
+
+```bash
+# Check Istio components
+kubectl get pods -n istio-system
+
+# You should see:
+# - istiod (Istio control plane)
+# - istio-ingressgateway (if using demo profile)
+# - istio-egressgateway (if using demo profile)
+
+# Verify with istioctl
+istioctl verify-install
+```
+
+#### Enable Automatic Sidecar Injection
+
+Label namespaces where you want Istio to automatically inject sidecar proxies:
+
+```bash
+# Enable sidecar injection for default namespace
+kubectl label namespace default istio-injection=enabled
+
+# Verify the label
+kubectl get namespace -L istio-injection
+
+# Restart existing deployments to inject sidecars
+kubectl rollout restart deployment/kkbase-watcher
+```
+
+#### Verify kkbase Tracks Istio Resources
+
+Once Istio is installed, kkbase will automatically discover and track Istio CRDs:
+
+```bash
+# Check logs for Istio resource registration
+kubectl logs deployment/kkbase-watcher | grep -i istio
+
+# You should see watchers registered for:
+# - VirtualService
+# - DestinationRule
+# - Gateway
+# - ServiceEntry
+# - EnvoyFilter
+# - PeerAuthentication
+# - RequestAuthentication
+# - AuthorizationPolicy
+```
+
+#### Query Istio Resources in Neo4j
+
+Once Istio resources are tracked, you can query them:
+
+```cypher
+// Find all VirtualServices
+MATCH (vs:VirtualService)
+RETURN vs.namespace, vs.name, vs.hosts
+
+// Find Gateways and their VirtualServices
+MATCH (g:Gateway)<-[:USES_GATEWAY]-(vs:VirtualService)
+RETURN g.name, collect(vs.name) as virtualservices
+
+// Find DestinationRules for a Service
+MATCH (s:Service)<-[:APPLIES_TO]-(dr:DestinationRule)
+RETURN s.name, dr.name, dr.trafficPolicy
+```
+
+#### Uninstall Istio
+
+If you need to remove Istio:
+
+```bash
+# Using istioctl
+istioctl uninstall --purge -y
+
+# Remove namespace label
+kubectl label namespace default istio-injection-
+
+# Clean up namespace
+kubectl delete namespace istio-system
+
+# Using Helm (if installed via Helm)
+helm uninstall istio-ingress -n istio-system
+helm uninstall istiod -n istio-system
+helm uninstall istio-base -n istio-system
+kubectl delete namespace istio-system
+```
+
 ### Step 4: Verify
 
 ```bash
@@ -459,12 +606,13 @@ data:
 ## Next Steps
 
 1. **Enable Metrics**: Deploy Prometheus (see Step 3a) to enable RCA investigation tools
-2. **Use MCP Tools**: Try the [Investigation Tools](./investigation-tools.md) for AI-powered RCA
-3. **Visualize**: Use Neo4j Bloom for visual graph exploration
-4. **Query**: Write custom Cypher queries for your use cases - see [Metrics RCA Queries](../reference/metrics-rca-queries.md)
-5. **Integrate**: Use Neo4j drivers to query from your apps
-6. **Extend**: Add custom resource handlers for CRDs
-7. **Monitor**: Add Grafana dashboards for visualization
+2. **Enable Service Mesh**: Deploy Istio (see Step 3b) to add traffic management and observability
+3. **Use MCP Tools**: Try the [Investigation Tools](./investigation-tools.md) for AI-powered RCA
+4. **Visualize**: Use Neo4j Bloom for visual graph exploration
+5. **Query**: Write custom Cypher queries for your use cases - see [Metrics RCA Queries](../reference/metrics-rca-queries.md)
+6. **Integrate**: Use Neo4j drivers to query from your apps
+7. **Extend**: Add custom resource handlers for CRDs
+8. **Monitor**: Add Grafana dashboards for visualization
 
 ## Clean Up
 
@@ -479,6 +627,10 @@ helm uninstall neo4j
 helm uninstall prometheus -n monitoring
 # Or for minimal deployment:
 kubectl delete namespace monitoring
+
+# Remove Istio (if installed)
+istioctl uninstall --purge -y
+kubectl delete namespace istio-system
 ```
 
 ## Resources
@@ -486,6 +638,7 @@ kubectl delete namespace monitoring
 - **Neo4j Cypher Manual**: https://neo4j.com/docs/cypher-manual/
 - **Kubernetes API**: https://kubernetes.io/docs/reference/kubernetes-api/
 - **Prometheus Docs**: https://prometheus.io/docs/
+- **Istio Documentation**: https://istio.io/latest/docs/
 - **Documentation**: See [Documentation Index](../README.md)
 - **Query Reference**: See [Cypher Queries](../reference/cypher-queries.md)
 - **Investigation Tools**: See [Investigation Tools Guide](./investigation-tools.md)
