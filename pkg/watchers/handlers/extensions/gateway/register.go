@@ -6,11 +6,13 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
+	"k8s.io/client-go/kubernetes"
 )
 
 // RegisterGatewayAPIHandlers registers Gateway API resource handlers with dynamic CRD detection
 func RegisterGatewayAPIHandlers(
 	manager *watchers.Manager,
+	clientset *kubernetes.Clientset,
 	dynamicClient dynamic.Interface,
 	factory dynamicinformer.DynamicSharedInformerFactory,
 	graphStore graph.GraphStore,
@@ -27,7 +29,7 @@ func RegisterGatewayAPIHandlers(
 			ClusterScoped: true,
 		},
 		func() watchers.ResourceWatcher {
-			return NewGatewayClassHandler(dynamicClient, graphStore, logger, factory)
+			return NewGatewayClassHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
 
@@ -40,7 +42,7 @@ func RegisterGatewayAPIHandlers(
 			ClusterScoped: false,
 		},
 		func() watchers.ResourceWatcher {
-			return NewGatewayHandler(dynamicClient, graphStore, logger, factory)
+			return NewGatewayHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
 
@@ -53,7 +55,7 @@ func RegisterGatewayAPIHandlers(
 			ClusterScoped: false,
 		},
 		func() watchers.ResourceWatcher {
-			return NewHTTPRouteHandler(dynamicClient, graphStore, logger, factory)
+			return NewHTTPRouteHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
 
@@ -66,7 +68,7 @@ func RegisterGatewayAPIHandlers(
 			ClusterScoped: false,
 		},
 		func() watchers.ResourceWatcher {
-			return NewGRPCRouteHandler(dynamicClient, graphStore, logger, factory)
+			return NewGRPCRouteHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
 
@@ -79,7 +81,7 @@ func RegisterGatewayAPIHandlers(
 			ClusterScoped: false,
 		},
 		func() watchers.ResourceWatcher {
-			return NewTCPRouteHandler(dynamicClient, graphStore, logger, factory)
+			return NewTCPRouteHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
 
@@ -92,7 +94,7 @@ func RegisterGatewayAPIHandlers(
 			ClusterScoped: false,
 		},
 		func() watchers.ResourceWatcher {
-			return NewUDPRouteHandler(dynamicClient, graphStore, logger, factory)
+			return NewUDPRouteHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
 
@@ -105,7 +107,7 @@ func RegisterGatewayAPIHandlers(
 			ClusterScoped: false,
 		},
 		func() watchers.ResourceWatcher {
-			return NewTLSRouteHandler(dynamicClient, graphStore, logger, factory)
+			return NewTLSRouteHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
 
@@ -118,7 +120,7 @@ func RegisterGatewayAPIHandlers(
 			ClusterScoped: false,
 		},
 		func() watchers.ResourceWatcher {
-			return NewReferenceGrantHandler(dynamicClient, graphStore, logger, factory)
+			return NewReferenceGrantHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
 
@@ -131,7 +133,7 @@ func RegisterGatewayAPIHandlers(
 			ClusterScoped: false,
 		},
 		func() watchers.ResourceWatcher {
-			return NewBackendTLSPolicyHandler(dynamicClient, graphStore, logger, factory)
+			return NewBackendTLSPolicyHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
 

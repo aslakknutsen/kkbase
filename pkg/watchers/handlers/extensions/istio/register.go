@@ -6,11 +6,13 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
+	"k8s.io/client-go/kubernetes"
 )
 
 // RegisterIstioHandlers registers Istio resource handlers with dynamic CRD detection
 func RegisterIstioHandlers(
 	manager *watchers.Manager,
+	clientset *kubernetes.Clientset,
 	dynamicClient dynamic.Interface,
 	factory dynamicinformer.DynamicSharedInformerFactory,
 	graphStore graph.GraphStore,
@@ -27,7 +29,7 @@ func RegisterIstioHandlers(
 			ClusterScoped: false,
 		},
 		func() watchers.ResourceWatcher {
-			return NewIstioGatewayHandler(nil, dynamicClient, graphStore, logger, factory)
+			return NewIstioGatewayHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
 
@@ -40,7 +42,7 @@ func RegisterIstioHandlers(
 			ClusterScoped: false,
 		},
 		func() watchers.ResourceWatcher {
-			return NewVirtualServiceHandler(nil, dynamicClient, graphStore, logger, factory)
+			return NewVirtualServiceHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
 
@@ -53,7 +55,7 @@ func RegisterIstioHandlers(
 			ClusterScoped: false,
 		},
 		func() watchers.ResourceWatcher {
-			return NewDestinationRuleHandler(nil, dynamicClient, graphStore, logger, factory)
+			return NewDestinationRuleHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
 
@@ -66,7 +68,7 @@ func RegisterIstioHandlers(
 			ClusterScoped: false,
 		},
 		func() watchers.ResourceWatcher {
-			return NewServiceEntryHandler(nil, dynamicClient, graphStore, logger, factory)
+			return NewServiceEntryHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
 
@@ -79,7 +81,7 @@ func RegisterIstioHandlers(
 			ClusterScoped: false,
 		},
 		func() watchers.ResourceWatcher {
-			return NewSidecarHandler(nil, dynamicClient, graphStore, logger, factory)
+			return NewSidecarHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
 
@@ -92,7 +94,7 @@ func RegisterIstioHandlers(
 			ClusterScoped: false,
 		},
 		func() watchers.ResourceWatcher {
-			return NewAuthorizationPolicyHandler(nil, dynamicClient, graphStore, logger, factory)
+			return NewAuthorizationPolicyHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
 
@@ -105,7 +107,7 @@ func RegisterIstioHandlers(
 			ClusterScoped: false,
 		},
 		func() watchers.ResourceWatcher {
-			return NewPeerAuthenticationHandler(nil, dynamicClient, graphStore, logger, factory)
+			return NewPeerAuthenticationHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
 
@@ -118,7 +120,7 @@ func RegisterIstioHandlers(
 			ClusterScoped: false,
 		},
 		func() watchers.ResourceWatcher {
-			return NewRequestAuthenticationHandler(nil, dynamicClient, graphStore, logger, factory)
+			return NewRequestAuthenticationHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
 

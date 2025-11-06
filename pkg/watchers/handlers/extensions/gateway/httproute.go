@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -22,18 +23,19 @@ type HTTPRouteHandler struct {
 
 // NewHTTPRouteHandler creates a new HTTPRoute handler
 func NewHTTPRouteHandler(
+	clientset *kubernetes.Clientset,
 	dynamicClient dynamic.Interface,
 	graphStore graph.GraphStore,
 	logger *zap.Logger,
-
 	factory dynamicinformer.DynamicSharedInformerFactory,
 ) *HTTPRouteHandler {
 	gvr := gatewayv1.SchemeGroupVersion.WithResource("httproutes")
 	informer := factory.ForResource(gvr).Informer()
 
 	handler := &HTTPRouteHandler{
-		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
-		dynamicClient: dynamicClient, relationshipBuilder: NewRelationshipBuilder(nil, graphStore, logger),
+		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
+		dynamicClient:       dynamicClient,
+		relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{

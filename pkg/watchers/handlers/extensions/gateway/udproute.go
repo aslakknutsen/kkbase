@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 )
@@ -22,18 +23,19 @@ type UDPRouteHandler struct {
 
 // NewUDPRouteHandler creates a new UDPRoute handler
 func NewUDPRouteHandler(
+	clientset *kubernetes.Clientset,
 	dynamicClient dynamic.Interface,
 	graphStore graph.GraphStore,
 	logger *zap.Logger,
-
 	factory dynamicinformer.DynamicSharedInformerFactory,
 ) *UDPRouteHandler {
 	gvr := gatewayv1alpha2.SchemeGroupVersion.WithResource("udproutes")
 	informer := factory.ForResource(gvr).Informer()
 
 	handler := &UDPRouteHandler{
-		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
-		dynamicClient: dynamicClient, relationshipBuilder: NewRelationshipBuilder(nil, graphStore, logger),
+		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
+		dynamicClient:       dynamicClient,
+		relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{

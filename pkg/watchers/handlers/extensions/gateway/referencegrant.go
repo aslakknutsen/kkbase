@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	gatewayv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 )
@@ -22,18 +23,19 @@ type ReferenceGrantHandler struct {
 
 // NewReferenceGrantHandler creates a new ReferenceGrant handler
 func NewReferenceGrantHandler(
+	clientset *kubernetes.Clientset,
 	dynamicClient dynamic.Interface,
 	graphStore graph.GraphStore,
 	logger *zap.Logger,
-
 	factory dynamicinformer.DynamicSharedInformerFactory,
 ) *ReferenceGrantHandler {
 	gvr := gatewayv1beta1.SchemeGroupVersion.WithResource("referencegrants")
 	informer := factory.ForResource(gvr).Informer()
 
 	handler := &ReferenceGrantHandler{
-		BaseWatcher:   watchers.NewBaseWatcher(graphStore, logger, informer),
-		dynamicClient: dynamicClient, relationshipBuilder: NewRelationshipBuilder(nil, graphStore, logger),
+		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
+		dynamicClient:       dynamicClient,
+		relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{

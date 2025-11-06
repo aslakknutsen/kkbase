@@ -128,10 +128,10 @@ func run() error {
 	core.RegisterCoreHandlers(watcherManager, clientset, factory, graphStore, logger)
 
 	// Register Gateway API handlers (dynamic registration via CRD watcher)
-	gateway.RegisterGatewayAPIHandlers(watcherManager, dynamicClient, factory, graphStore, logger)
+	gateway.RegisterGatewayAPIHandlers(watcherManager, clientset, dynamicClient, factory, graphStore, logger)
 
 	// Register Istio handlers (dynamic registration via CRD watcher)
-	istio.RegisterIstioHandlers(watcherManager, dynamicClient, factory, graphStore, logger)
+	istio.RegisterIstioHandlers(watcherManager, clientset, dynamicClient, factory, graphStore, logger)
 
 	logger.Info("handler registration complete")
 

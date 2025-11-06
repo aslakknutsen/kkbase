@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -24,6 +25,7 @@ type BackendTLSPolicyHandler struct {
 
 // NewBackendTLSPolicyHandler creates a new BackendTLSPolicy handler
 func NewBackendTLSPolicyHandler(
+	clientset *kubernetes.Clientset,
 	dynamicClient dynamic.Interface,
 	graphStore graph.GraphStore,
 	logger *zap.Logger,
@@ -35,7 +37,7 @@ func NewBackendTLSPolicyHandler(
 	handler := &BackendTLSPolicyHandler{
 		BaseWatcher:         watchers.NewBaseWatcher(graphStore, logger, informer),
 		dynamicClient:       dynamicClient,
-		relationshipBuilder: NewRelationshipBuilder(nil, graphStore, logger),
+		relationshipBuilder: NewRelationshipBuilder(clientset, graphStore, logger),
 	}
 
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
