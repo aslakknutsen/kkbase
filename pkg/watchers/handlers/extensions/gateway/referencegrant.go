@@ -127,7 +127,7 @@ func (h *ReferenceGrantHandler) HandleUpdate(oldObj, newObj interface{}) {
 	)
 
 	ctx := context.Background()
-	referenceGrantID := models.GetNodeID("ReferenceGrant", referenceGrant.Namespace, referenceGrant.Name)
+	referenceGrantID := models.GetNodeID(NodeTypeReferenceGrant, referenceGrant.Namespace, referenceGrant.Name)
 
 	// Delete old edges
 	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeReferenceGrant), referenceGrantID); err != nil {
@@ -157,7 +157,7 @@ func (h *ReferenceGrantHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	referenceGrantID := models.GetNodeID("ReferenceGrant", referenceGrant.Namespace, referenceGrant.Name)
+	referenceGrantID := models.GetNodeID(NodeTypeReferenceGrant, referenceGrant.Namespace, referenceGrant.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeReferenceGrant), referenceGrantID); err != nil {
 		h.Logger.Error("failed to delete referencegrant node", zap.Error(err), zap.String("referencegrant", referenceGrant.Name))
 	}

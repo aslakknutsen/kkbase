@@ -105,7 +105,7 @@ func (h *RequestAuthenticationHandler) HandleUpdate(oldObj, newObj interface{}) 
 	)
 
 	ctx := context.Background()
-	raID := models.GetNodeID("RequestAuthentication", requestAuthentication.Namespace, requestAuthentication.Name)
+	raID := models.GetNodeID(NodeTypeRequestAuthentication, requestAuthentication.Namespace, requestAuthentication.Name)
 
 	// Delete old edges
 	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeRequestAuthentication), raID); err != nil {
@@ -131,7 +131,7 @@ func (h *RequestAuthenticationHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	raID := models.GetNodeID("RequestAuthentication", requestAuthentication.Namespace, requestAuthentication.Name)
+	raID := models.GetNodeID(NodeTypeRequestAuthentication, requestAuthentication.Namespace, requestAuthentication.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeRequestAuthentication), raID); err != nil {
 		h.Logger.Error("failed to delete requestauthentication node", zap.Error(err), zap.String("requestauthentication", requestAuthentication.Name))
 	}

@@ -110,7 +110,7 @@ func (h *PeerAuthenticationHandler) HandleUpdate(oldObj, newObj interface{}) {
 	)
 
 	ctx := context.Background()
-	paID := models.GetNodeID("PeerAuthentication", peerAuthentication.Namespace, peerAuthentication.Name)
+	paID := models.GetNodeID(NodeTypePeerAuthentication, peerAuthentication.Namespace, peerAuthentication.Name)
 
 	// Delete old edges
 	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypePeerAuthentication), paID); err != nil {
@@ -136,7 +136,7 @@ func (h *PeerAuthenticationHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	paID := models.GetNodeID("PeerAuthentication", peerAuthentication.Namespace, peerAuthentication.Name)
+	paID := models.GetNodeID(NodeTypePeerAuthentication, peerAuthentication.Namespace, peerAuthentication.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypePeerAuthentication), paID); err != nil {
 		h.Logger.Error("failed to delete peerauthentication node", zap.Error(err), zap.String("peerauthentication", peerAuthentication.Name))
 	}

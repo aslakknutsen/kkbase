@@ -103,7 +103,7 @@ func (h *StatefulSetHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	statefulSetID := models.GetNodeID("StatefulSet", statefulSet.Namespace, statefulSet.Name)
+	statefulSetID := models.GetNodeID(NodeTypeStatefulSet, statefulSet.Namespace, statefulSet.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeStatefulSet), statefulSetID); err != nil {
 		h.Logger.Error("failed to delete statefulset node", zap.Error(err), zap.String("statefulset", statefulSet.Name))
 	}

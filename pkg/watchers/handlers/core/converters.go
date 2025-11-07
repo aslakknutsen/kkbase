@@ -56,7 +56,7 @@ func NodeToGraphNode(node *corev1.Node) *models.GraphNode {
 		properties["labels"] = serializeMap(node.Labels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeNode), models.GetNodeID("Node", "", node.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeNode), models.GetNodeID(NodeTypeNode, "", node.Name), properties)
 }
 
 // PodToGraphNode converts a Kubernetes Pod to a graph node
@@ -117,7 +117,7 @@ func PodToGraphNode(pod *corev1.Pod) *models.GraphNode {
 		properties["owners"] = owners
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypePod), models.GetNodeID("Pod", pod.Namespace, pod.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypePod), models.GetNodeID(NodeTypePod, pod.Namespace, pod.Name), properties)
 }
 
 // ContainerToGraphNode converts a container spec to a graph node
@@ -181,7 +181,7 @@ func DeploymentToGraphNode(deployment *appsv1.Deployment) *models.GraphNode {
 		properties["selector"] = serializeMap(deployment.Spec.Selector.MatchLabels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeDeployment), models.GetNodeID("Deployment", deployment.Namespace, deployment.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeDeployment), models.GetNodeID(NodeTypeDeployment, deployment.Namespace, deployment.Name), properties)
 }
 
 // ReplicaSetToGraphNode converts a Kubernetes ReplicaSet to a graph node
@@ -211,7 +211,7 @@ func ReplicaSetToGraphNode(replicaSet *appsv1.ReplicaSet) *models.GraphNode {
 		properties["owners"] = owners
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeReplicaSet), models.GetNodeID("ReplicaSet", replicaSet.Namespace, replicaSet.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeReplicaSet), models.GetNodeID(NodeTypeReplicaSet, replicaSet.Namespace, replicaSet.Name), properties)
 }
 
 // StatefulSetToGraphNode converts a Kubernetes StatefulSet to a graph node
@@ -232,7 +232,7 @@ func StatefulSetToGraphNode(statefulSet *appsv1.StatefulSet) *models.GraphNode {
 		properties["selector"] = serializeMap(statefulSet.Spec.Selector.MatchLabels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeStatefulSet), models.GetNodeID("StatefulSet", statefulSet.Namespace, statefulSet.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeStatefulSet), models.GetNodeID(NodeTypeStatefulSet, statefulSet.Namespace, statefulSet.Name), properties)
 }
 
 // DaemonSetToGraphNode converts a Kubernetes DaemonSet to a graph node
@@ -254,7 +254,7 @@ func DaemonSetToGraphNode(daemonSet *appsv1.DaemonSet) *models.GraphNode {
 		properties["selector"] = serializeMap(daemonSet.Spec.Selector.MatchLabels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeDaemonSet), models.GetNodeID("DaemonSet", daemonSet.Namespace, daemonSet.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeDaemonSet), models.GetNodeID(NodeTypeDaemonSet, daemonSet.Namespace, daemonSet.Name), properties)
 }
 
 // ServiceToGraphNode converts a Kubernetes Service to a graph node
@@ -295,7 +295,7 @@ func ServiceToGraphNode(service *corev1.Service) *models.GraphNode {
 		properties["labels"] = serializeMap(service.Labels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeService), models.GetNodeID("Service", service.Namespace, service.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeService), models.GetNodeID(NodeTypeService, service.Namespace, service.Name), properties)
 }
 
 // IngressToGraphNode converts a Kubernetes Ingress to a graph node
@@ -319,7 +319,7 @@ func IngressToGraphNode(ingress *networkingv1.Ingress) *models.GraphNode {
 		properties["labels"] = serializeMap(ingress.Labels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeIngress), models.GetNodeID("Ingress", ingress.Namespace, ingress.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeIngress), models.GetNodeID(NodeTypeIngress, ingress.Namespace, ingress.Name), properties)
 }
 
 // NetworkPolicyToGraphNode converts a Kubernetes NetworkPolicy to a graph node
@@ -348,7 +348,7 @@ func NetworkPolicyToGraphNode(networkPolicy *networkingv1.NetworkPolicy) *models
 		properties["labels"] = serializeMap(networkPolicy.Labels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeNetworkPolicy), models.GetNodeID("NetworkPolicy", networkPolicy.Namespace, networkPolicy.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeNetworkPolicy), models.GetNodeID(NodeTypeNetworkPolicy, networkPolicy.Namespace, networkPolicy.Name), properties)
 }
 
 // PersistentVolumeToGraphNode converts a Kubernetes PersistentVolume to a graph node
@@ -382,7 +382,7 @@ func PersistentVolumeToGraphNode(pv *corev1.PersistentVolume) *models.GraphNode 
 		properties["labels"] = serializeMap(pv.Labels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypePersistentVolume), models.GetNodeID("PersistentVolume", "", pv.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypePersistentVolume), models.GetNodeID(NodeTypePersistentVolume, "", pv.Name), properties)
 }
 
 // PersistentVolumeClaimToGraphNode converts a Kubernetes PersistentVolumeClaim to a graph node
@@ -421,7 +421,7 @@ func PersistentVolumeClaimToGraphNode(pvc *corev1.PersistentVolumeClaim) *models
 		properties["labels"] = serializeMap(pvc.Labels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypePersistentVolumeClaim), models.GetNodeID("PersistentVolumeClaim", pvc.Namespace, pvc.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypePersistentVolumeClaim), models.GetNodeID(NodeTypePersistentVolumeClaim, pvc.Namespace, pvc.Name), properties)
 }
 
 // StorageClassToGraphNode converts a Kubernetes StorageClass to a graph node
@@ -444,7 +444,7 @@ func StorageClassToGraphNode(sc *storagev1.StorageClass) *models.GraphNode {
 		properties["labels"] = serializeMap(sc.Labels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeStorageClass), models.GetNodeID("StorageClass", "", sc.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeStorageClass), models.GetNodeID(NodeTypeStorageClass, "", sc.Name), properties)
 }
 
 // ConfigMapToGraphNode converts a Kubernetes ConfigMap to a graph node
@@ -467,7 +467,7 @@ func ConfigMapToGraphNode(cm *corev1.ConfigMap) *models.GraphNode {
 		properties["labels"] = serializeMap(cm.Labels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeConfigMap), models.GetNodeID("ConfigMap", cm.Namespace, cm.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeConfigMap), models.GetNodeID(NodeTypeConfigMap, cm.Namespace, cm.Name), properties)
 }
 
 // SecretToGraphNode converts a Kubernetes Secret to a graph node
@@ -491,7 +491,7 @@ func SecretToGraphNode(secret *corev1.Secret) *models.GraphNode {
 		properties["labels"] = serializeMap(secret.Labels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeSecret), models.GetNodeID("Secret", secret.Namespace, secret.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeSecret), models.GetNodeID(NodeTypeSecret, secret.Namespace, secret.Name), properties)
 }
 
 // EventToGraphNode converts a Kubernetes Event to a graph node
@@ -536,7 +536,7 @@ func NamespaceToGraphNode(namespace *corev1.Namespace) *models.GraphNode {
 		properties["labels"] = serializeMap(namespace.Labels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeNamespace), models.GetNodeID("Namespace", "", namespace.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeNamespace), models.GetNodeID(NodeTypeNamespace, "", namespace.Name), properties)
 }
 
 // getNodeStatus is a helper function to get node status

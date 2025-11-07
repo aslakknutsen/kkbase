@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/kagenti/kkbase/pkg/watchers/handlers/core"
+	coretypes "github.com/kagenti/kkbase/pkg/watchers/handlers/core"
 
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
@@ -89,7 +90,7 @@ func (h *BackendTLSPolicyHandler) HandleAdd(obj interface{}) {
 		targetNamespace := backendTLSPolicy.Namespace
 		targetName := string(targetRef.Name)
 
-		backendID := models.GetNodeID("Service", targetNamespace, targetName)
+		backendID := models.GetNodeID(coretypes.NodeTypeService, targetNamespace, targetName)
 		edgeProperties := map[string]interface{}{
 			"source": "BackendTLSPolicy",
 		}
@@ -120,7 +121,7 @@ func (h *BackendTLSPolicyHandler) HandleAdd(obj interface{}) {
 		certNamespace := backendTLSPolicy.Namespace
 		certName := string(certRef.Name)
 
-		secretID := models.GetNodeID("Secret", certNamespace, certName)
+		secretID := models.GetNodeID(coretypes.NodeTypeSecret, certNamespace, certName)
 		edgeProperties := map[string]interface{}{
 			"purpose": "ca_certificate",
 		}
@@ -156,7 +157,7 @@ func (h *BackendTLSPolicyHandler) HandleUpdate(oldObj, newObj interface{}) {
 	)
 
 	ctx := context.Background()
-	backendTLSPolicyID := models.GetNodeID("BackendTLSPolicy", backendTLSPolicy.Namespace, backendTLSPolicy.Name)
+	backendTLSPolicyID := models.GetNodeID(NodeTypeBackendTLSPolicy, backendTLSPolicy.Namespace, backendTLSPolicy.Name)
 
 	// Delete old edges
 	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeBackendTLSPolicy), backendTLSPolicyID); err != nil {
@@ -182,7 +183,7 @@ func (h *BackendTLSPolicyHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	backendTLSPolicyID := models.GetNodeID("BackendTLSPolicy", backendTLSPolicy.Namespace, backendTLSPolicy.Name)
+	backendTLSPolicyID := models.GetNodeID(NodeTypeBackendTLSPolicy, backendTLSPolicy.Namespace, backendTLSPolicy.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeBackendTLSPolicy), backendTLSPolicyID); err != nil {
 		h.Logger.Error("failed to delete backendtlspolicy node", zap.Error(err), zap.String("backendtlspolicy", backendTLSPolicy.Name))
 	}

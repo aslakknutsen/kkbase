@@ -100,11 +100,11 @@ const (
 
 // GetNodeID generates a unique identifier for a Kubernetes resource
 // Format: kind/namespace/name for namespaced resources, kind/name for cluster-scoped
-func GetNodeID(kind, namespace, name string) string {
+func GetNodeID(nodeType NodeType, namespace, name string) string {
 	if namespace == "" {
-		return fmt.Sprintf("%s/%s", kind, name)
+		return fmt.Sprintf("%s/%s", nodeType, name)
 	}
-	return fmt.Sprintf("%s/%s/%s", kind, namespace, name)
+	return fmt.Sprintf("%s/%s/%s", nodeType, namespace, name)
 }
 
 // GetOwnerReference extracts the controller owner reference from a list

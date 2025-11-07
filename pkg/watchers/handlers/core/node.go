@@ -93,7 +93,7 @@ func (h *NodeHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	nodeID := models.GetNodeID("Node", "", node.Name)
+	nodeID := models.GetNodeID(NodeTypeNode, "", node.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeNode), nodeID); err != nil {
 		h.Logger.Error("failed to delete node", zap.Error(err), zap.String("node", node.Name))
 	}

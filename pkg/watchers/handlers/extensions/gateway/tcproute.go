@@ -160,7 +160,7 @@ func (h *TCPRouteHandler) HandleUpdate(oldObj, newObj interface{}) {
 	)
 
 	ctx := context.Background()
-	tcpRouteID := models.GetNodeID("TCPRoute", tcpRoute.Namespace, tcpRoute.Name)
+	tcpRouteID := models.GetNodeID(NodeTypeTCPRoute, tcpRoute.Namespace, tcpRoute.Name)
 
 	// Delete old edges
 	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeTCPRoute), tcpRouteID); err != nil {
@@ -190,7 +190,7 @@ func (h *TCPRouteHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	tcpRouteID := models.GetNodeID("TCPRoute", tcpRoute.Namespace, tcpRoute.Name)
+	tcpRouteID := models.GetNodeID(NodeTypeTCPRoute, tcpRoute.Namespace, tcpRoute.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeTCPRoute), tcpRouteID); err != nil {
 		h.Logger.Error("failed to delete tcproute node", zap.Error(err), zap.String("tcproute", tcpRoute.Name))
 	}

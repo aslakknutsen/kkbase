@@ -151,7 +151,7 @@ func (h *VirtualServiceHandler) HandleUpdate(oldObj, newObj interface{}) {
 	)
 
 	ctx := context.Background()
-	vsID := models.GetNodeID("VirtualService", virtualService.Namespace, virtualService.Name)
+	vsID := models.GetNodeID(NodeTypeVirtualService, virtualService.Namespace, virtualService.Name)
 
 	// Delete old edges
 	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeVirtualService), vsID); err != nil {
@@ -181,7 +181,7 @@ func (h *VirtualServiceHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	vsID := models.GetNodeID("VirtualService", virtualService.Namespace, virtualService.Name)
+	vsID := models.GetNodeID(NodeTypeVirtualService, virtualService.Namespace, virtualService.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeVirtualService), vsID); err != nil {
 		h.Logger.Error("failed to delete virtualservice node", zap.Error(err), zap.String("virtualservice", virtualService.Name))
 	}

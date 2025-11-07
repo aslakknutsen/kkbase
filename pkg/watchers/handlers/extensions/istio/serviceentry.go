@@ -104,7 +104,7 @@ func (h *ServiceEntryHandler) HandleUpdate(oldObj, newObj interface{}) {
 	)
 
 	ctx := context.Background()
-	seID := models.GetNodeID("ServiceEntry", serviceEntry.Namespace, serviceEntry.Name)
+	seID := models.GetNodeID(NodeTypeServiceEntry, serviceEntry.Namespace, serviceEntry.Name)
 
 	// Delete old edges
 	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeServiceEntry), seID); err != nil {
@@ -134,7 +134,7 @@ func (h *ServiceEntryHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	seID := models.GetNodeID("ServiceEntry", serviceEntry.Namespace, serviceEntry.Name)
+	seID := models.GetNodeID(NodeTypeServiceEntry, serviceEntry.Namespace, serviceEntry.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeServiceEntry), seID); err != nil {
 		h.Logger.Error("failed to delete serviceentry node", zap.Error(err), zap.String("serviceentry", serviceEntry.Name))
 	}

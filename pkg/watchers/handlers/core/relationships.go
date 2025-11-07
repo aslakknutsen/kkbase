@@ -49,7 +49,7 @@ func (rb *RelationshipBuilder) CreateOwnerEdge(ctx context.Context, childType mo
 		ownerNamespace = ""
 	}
 
-	parentID := models.GetNodeID(ownerRef.Kind, ownerNamespace, ownerRef.Name)
+	parentID := models.GetNodeID(parentType, ownerNamespace, ownerRef.Name)
 	return rb.GraphStore.UpsertEdge(
 		ctx,
 		string(parentType),
@@ -63,11 +63,11 @@ func (rb *RelationshipBuilder) CreateOwnerEdge(ctx context.Context, childType mo
 
 // CreatePodSchedulingEdges creates edges for pod scheduling
 func (rb *RelationshipBuilder) CreatePodSchedulingEdges(ctx context.Context, pod *corev1.Pod) error {
-	podID := models.GetNodeID("Pod", pod.Namespace, pod.Name)
+	podID := models.GetNodeID(NodeTypePod, pod.Namespace, pod.Name)
 
 	// Create SCHEDULED_ON edge to Node
 	if pod.Spec.NodeName != "" {
-		nodeID := models.GetNodeID("Node", "", pod.Spec.NodeName)
+		nodeID := models.GetNodeID(NodeTypeNode, "", pod.Spec.NodeName)
 		if err := rb.GraphStore.UpsertEdge(
 			ctx,
 			string(NodeTypePod),
@@ -82,7 +82,7 @@ func (rb *RelationshipBuilder) CreatePodSchedulingEdges(ctx context.Context, pod
 	}
 
 	// Create IN_NAMESPACE edge
-	namespaceID := models.GetNodeID("Namespace", "", pod.Namespace)
+	namespaceID := models.GetNodeID(NodeTypeNamespace, "", pod.Namespace)
 	if err := rb.GraphStore.UpsertEdge(
 		ctx,
 		string(NodeTypePod),
@@ -100,7 +100,7 @@ func (rb *RelationshipBuilder) CreatePodSchedulingEdges(ctx context.Context, pod
 
 // CreatePodContainerEdges creates CONTAINS edges from Pod to Containers
 func (rb *RelationshipBuilder) CreatePodContainerEdges(ctx context.Context, pod *corev1.Pod) error {
-	podID := models.GetNodeID("Pod", pod.Namespace, pod.Name)
+	podID := models.GetNodeID(NodeTypePod, pod.Namespace, pod.Name)
 
 	for _, container := range pod.Spec.Containers {
 		containerID := fmt.Sprintf("Container/%s/%s/%s", pod.Namespace, pod.Name, container.Name)
@@ -123,12 +123,12 @@ func (rb *RelationshipBuilder) CreatePodContainerEdges(ctx context.Context, pod 
 
 // CreatePodVolumeEdges creates edges for pod volumes
 func (rb *RelationshipBuilder) CreatePodVolumeEdges(ctx context.Context, pod *corev1.Pod) error {
-	podID := models.GetNodeID("Pod", pod.Namespace, pod.Name)
+	podID := models.GetNodeID(NodeTypePod, pod.Namespace, pod.Name)
 
 	for _, volume := range pod.Spec.Volumes {
 		// Handle PersistentVolumeClaim
 		if volume.PersistentVolumeClaim != nil {
-			pvcID := models.GetNodeID("PersistentVolumeClaim", pod.Namespace, volume.PersistentVolumeClaim.ClaimName)
+			pvcID := models.GetNodeID(NodeTypePersistentVolumeClaim, pod.Namespace, volume.PersistentVolumeClaim.ClaimName)
 
 			if err := rb.GraphStore.UpsertEdge(
 				ctx,
@@ -147,7 +147,7 @@ func (rb *RelationshipBuilder) CreatePodVolumeEdges(ctx context.Context, pod *co
 
 		// Handle ConfigMap
 		if volume.ConfigMap != nil {
-			configMapID := models.GetNodeID("ConfigMap", pod.Namespace, volume.ConfigMap.Name)
+			configMapID := models.GetNodeID(NodeTypeConfigMap, pod.Namespace, volume.ConfigMap.Name)
 
 			if err := rb.GraphStore.UpsertEdge(
 				ctx,
@@ -166,7 +166,7 @@ func (rb *RelationshipBuilder) CreatePodVolumeEdges(ctx context.Context, pod *co
 
 		// Handle Secret
 		if volume.Secret != nil {
-			secretID := models.GetNodeID("Secret", pod.Namespace, volume.Secret.SecretName)
+			secretID := models.GetNodeID(NodeTypeSecret, pod.Namespace, volume.Secret.SecretName)
 
 			if err := rb.GraphStore.UpsertEdge(
 				ctx,
@@ -188,7 +188,7 @@ func (rb *RelationshipBuilder) CreatePodVolumeEdges(ctx context.Context, pod *co
 	for _, container := range pod.Spec.Containers {
 		for _, envFrom := range container.EnvFrom {
 			if envFrom.ConfigMapRef != nil {
-				configMapID := models.GetNodeID("ConfigMap", pod.Namespace, envFrom.ConfigMapRef.Name)
+				configMapID := models.GetNodeID(NodeTypeConfigMap, pod.Namespace, envFrom.ConfigMapRef.Name)
 
 				if err := rb.GraphStore.UpsertEdge(
 					ctx,
@@ -207,7 +207,7 @@ func (rb *RelationshipBuilder) CreatePodVolumeEdges(ctx context.Context, pod *co
 			}
 
 			if envFrom.SecretRef != nil {
-				secretID := models.GetNodeID("Secret", pod.Namespace, envFrom.SecretRef.Name)
+				secretID := models.GetNodeID(NodeTypeSecret, pod.Namespace, envFrom.SecretRef.Name)
 
 				if err := rb.GraphStore.UpsertEdge(
 					ctx,
@@ -232,7 +232,7 @@ func (rb *RelationshipBuilder) CreatePodVolumeEdges(ctx context.Context, pod *co
 
 // CreateServicePodEdges creates SELECTS_PODS edges from Service to Pods
 func (rb *RelationshipBuilder) CreateServicePodEdges(ctx context.Context, service *corev1.Service) error {
-	serviceID := models.GetNodeID("Service", service.Namespace, service.Name)
+	serviceID := models.GetNodeID(NodeTypeService, service.Namespace, service.Name)
 
 	// If no selector, nothing to do
 	if len(service.Spec.Selector) == 0 {
@@ -252,7 +252,7 @@ func (rb *RelationshipBuilder) CreateServicePodEdges(ctx context.Context, servic
 
 	// Create edges to matching pods
 	for _, pod := range pods.Items {
-		podID := models.GetNodeID("Pod", pod.Namespace, pod.Name)
+		podID := models.GetNodeID(NodeTypePod, pod.Namespace, pod.Name)
 
 		if err := rb.GraphStore.UpsertEdge(
 			ctx,
@@ -272,7 +272,7 @@ func (rb *RelationshipBuilder) CreateServicePodEdges(ctx context.Context, servic
 
 // CreatePodToServiceEdges creates SELECTS_PODS edges from matching Services to this Pod
 func (rb *RelationshipBuilder) CreatePodToServiceEdges(ctx context.Context, pod *corev1.Pod) error {
-	podID := models.GetNodeID("Pod", pod.Namespace, pod.Name)
+	podID := models.GetNodeID(NodeTypePod, pod.Namespace, pod.Name)
 
 	// List all services in the same namespace
 	services, err := rb.Clientset.CoreV1().Services(pod.Namespace).List(ctx, metav1.ListOptions{})
@@ -288,7 +288,7 @@ func (rb *RelationshipBuilder) CreatePodToServiceEdges(ctx context.Context, pod 
 
 		selector := labels.SelectorFromSet(service.Spec.Selector)
 		if selector.Matches(labels.Set(pod.Labels)) {
-			serviceID := models.GetNodeID("Service", service.Namespace, service.Name)
+			serviceID := models.GetNodeID(NodeTypeService, service.Namespace, service.Name)
 
 			if err := rb.GraphStore.UpsertEdge(
 				ctx,
@@ -313,8 +313,8 @@ func (rb *RelationshipBuilder) CreatePVCPVEdge(ctx context.Context, pvc *corev1.
 		return nil
 	}
 
-	pvcID := models.GetNodeID("PersistentVolumeClaim", pvc.Namespace, pvc.Name)
-	pvID := models.GetNodeID("PersistentVolume", "", pvc.Spec.VolumeName)
+	pvcID := models.GetNodeID(NodeTypePersistentVolumeClaim, pvc.Namespace, pvc.Name)
+	pvID := models.GetNodeID(NodeTypePersistentVolume, "", pvc.Spec.VolumeName)
 
 	return rb.GraphStore.UpsertEdge(
 		ctx,
@@ -333,8 +333,8 @@ func (rb *RelationshipBuilder) CreatePVStorageClassEdge(ctx context.Context, pv 
 		return nil
 	}
 
-	pvID := models.GetNodeID("PersistentVolume", "", pv.Name)
-	storageClassID := models.GetNodeID("StorageClass", "", pv.Spec.StorageClassName)
+	pvID := models.GetNodeID(NodeTypePersistentVolume, "", pv.Name)
+	storageClassID := models.GetNodeID(NodeTypeStorageClass, "", pv.Spec.StorageClassName)
 
 	return rb.GraphStore.UpsertEdge(
 		ctx,
@@ -353,8 +353,8 @@ func (rb *RelationshipBuilder) CreatePVCStorageClassEdge(ctx context.Context, pv
 		return nil
 	}
 
-	pvcID := models.GetNodeID("PersistentVolumeClaim", pvc.Namespace, pvc.Name)
-	storageClassID := models.GetNodeID("StorageClass", "", *pvc.Spec.StorageClassName)
+	pvcID := models.GetNodeID(NodeTypePersistentVolumeClaim, pvc.Namespace, pvc.Name)
+	storageClassID := models.GetNodeID(NodeTypeStorageClass, "", *pvc.Spec.StorageClassName)
 
 	return rb.GraphStore.UpsertEdge(
 		ctx,
@@ -369,8 +369,8 @@ func (rb *RelationshipBuilder) CreatePVCStorageClassEdge(ctx context.Context, pv
 
 // CreateIngressServiceEdges creates ROUTES_TO edges from Ingress to Services
 func (rb *RelationshipBuilder) CreateIngressServiceEdges(ctx context.Context, namespace, ingressName string, serviceName string) error {
-	ingressID := models.GetNodeID("Ingress", namespace, ingressName)
-	serviceID := models.GetNodeID("Service", namespace, serviceName)
+	ingressID := models.GetNodeID(NodeTypeIngress, namespace, ingressName)
+	serviceID := models.GetNodeID(NodeTypeService, namespace, serviceName)
 
 	return rb.GraphStore.UpsertEdge(
 		ctx,
@@ -403,8 +403,8 @@ func (rb *RelationshipBuilder) CreateEventInvolvedObjectEdge(ctx context.Context
 		}
 	}
 
-	// Use the Kind from the event's involved object
-	objectID := models.GetNodeID(event.InvolvedObject.Kind, objectNamespace, event.InvolvedObject.Name)
+	// Use the NodeType from the event's involved object
+	objectID := models.GetNodeID(objectType, objectNamespace, event.InvolvedObject.Name)
 
 	return rb.GraphStore.UpsertEdge(
 		ctx,
@@ -419,7 +419,7 @@ func (rb *RelationshipBuilder) CreateEventInvolvedObjectEdge(ctx context.Context
 
 // CreateNamespaceEdge creates IN_NAMESPACE edge for namespaced resources
 func (rb *RelationshipBuilder) CreateNamespaceEdge(ctx context.Context, resourceType models.NodeType, resourceID, namespace string) error {
-	namespaceID := models.GetNodeID("Namespace", "", namespace)
+	namespaceID := models.GetNodeID(NodeTypeNamespace, "", namespace)
 	return rb.GraphStore.UpsertEdge(
 		ctx,
 		string(resourceType),

@@ -99,7 +99,7 @@ func (h *ConfigMapHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	configMapID := models.GetNodeID("ConfigMap", configMap.Namespace, configMap.Name)
+	configMapID := models.GetNodeID(NodeTypeConfigMap, configMap.Namespace, configMap.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeConfigMap), configMapID); err != nil {
 		h.Logger.Error("failed to delete configmap node", zap.Error(err), zap.String("configmap", configMap.Name))
 	}

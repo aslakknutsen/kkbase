@@ -110,7 +110,7 @@ func (h *AuthorizationPolicyHandler) HandleUpdate(oldObj, newObj interface{}) {
 	)
 
 	ctx := context.Background()
-	policyID := models.GetNodeID("AuthorizationPolicy", policy.Namespace, policy.Name)
+	policyID := models.GetNodeID(NodeTypeAuthorizationPolicy, policy.Namespace, policy.Name)
 
 	// Delete old edges
 	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeAuthorizationPolicy), policyID); err != nil {
@@ -136,7 +136,7 @@ func (h *AuthorizationPolicyHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	policyID := models.GetNodeID("AuthorizationPolicy", policy.Namespace, policy.Name)
+	policyID := models.GetNodeID(NodeTypeAuthorizationPolicy, policy.Namespace, policy.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeAuthorizationPolicy), policyID); err != nil {
 		h.Logger.Error("failed to delete authorizationpolicy node", zap.Error(err), zap.String("policy", policy.Name))
 	}

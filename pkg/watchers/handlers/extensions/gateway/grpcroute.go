@@ -155,7 +155,7 @@ func (h *GRPCRouteHandler) HandleUpdate(oldObj, newObj interface{}) {
 	)
 
 	ctx := context.Background()
-	grpcRouteID := models.GetNodeID("GRPCRoute", grpcRoute.Namespace, grpcRoute.Name)
+	grpcRouteID := models.GetNodeID(NodeTypeGRPCRoute, grpcRoute.Namespace, grpcRoute.Name)
 
 	// Delete old edges
 	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeGRPCRoute), grpcRouteID); err != nil {
@@ -181,7 +181,7 @@ func (h *GRPCRouteHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	grpcRouteID := models.GetNodeID("GRPCRoute", grpcRoute.Namespace, grpcRoute.Name)
+	grpcRouteID := models.GetNodeID(NodeTypeGRPCRoute, grpcRoute.Namespace, grpcRoute.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeGRPCRoute), grpcRouteID); err != nil {
 		h.Logger.Error("failed to delete grpcroute node", zap.Error(err), zap.String("grpcroute", grpcRoute.Name))
 	}

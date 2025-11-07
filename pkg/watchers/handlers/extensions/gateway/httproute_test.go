@@ -369,7 +369,7 @@ spec:
 
 	if len(mockStore.DeletedEdges) > 0 {
 		deleted := mockStore.DeletedEdges[0]
-		expectedNodeID := models.GetNodeID("HTTPRoute", "default", "update-route")
+		expectedNodeID := models.GetNodeID(NodeTypeHTTPRoute, "default", "update-route")
 		if deleted.NodeID != expectedNodeID {
 			t.Errorf("Expected deleted edges for node %s, got %s", expectedNodeID, deleted.NodeID)
 		}
@@ -431,7 +431,7 @@ spec:
 
 	if len(mockStore.DeletedNodes) > 0 {
 		deleted := mockStore.DeletedNodes[0]
-		expectedNodeID := models.GetNodeID("HTTPRoute", "default", "delete-route")
+		expectedNodeID := models.GetNodeID(NodeTypeHTTPRoute, "default", "delete-route")
 		if deleted.ID != expectedNodeID {
 			t.Errorf("Expected deleted node ID %s, got %s", expectedNodeID, deleted.ID)
 		}

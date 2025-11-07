@@ -131,7 +131,7 @@ func (h *DestinationRuleHandler) HandleUpdate(oldObj, newObj interface{}) {
 	)
 
 	ctx := context.Background()
-	drID := models.GetNodeID("DestinationRule", destinationRule.Namespace, destinationRule.Name)
+	drID := models.GetNodeID(NodeTypeDestinationRule, destinationRule.Namespace, destinationRule.Name)
 
 	// Delete old edges
 	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeDestinationRule), drID); err != nil {
@@ -161,7 +161,7 @@ func (h *DestinationRuleHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	drID := models.GetNodeID("DestinationRule", destinationRule.Namespace, destinationRule.Name)
+	drID := models.GetNodeID(NodeTypeDestinationRule, destinationRule.Namespace, destinationRule.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeDestinationRule), drID); err != nil {
 		h.Logger.Error("failed to delete destinationrule node", zap.Error(err), zap.String("destinationrule", destinationRule.Name))
 	}

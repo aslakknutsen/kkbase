@@ -166,7 +166,7 @@ func (h *HTTPRouteHandler) HandleUpdate(oldObj, newObj interface{}) {
 	)
 
 	ctx := context.Background()
-	httpRouteID := models.GetNodeID("HTTPRoute", httpRoute.Namespace, httpRoute.Name)
+	httpRouteID := models.GetNodeID(NodeTypeHTTPRoute, httpRoute.Namespace, httpRoute.Name)
 
 	// Delete old edges
 	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeHTTPRoute), httpRouteID); err != nil {
@@ -192,7 +192,7 @@ func (h *HTTPRouteHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	httpRouteID := models.GetNodeID("HTTPRoute", httpRoute.Namespace, httpRoute.Name)
+	httpRouteID := models.GetNodeID(NodeTypeHTTPRoute, httpRoute.Namespace, httpRoute.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeHTTPRoute), httpRouteID); err != nil {
 		h.Logger.Error("failed to delete httproute node", zap.Error(err), zap.String("httproute", httpRoute.Name))
 	}

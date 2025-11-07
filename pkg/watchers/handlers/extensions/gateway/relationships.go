@@ -25,8 +25,8 @@ func NewRelationshipBuilder(clientset *kubernetes.Clientset, graphStore graph.Gr
 
 // CreateGatewayImplementedByEdge creates IMPLEMENTED_BY edge from Gateway to GatewayClass
 func (rb *RelationshipBuilder) CreateGatewayImplementedByEdge(ctx context.Context, gatewayNamespace, gatewayName, gatewayClassName string) error {
-	gatewayID := models.GetNodeID("Gateway", gatewayNamespace, gatewayName)
-	gatewayClassID := models.GetNodeID("GatewayClass", "", gatewayClassName)
+	gatewayID := models.GetNodeID(NodeTypeGateway, gatewayNamespace, gatewayName)
+	gatewayClassID := models.GetNodeID(NodeTypeGatewayClass, "", gatewayClassName)
 
 	return rb.base.GraphStore.UpsertEdge(
 		ctx,
@@ -41,8 +41,8 @@ func (rb *RelationshipBuilder) CreateGatewayImplementedByEdge(ctx context.Contex
 
 // CreateGatewayTLSEdge creates USES_TLS_FROM edge from Gateway to Secret
 func (rb *RelationshipBuilder) CreateGatewayTLSEdge(ctx context.Context, gatewayNamespace, gatewayName, secretNamespace, secretName, listenerName string) error {
-	gatewayID := models.GetNodeID("Gateway", gatewayNamespace, gatewayName)
-	secretID := models.GetNodeID("Secret", secretNamespace, secretName)
+	gatewayID := models.GetNodeID(NodeTypeGateway, gatewayNamespace, gatewayName)
+	secretID := models.GetNodeID(coretypes.NodeTypeSecret, secretNamespace, secretName)
 
 	properties := map[string]interface{}{
 		"listener_name": listenerName,
@@ -61,8 +61,8 @@ func (rb *RelationshipBuilder) CreateGatewayTLSEdge(ctx context.Context, gateway
 
 // CreateRouteAttachesToEdge creates ATTACHES_TO edge from Route to Gateway
 func (rb *RelationshipBuilder) CreateRouteAttachesToEdge(ctx context.Context, routeType models.NodeType, routeNamespace, routeName, gatewayNamespace, gatewayName string, sectionName *string) error {
-	routeID := models.GetNodeID(string(routeType), routeNamespace, routeName)
-	gatewayID := models.GetNodeID("Gateway", gatewayNamespace, gatewayName)
+	routeID := models.GetNodeID(routeType, routeNamespace, routeName)
+	gatewayID := models.GetNodeID(NodeTypeGateway, gatewayNamespace, gatewayName)
 
 	properties := map[string]interface{}{}
 	if sectionName != nil {
@@ -82,8 +82,8 @@ func (rb *RelationshipBuilder) CreateRouteAttachesToEdge(ctx context.Context, ro
 
 // CreateRouteForwardsToEdge creates FORWARDS_TO edge from Route to Service
 func (rb *RelationshipBuilder) CreateRouteForwardsToEdge(ctx context.Context, routeType models.NodeType, routeNamespace, routeName, serviceNamespace, serviceName string, weight *int32) error {
-	routeID := models.GetNodeID(string(routeType), routeNamespace, routeName)
-	serviceID := models.GetNodeID("Service", serviceNamespace, serviceName)
+	routeID := models.GetNodeID(routeType, routeNamespace, routeName)
+	serviceID := models.GetNodeID(coretypes.NodeTypeService, serviceNamespace, serviceName)
 
 	properties := map[string]interface{}{}
 	if weight != nil {
@@ -103,8 +103,8 @@ func (rb *RelationshipBuilder) CreateRouteForwardsToEdge(ctx context.Context, ro
 
 // CreateRoutePermittedByEdge creates PERMITTED_BY edge from Route to ReferenceGrant
 func (rb *RelationshipBuilder) CreateRoutePermittedByEdge(ctx context.Context, routeType models.NodeType, routeNamespace, routeName, grantNamespace, grantName string) error {
-	routeID := models.GetNodeID(string(routeType), routeNamespace, routeName)
-	grantID := models.GetNodeID("ReferenceGrant", grantNamespace, grantName)
+	routeID := models.GetNodeID(routeType, routeNamespace, routeName)
+	grantID := models.GetNodeID(NodeTypeReferenceGrant, grantNamespace, grantName)
 
 	return rb.base.GraphStore.UpsertEdge(
 		ctx,
@@ -119,8 +119,8 @@ func (rb *RelationshipBuilder) CreateRoutePermittedByEdge(ctx context.Context, r
 
 // CreateReferenceGrantAllowsEdge creates ALLOWS_ROUTE_TO edge from ReferenceGrant to Service
 func (rb *RelationshipBuilder) CreateReferenceGrantAllowsEdge(ctx context.Context, grantNamespace, grantName, serviceNamespace, serviceName string) error {
-	grantID := models.GetNodeID("ReferenceGrant", grantNamespace, grantName)
-	serviceID := models.GetNodeID("Service", serviceNamespace, serviceName)
+	grantID := models.GetNodeID(NodeTypeReferenceGrant, grantNamespace, grantName)
+	serviceID := models.GetNodeID(coretypes.NodeTypeService, serviceNamespace, serviceName)
 
 	return rb.base.GraphStore.UpsertEdge(
 		ctx,

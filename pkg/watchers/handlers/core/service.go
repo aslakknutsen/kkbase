@@ -95,7 +95,7 @@ func (h *ServiceHandler) HandleUpdate(oldObj, newObj interface{}) {
 
 	// For services, we need to delete old edges and recreate them
 	ctx := context.Background()
-	serviceID := models.GetNodeID("Service", newService.Namespace, newService.Name)
+	serviceID := models.GetNodeID(NodeTypeService, newService.Namespace, newService.Name)
 
 	// Delete only the edge types that we manage (not runtime-observed edges like ORIGINATED_FROM, CALLS, FAILED_CALL_TO)
 	managedEdgeTypes := []string{"SELECTS_PODS", "IN_NAMESPACE", "ROUTES_TO", "FORWARDS_TO"}
@@ -119,7 +119,7 @@ func (h *ServiceHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	serviceID := models.GetNodeID("Service", service.Namespace, service.Name)
+	serviceID := models.GetNodeID(NodeTypeService, service.Namespace, service.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeService), serviceID); err != nil {
 		h.Logger.Error("failed to delete service node", zap.Error(err), zap.String("service", service.Name))
 	}

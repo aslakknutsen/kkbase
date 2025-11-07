@@ -102,7 +102,7 @@ func (h *SidecarHandler) HandleUpdate(oldObj, newObj interface{}) {
 	)
 
 	ctx := context.Background()
-	sidecarID := models.GetNodeID("Sidecar", sidecar.Namespace, sidecar.Name)
+	sidecarID := models.GetNodeID(NodeTypeSidecar, sidecar.Namespace, sidecar.Name)
 
 	// Delete old edges
 	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeSidecar), sidecarID); err != nil {
@@ -132,7 +132,7 @@ func (h *SidecarHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	sidecarID := models.GetNodeID("Sidecar", sidecar.Namespace, sidecar.Name)
+	sidecarID := models.GetNodeID(NodeTypeSidecar, sidecar.Namespace, sidecar.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeSidecar), sidecarID); err != nil {
 		h.Logger.Error("failed to delete sidecar node", zap.Error(err), zap.String("sidecar", sidecar.Name))
 	}

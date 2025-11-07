@@ -160,7 +160,7 @@ func (h *TLSRouteHandler) HandleUpdate(oldObj, newObj interface{}) {
 	)
 
 	ctx := context.Background()
-	tlsRouteID := models.GetNodeID("TLSRoute", tlsRoute.Namespace, tlsRoute.Name)
+	tlsRouteID := models.GetNodeID(NodeTypeTLSRoute, tlsRoute.Namespace, tlsRoute.Name)
 
 	// Delete old edges
 	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeTLSRoute), tlsRouteID); err != nil {
@@ -190,7 +190,7 @@ func (h *TLSRouteHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	tlsRouteID := models.GetNodeID("TLSRoute", tlsRoute.Namespace, tlsRoute.Name)
+	tlsRouteID := models.GetNodeID(NodeTypeTLSRoute, tlsRoute.Namespace, tlsRoute.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeTLSRoute), tlsRouteID); err != nil {
 		h.Logger.Error("failed to delete tlsroute node", zap.Error(err), zap.String("tlsroute", tlsRoute.Name))
 	}

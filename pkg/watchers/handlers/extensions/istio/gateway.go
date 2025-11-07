@@ -101,7 +101,7 @@ func (h *IstioGatewayHandler) HandleUpdate(oldObj, newObj interface{}) {
 	)
 
 	ctx := context.Background()
-	gatewayID := models.GetNodeID("IstioGateway", gateway.Namespace, gateway.Name)
+	gatewayID := models.GetNodeID(NodeTypeIstioGateway, gateway.Namespace, gateway.Name)
 
 	// Delete old edges
 	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeIstioGateway), gatewayID); err != nil {
@@ -127,7 +127,7 @@ func (h *IstioGatewayHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	gatewayID := models.GetNodeID("IstioGateway", gateway.Namespace, gateway.Name)
+	gatewayID := models.GetNodeID(NodeTypeIstioGateway, gateway.Namespace, gateway.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeIstioGateway), gatewayID); err != nil {
 		h.Logger.Error("failed to delete istio gateway node", zap.Error(err), zap.String("gateway", gateway.Name))
 	}

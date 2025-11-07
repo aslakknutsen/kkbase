@@ -110,7 +110,7 @@ func (h *ReplicaSetHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	replicaSetID := models.GetNodeID("ReplicaSet", replicaSet.Namespace, replicaSet.Name)
+	replicaSetID := models.GetNodeID(NodeTypeReplicaSet, replicaSet.Namespace, replicaSet.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeReplicaSet), replicaSetID); err != nil {
 		h.Logger.Error("failed to delete replicaset node", zap.Error(err), zap.String("replicaset", replicaSet.Name))
 	}

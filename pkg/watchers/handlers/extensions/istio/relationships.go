@@ -49,11 +49,11 @@ func (rb *RelationshipBuilder) CreateIstioGatewaySelectsProxyEdge(ctx context.Co
 		return fmt.Errorf("failed to list pods with selector %v: %w", selector, err)
 	}
 
-	gatewayID := models.GetNodeID("IstioGateway", gatewayNamespace, gatewayName)
+	gatewayID := models.GetNodeID(NodeTypeIstioGateway, gatewayNamespace, gatewayName)
 	selectorLabelsJSON, _ := json.Marshal(selector)
 
 	for _, pod := range pods.Items {
-		podID := models.GetNodeID("Pod", pod.Namespace, pod.Name)
+		podID := models.GetNodeID(core.NodeTypePod, pod.Namespace, pod.Name)
 		if err := rb.base.GraphStore.UpsertEdge(
 			ctx,
 			string(NodeTypeIstioGateway),
@@ -78,8 +78,8 @@ func (rb *RelationshipBuilder) CreateIstioGatewaySelectsProxyEdge(ctx context.Co
 
 // CreateVirtualServiceAttachesToEdge creates an edge from a VirtualService to an Istio Gateway
 func (rb *RelationshipBuilder) CreateVirtualServiceAttachesToEdge(ctx context.Context, vsNamespace, vsName, gatewayNamespace, gatewayName string) error {
-	vsID := models.GetNodeID("VirtualService", vsNamespace, vsName)
-	gatewayID := models.GetNodeID("IstioGateway", gatewayNamespace, gatewayName)
+	vsID := models.GetNodeID(NodeTypeVirtualService, vsNamespace, vsName)
+	gatewayID := models.GetNodeID(NodeTypeIstioGateway, gatewayNamespace, gatewayName)
 
 	return rb.base.GraphStore.UpsertEdge(
 		ctx,
@@ -96,8 +96,8 @@ func (rb *RelationshipBuilder) CreateVirtualServiceAttachesToEdge(ctx context.Co
 
 // CreateVirtualServiceRoutesTrafficForEdge creates an edge from a VirtualService to a Service
 func (rb *RelationshipBuilder) CreateVirtualServiceRoutesTrafficForEdge(ctx context.Context, vsNamespace, vsName, svcNamespace, svcName, host string) error {
-	vsID := models.GetNodeID("VirtualService", vsNamespace, vsName)
-	svcID := models.GetNodeID("Service", svcNamespace, svcName)
+	vsID := models.GetNodeID(NodeTypeVirtualService, vsNamespace, vsName)
+	svcID := models.GetNodeID(core.NodeTypeService, svcNamespace, svcName)
 
 	return rb.base.GraphStore.UpsertEdge(
 		ctx,
@@ -114,8 +114,8 @@ func (rb *RelationshipBuilder) CreateVirtualServiceRoutesTrafficForEdge(ctx cont
 
 // CreateVirtualServiceRoutesToSubsetEdge creates an edge from a VirtualService to a DestinationRule
 func (rb *RelationshipBuilder) CreateVirtualServiceRoutesToSubsetEdge(ctx context.Context, vsNamespace, vsName, drNamespace, drName, subsetName string, weight int32) error {
-	vsID := models.GetNodeID("VirtualService", vsNamespace, vsName)
-	drID := models.GetNodeID("DestinationRule", drNamespace, drName)
+	vsID := models.GetNodeID(NodeTypeVirtualService, vsNamespace, vsName)
+	drID := models.GetNodeID(NodeTypeDestinationRule, drNamespace, drName)
 
 	properties := map[string]interface{}{
 		"subset_name": subsetName,
@@ -137,8 +137,8 @@ func (rb *RelationshipBuilder) CreateVirtualServiceRoutesToSubsetEdge(ctx contex
 
 // CreateDestinationRuleDefinesPolicyForEdge creates an edge from a DestinationRule to a Service
 func (rb *RelationshipBuilder) CreateDestinationRuleDefinesPolicyForEdge(ctx context.Context, drNamespace, drName, svcNamespace, svcName, host string) error {
-	drID := models.GetNodeID("DestinationRule", drNamespace, drName)
-	svcID := models.GetNodeID("Service", svcNamespace, svcName)
+	drID := models.GetNodeID(NodeTypeDestinationRule, drNamespace, drName)
+	svcID := models.GetNodeID(core.NodeTypeService, svcNamespace, svcName)
 
 	return rb.base.GraphStore.UpsertEdge(
 		ctx,
@@ -174,11 +174,11 @@ func (rb *RelationshipBuilder) CreateDestinationRuleSelectsSubsetPodsEdge(ctx co
 		return fmt.Errorf("failed to list pods with selector %v: %w", subsetLabels, err)
 	}
 
-	drID := models.GetNodeID("DestinationRule", drNamespace, drName)
+	drID := models.GetNodeID(NodeTypeDestinationRule, drNamespace, drName)
 	subsetLabelsJSON, _ := json.Marshal(subsetLabels)
 
 	for _, pod := range pods.Items {
-		podID := models.GetNodeID("Pod", pod.Namespace, pod.Name)
+		podID := models.GetNodeID(core.NodeTypePod, pod.Namespace, pod.Name)
 		if err := rb.base.GraphStore.UpsertEdge(
 			ctx,
 			string(NodeTypeDestinationRule),
@@ -229,7 +229,7 @@ func (rb *RelationshipBuilder) CreateIstioPolicyAppliesToEdge(ctx context.Contex
 		return fmt.Errorf("failed to list pods: %w", err)
 	}
 
-	policyID := models.GetNodeID(string(policyType), policyNamespace, policyName)
+	policyID := models.GetNodeID(policyType, policyNamespace, policyName)
 
 	properties := make(map[string]interface{})
 	if len(selector) > 0 {
@@ -242,7 +242,7 @@ func (rb *RelationshipBuilder) CreateIstioPolicyAppliesToEdge(ctx context.Contex
 	}
 
 	for _, pod := range pods.Items {
-		podID := models.GetNodeID("Pod", pod.Namespace, pod.Name)
+		podID := models.GetNodeID(core.NodeTypePod, pod.Namespace, pod.Name)
 		if err := rb.base.GraphStore.UpsertEdge(
 			ctx,
 			string(policyType),

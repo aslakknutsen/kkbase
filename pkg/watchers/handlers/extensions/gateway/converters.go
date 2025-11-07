@@ -52,7 +52,7 @@ func GatewayClassToGraphNode(gatewayClass *gatewayv1.GatewayClass) *models.Graph
 		properties["labels"] = serializeMap(gatewayClass.Labels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeGatewayClass), models.GetNodeID("GatewayClass", "", gatewayClass.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeGatewayClass), models.GetNodeID(NodeTypeGatewayClass, "", gatewayClass.Name), properties)
 }
 
 // GatewayToGraphNode converts a Gateway API Gateway to a graph node
@@ -121,7 +121,7 @@ func GatewayToGraphNode(gateway *gatewayv1.Gateway) *models.GraphNode {
 		properties["labels"] = serializeMap(gateway.Labels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeGateway), models.GetNodeID("Gateway", gateway.Namespace, gateway.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeGateway), models.GetNodeID(NodeTypeGateway, gateway.Namespace, gateway.Name), properties)
 }
 
 // HTTPRouteToGraphNode converts a Gateway API HTTPRoute to a graph node
@@ -224,7 +224,7 @@ func HTTPRouteToGraphNode(httpRoute *gatewayv1.HTTPRoute) *models.GraphNode {
 		properties["labels"] = serializeMap(httpRoute.Labels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeHTTPRoute), models.GetNodeID("HTTPRoute", httpRoute.Namespace, httpRoute.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeHTTPRoute), models.GetNodeID(NodeTypeHTTPRoute, httpRoute.Namespace, httpRoute.Name), properties)
 }
 
 // GRPCRouteToGraphNode converts a Gateway API GRPCRoute to a graph node
@@ -329,7 +329,7 @@ func GRPCRouteToGraphNode(grpcRoute *gatewayv1.GRPCRoute) *models.GraphNode {
 		properties["labels"] = serializeMap(grpcRoute.Labels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeGRPCRoute), models.GetNodeID("GRPCRoute", grpcRoute.Namespace, grpcRoute.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeGRPCRoute), models.GetNodeID(NodeTypeGRPCRoute, grpcRoute.Namespace, grpcRoute.Name), properties)
 }
 
 // TCPRouteToGraphNode converts a Gateway API TCPRoute to a graph node
@@ -368,7 +368,7 @@ func TCPRouteToGraphNode(tcpRoute *gatewayv1alpha2.TCPRoute) *models.GraphNode {
 		properties["labels"] = serializeMap(tcpRoute.Labels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeTCPRoute), models.GetNodeID("TCPRoute", tcpRoute.Namespace, tcpRoute.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeTCPRoute), models.GetNodeID(NodeTypeTCPRoute, tcpRoute.Namespace, tcpRoute.Name), properties)
 }
 
 // UDPRouteToGraphNode converts a Gateway API UDPRoute to a graph node
@@ -407,7 +407,7 @@ func UDPRouteToGraphNode(udpRoute *gatewayv1alpha2.UDPRoute) *models.GraphNode {
 		properties["labels"] = serializeMap(udpRoute.Labels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeUDPRoute), models.GetNodeID("UDPRoute", udpRoute.Namespace, udpRoute.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeUDPRoute), models.GetNodeID(NodeTypeUDPRoute, udpRoute.Namespace, udpRoute.Name), properties)
 }
 
 // TLSRouteToGraphNode converts a Gateway API TLSRoute to a graph node
@@ -455,7 +455,7 @@ func TLSRouteToGraphNode(tlsRoute *gatewayv1alpha2.TLSRoute) *models.GraphNode {
 		properties["labels"] = serializeMap(tlsRoute.Labels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeTLSRoute), models.GetNodeID("TLSRoute", tlsRoute.Namespace, tlsRoute.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeTLSRoute), models.GetNodeID(NodeTypeTLSRoute, tlsRoute.Namespace, tlsRoute.Name), properties)
 }
 
 // ReferenceGrantToGraphNode converts a Gateway API ReferenceGrant to a graph node
@@ -504,7 +504,7 @@ func ReferenceGrantToGraphNode(referenceGrant *gatewayv1beta1.ReferenceGrant) *m
 		properties["labels"] = serializeMap(referenceGrant.Labels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeReferenceGrant), models.GetNodeID("ReferenceGrant", referenceGrant.Namespace, referenceGrant.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeReferenceGrant), models.GetNodeID(NodeTypeReferenceGrant, referenceGrant.Namespace, referenceGrant.Name), properties)
 }
 
 // BackendTLSPolicyToGraphNode converts a Gateway API BackendTLSPolicy to a graph node
@@ -559,5 +559,5 @@ func BackendTLSPolicyToGraphNode(backendTLSPolicy *gatewayv1.BackendTLSPolicy) *
 		properties["labels"] = serializeMap(backendTLSPolicy.Labels)
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeBackendTLSPolicy), models.GetNodeID("BackendTLSPolicy", backendTLSPolicy.Namespace, backendTLSPolicy.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeBackendTLSPolicy), models.GetNodeID(NodeTypeBackendTLSPolicy, backendTLSPolicy.Namespace, backendTLSPolicy.Name), properties)
 }

@@ -96,7 +96,7 @@ func (h *SecretHandler) HandleUpdate(oldObj, newObj interface{}) {
 	)
 
 	ctx := context.Background()
-	secretID := models.GetNodeID("Secret", newSecret.Namespace, newSecret.Name)
+	secretID := models.GetNodeID(NodeTypeSecret, newSecret.Namespace, newSecret.Name)
 
 	// Delete old edges
 	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeSecret), secretID); err != nil {
@@ -122,7 +122,7 @@ func (h *SecretHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	secretID := models.GetNodeID("Secret", secret.Namespace, secret.Name)
+	secretID := models.GetNodeID(NodeTypeSecret, secret.Namespace, secret.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeSecret), secretID); err != nil {
 		h.Logger.Error("failed to delete secret node", zap.Error(err), zap.String("secret", secret.Name))
 	}

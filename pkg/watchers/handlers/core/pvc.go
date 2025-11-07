@@ -109,7 +109,7 @@ func (h *PVCHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	pvcID := models.GetNodeID("PersistentVolumeClaim", pvc.Namespace, pvc.Name)
+	pvcID := models.GetNodeID(NodeTypePersistentVolumeClaim, pvc.Namespace, pvc.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypePersistentVolumeClaim), pvcID); err != nil {
 		h.Logger.Error("failed to delete pvc node", zap.Error(err), zap.String("pvc", pvc.Name))
 	}

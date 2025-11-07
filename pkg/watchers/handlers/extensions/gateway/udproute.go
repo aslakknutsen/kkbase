@@ -160,7 +160,7 @@ func (h *UDPRouteHandler) HandleUpdate(oldObj, newObj interface{}) {
 	)
 
 	ctx := context.Background()
-	udpRouteID := models.GetNodeID("UDPRoute", udpRoute.Namespace, udpRoute.Name)
+	udpRouteID := models.GetNodeID(NodeTypeUDPRoute, udpRoute.Namespace, udpRoute.Name)
 
 	// Delete old edges
 	if err := h.GraphStore.DeleteEdgesByNode(ctx, string(NodeTypeUDPRoute), udpRouteID); err != nil {
@@ -190,7 +190,7 @@ func (h *UDPRouteHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	udpRouteID := models.GetNodeID("UDPRoute", udpRoute.Namespace, udpRoute.Name)
+	udpRouteID := models.GetNodeID(NodeTypeUDPRoute, udpRoute.Namespace, udpRoute.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeUDPRoute), udpRouteID); err != nil {
 		h.Logger.Error("failed to delete udproute node", zap.Error(err), zap.String("udproute", udpRoute.Name))
 	}

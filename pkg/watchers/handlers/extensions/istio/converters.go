@@ -53,7 +53,7 @@ func IstioGatewayToGraphNode(gateway *istiov1.Gateway) *models.GraphNode {
 		}
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeIstioGateway), models.GetNodeID("IstioGateway", gateway.Namespace, gateway.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeIstioGateway), models.GetNodeID(NodeTypeIstioGateway, gateway.Namespace, gateway.Name), properties)
 }
 
 // VirtualServiceToGraphNode converts an Istio VirtualService to a graph node
@@ -115,7 +115,7 @@ func VirtualServiceToGraphNode(vs *istiov1.VirtualService) *models.GraphNode {
 		}
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeVirtualService), models.GetNodeID("VirtualService", vs.Namespace, vs.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeVirtualService), models.GetNodeID(NodeTypeVirtualService, vs.Namespace, vs.Name), properties)
 }
 
 // DestinationRuleToGraphNode converts an Istio DestinationRule to a graph node
@@ -158,7 +158,7 @@ func DestinationRuleToGraphNode(dr *istiov1.DestinationRule) *models.GraphNode {
 		}
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeDestinationRule), models.GetNodeID("DestinationRule", dr.Namespace, dr.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeDestinationRule), models.GetNodeID(NodeTypeDestinationRule, dr.Namespace, dr.Name), properties)
 }
 
 // ServiceEntryToGraphNode converts an Istio ServiceEntry to a graph node
@@ -206,7 +206,7 @@ func ServiceEntryToGraphNode(se *istiov1.ServiceEntry) *models.GraphNode {
 		}
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeServiceEntry), models.GetNodeID("ServiceEntry", se.Namespace, se.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeServiceEntry), models.GetNodeID(NodeTypeServiceEntry, se.Namespace, se.Name), properties)
 }
 
 // SidecarToGraphNode converts an Istio Sidecar to a graph node
@@ -266,7 +266,7 @@ func SidecarToGraphNode(sidecar *istiov1.Sidecar) *models.GraphNode {
 		}
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeSidecar), models.GetNodeID("Sidecar", sidecar.Namespace, sidecar.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeSidecar), models.GetNodeID(NodeTypeSidecar, sidecar.Namespace, sidecar.Name), properties)
 }
 
 // AuthorizationPolicyToGraphNode converts an Istio AuthorizationPolicy to a graph node
@@ -309,7 +309,7 @@ func AuthorizationPolicyToGraphNode(policy *istiosecurityv1.AuthorizationPolicy)
 		}
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeAuthorizationPolicy), models.GetNodeID("AuthorizationPolicy", policy.Namespace, policy.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeAuthorizationPolicy), models.GetNodeID(NodeTypeAuthorizationPolicy, policy.Namespace, policy.Name), properties)
 }
 
 // PeerAuthenticationToGraphNode converts an Istio PeerAuthentication to a graph node
@@ -352,7 +352,7 @@ func PeerAuthenticationToGraphNode(pa *istiosecurityv1.PeerAuthentication) *mode
 		}
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypePeerAuthentication), models.GetNodeID("PeerAuthentication", pa.Namespace, pa.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypePeerAuthentication), models.GetNodeID(NodeTypePeerAuthentication, pa.Namespace, pa.Name), properties)
 }
 
 // RequestAuthenticationToGraphNode converts an Istio RequestAuthentication to a graph node
@@ -390,5 +390,5 @@ func RequestAuthenticationToGraphNode(ra *istiosecurityv1.RequestAuthentication)
 		}
 	}
 
-	return models.NewGraphNode(models.NodeType(NodeTypeRequestAuthentication), models.GetNodeID("RequestAuthentication", ra.Namespace, ra.Name), properties)
+	return models.NewGraphNode(models.NodeType(NodeTypeRequestAuthentication), models.GetNodeID(NodeTypeRequestAuthentication, ra.Namespace, ra.Name), properties)
 }

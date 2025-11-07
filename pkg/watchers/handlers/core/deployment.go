@@ -103,7 +103,7 @@ func (h *DeploymentHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	deploymentID := models.GetNodeID("Deployment", deployment.Namespace, deployment.Name)
+	deploymentID := models.GetNodeID(NodeTypeDeployment, deployment.Namespace, deployment.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeDeployment), deploymentID); err != nil {
 		h.Logger.Error("failed to delete deployment node", zap.Error(err), zap.String("deployment", deployment.Name))
 	}

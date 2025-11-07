@@ -103,7 +103,7 @@ func (h *DaemonSetHandler) HandleDelete(obj interface{}) {
 
 	ctx := context.Background()
 
-	daemonSetID := models.GetNodeID("DaemonSet", daemonSet.Namespace, daemonSet.Name)
+	daemonSetID := models.GetNodeID(NodeTypeDaemonSet, daemonSet.Namespace, daemonSet.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypeDaemonSet), daemonSetID); err != nil {
 		h.Logger.Error("failed to delete daemonset node", zap.Error(err), zap.String("daemonset", daemonSet.Name))
 	}

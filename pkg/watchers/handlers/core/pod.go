@@ -148,7 +148,7 @@ func (h *PodHandler) HandleDelete(obj interface{}) {
 	}
 
 	// Delete Pod node
-	podID := models.GetNodeID("Pod", pod.Namespace, pod.Name)
+	podID := models.GetNodeID(NodeTypePod, pod.Namespace, pod.Name)
 	if err := h.GraphStore.DeleteNode(ctx, string(NodeTypePod), podID); err != nil {
 		h.Logger.Error("failed to delete pod node", zap.Error(err), zap.String("pod", pod.Name))
 	}
