@@ -3,12 +3,10 @@ package gateway
 import (
 	"context"
 
-	"github.com/kagenti/kkbase/pkg/watchers/handlers/core"
-	coretypes "github.com/kagenti/kkbase/pkg/watchers/handlers/core"
-
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
 	"github.com/kagenti/kkbase/pkg/watchers"
+	"github.com/kagenti/kkbase/pkg/watchers/handlers/core"
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
@@ -56,6 +54,7 @@ func NewBackendTLSPolicyHandler(
 // HandleAdd processes a newly added BackendTLSPolicy
 func (h *BackendTLSPolicyHandler) HandleAdd(obj interface{}) {
 	backendTLSPolicy, err := watchers.ConvertToTyped[gatewayv1.BackendTLSPolicy](obj)
+
 	if err != nil {
 		h.Logger.Error("failed to convert to BackendTLSPolicy", zap.Error(err))
 		return
@@ -80,65 +79,28 @@ func (h *BackendTLSPolicyHandler) HandleAdd(obj interface{}) {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
-	// Create APPLIES_TO edges to target backends (Services)
+	// Create APPLIES_TO edges to target Services
 	for _, targetRef := range backendTLSPolicy.Spec.TargetRefs {
-		if targetRef.Kind != "Service" {
-			continue
-		}
+		if targetRef.Kind == "Service" && (targetRef.Group == "" || targetRef.Group == "core" || targetRef.Group == "v1") {
+			targetNamespace := backendTLSPolicy.Namespace // LocalPolicyTargetReference is always in the same namespace
+			serviceName := string(targetRef.Name)
 
-		// LocalPolicyTargetReference is always in the same namespace as the policy
-		targetNamespace := backendTLSPolicy.Namespace
-		targetName := string(targetRef.Name)
+			serviceID := models.GetNodeID(core.NodeTypeService, targetNamespace, serviceName)
 
-		backendID := models.GetNodeID(coretypes.NodeTypeService, targetNamespace, targetName)
-		edgeProperties := map[string]interface{}{
-			"source": "BackendTLSPolicy",
-		}
-
-		if err := h.GraphStore.UpsertEdge(
-			ctx,
-			string(models.EdgeTypeAppliesTo),
-			string(NodeTypeBackendTLSPolicy),
-			backendTLSPolicyNode.ID,
-			string(core.NodeTypeService),
-			backendID,
-			edgeProperties,
-		); err != nil {
-			h.Logger.Error("failed to create APPLIES_TO edge",
-				zap.Error(err),
-				zap.String("target", targetName),
-			)
-		}
-	}
-
-	// Create USES_SECRET edges for CA certificate references
-	for _, certRef := range backendTLSPolicy.Spec.Validation.CACertificateRefs {
-		if certRef.Kind != "Secret" {
-			continue
-		}
-
-		// LocalObjectReference is always in the same namespace as the policy
-		certNamespace := backendTLSPolicy.Namespace
-		certName := string(certRef.Name)
-
-		secretID := models.GetNodeID(coretypes.NodeTypeSecret, certNamespace, certName)
-		edgeProperties := map[string]interface{}{
-			"purpose": "ca_certificate",
-		}
-
-		if err := h.GraphStore.UpsertEdge(
-			ctx,
-			string(models.EdgeTypeUsesSecret),
-			string(NodeTypeBackendTLSPolicy),
-			backendTLSPolicyNode.ID,
-			string(core.NodeTypeSecret),
-			secretID,
-			edgeProperties,
-		); err != nil {
-			h.Logger.Error("failed to create USES_SECRET edge",
-				zap.Error(err),
-				zap.String("secret", certName),
-			)
+			if err := h.GraphStore.UpsertEdge(
+				ctx,
+				string(NodeTypeBackendTLSPolicy),
+				backendTLSPolicyNode.ID,
+				string(models.EdgeTypeAppliesTo),
+				string(core.NodeTypeService),
+				serviceID,
+				nil,
+			); err != nil {
+				h.Logger.Error("failed to create APPLIES_TO edge",
+					zap.Error(err),
+					zap.String("service", serviceName),
+				)
+			}
 		}
 	}
 }
@@ -146,6 +108,7 @@ func (h *BackendTLSPolicyHandler) HandleAdd(obj interface{}) {
 // HandleUpdate processes an updated BackendTLSPolicy
 func (h *BackendTLSPolicyHandler) HandleUpdate(oldObj, newObj interface{}) {
 	backendTLSPolicy, err := watchers.ConvertToTyped[gatewayv1.BackendTLSPolicy](newObj)
+
 	if err != nil {
 		h.Logger.Error("failed to convert to BackendTLSPolicy", zap.Error(err))
 		return
@@ -171,6 +134,7 @@ func (h *BackendTLSPolicyHandler) HandleUpdate(oldObj, newObj interface{}) {
 // HandleDelete processes a deleted BackendTLSPolicy
 func (h *BackendTLSPolicyHandler) HandleDelete(obj interface{}) {
 	backendTLSPolicy, err := watchers.ConvertToTyped[gatewayv1.BackendTLSPolicy](obj)
+
 	if err != nil {
 		h.Logger.Error("failed to convert to BackendTLSPolicy", zap.Error(err))
 		return

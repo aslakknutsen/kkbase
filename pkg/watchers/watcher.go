@@ -176,9 +176,10 @@ func (m *Manager) registerHandlerOnly(name string, handler ResourceWatcher) {
 
 // RegisterHandlerFactory registers a handler factory for CRD-based resources
 // The handler will be created when the CRD becomes available
+// The factory function receives CRDInfo (including schema and version) to enable version-agnostic handlers
 func (m *Manager) RegisterHandlerFactory(
 	typeInfo ResourceTypeInfo,
-	factory func() ResourceWatcher,
+	factory func(crdInfo *CRDInfo) ResourceWatcher,
 ) {
 	// Register the NodeType metadata immediately (even before CRD is available)
 	models.RegisterNodeType(models.NodeTypeMetadata{
@@ -212,10 +213,19 @@ func (m *Manager) RegisterHandlerFactory(
 			zap.String("group", crd.Group),
 			zap.String("kind", crd.Kind),
 			zap.String("node_type", string(typeInfo.NodeType)),
+			zap.String("version", crd.Version),
 		)
 
-		// Create the handler
-		handler := factory()
+		// Create the handler, passing CRDInfo with schema and version
+		handler := factory(crd)
+
+		if handler == nil {
+			m.logger.Warn("handler factory returned nil - version not supported or validation failed",
+				zap.String("handler", name),
+				zap.String("version", crd.Version),
+			)
+			return
+		}
 
 		// Register it (without type info since we already registered it above)
 		m.registerHandlerOnly(name, handler)

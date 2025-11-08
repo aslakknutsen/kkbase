@@ -455,6 +455,30 @@ kubectl exec neo4j-0 -- cypher-shell -u neo4j -p changeme \
 6. **Document** - Add comments explaining CRD-specific logic
 7. **Make Optional** - Extension handlers shouldn't break if CRD is missing
 
+## Advanced: Version-Agnostic Handlers
+
+For CRDs that may have multiple API versions, consider implementing version-agnostic handlers using dynamic field extraction. This approach:
+
+- Eliminates dependency version conflicts
+- Supports multiple CRD versions automatically
+- Validates field availability at CRD registration time
+- Provides type-safe extraction at runtime
+
+**Example Implementation:** The Kuadrant extension handlers demonstrate this pattern comprehensively.
+
+See the [Kuadrant Architecture Documentation](../../pkg/watchers/handlers/extensions/kuadrant/ARCHITECTURE.md) for a complete guide on:
+- Field requirement definitions
+- Schema-based validation
+- Dynamic field extraction
+- Multi-version support
+- Build-time validation with test fixtures
+
+This pattern is recommended when:
+1. Your CRD has multiple versions (v1alpha1, v1beta1, v1)
+2. Different clusters may run different CRD versions
+3. You want to avoid hard dependency on specific CRD types
+4. API evolution is expected
+
 ## Troubleshooting
 
 ### CRD Not Found

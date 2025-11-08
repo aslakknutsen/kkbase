@@ -28,7 +28,7 @@ func RegisterIstioHandlers(
 			APIGroup:      "networking.istio.io",
 			ClusterScoped: false,
 		},
-		func() watchers.ResourceWatcher {
+		func(_ *watchers.CRDInfo) watchers.ResourceWatcher {
 			return NewIstioGatewayHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
@@ -41,7 +41,7 @@ func RegisterIstioHandlers(
 			APIGroup:      "networking.istio.io",
 			ClusterScoped: false,
 		},
-		func() watchers.ResourceWatcher {
+		func(_ *watchers.CRDInfo) watchers.ResourceWatcher {
 			return NewVirtualServiceHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
@@ -54,7 +54,7 @@ func RegisterIstioHandlers(
 			APIGroup:      "networking.istio.io",
 			ClusterScoped: false,
 		},
-		func() watchers.ResourceWatcher {
+		func(_ *watchers.CRDInfo) watchers.ResourceWatcher {
 			return NewDestinationRuleHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
@@ -67,7 +67,7 @@ func RegisterIstioHandlers(
 			APIGroup:      "networking.istio.io",
 			ClusterScoped: false,
 		},
-		func() watchers.ResourceWatcher {
+		func(_ *watchers.CRDInfo) watchers.ResourceWatcher {
 			return NewServiceEntryHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
@@ -80,7 +80,7 @@ func RegisterIstioHandlers(
 			APIGroup:      "networking.istio.io",
 			ClusterScoped: false,
 		},
-		func() watchers.ResourceWatcher {
+		func(_ *watchers.CRDInfo) watchers.ResourceWatcher {
 			return NewSidecarHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
@@ -93,7 +93,7 @@ func RegisterIstioHandlers(
 			APIGroup:      "security.istio.io",
 			ClusterScoped: false,
 		},
-		func() watchers.ResourceWatcher {
+		func(_ *watchers.CRDInfo) watchers.ResourceWatcher {
 			return NewAuthorizationPolicyHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
@@ -106,7 +106,7 @@ func RegisterIstioHandlers(
 			APIGroup:      "security.istio.io",
 			ClusterScoped: false,
 		},
-		func() watchers.ResourceWatcher {
+		func(_ *watchers.CRDInfo) watchers.ResourceWatcher {
 			return NewPeerAuthenticationHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
@@ -119,7 +119,7 @@ func RegisterIstioHandlers(
 			APIGroup:      "security.istio.io",
 			ClusterScoped: false,
 		},
-		func() watchers.ResourceWatcher {
+		func(_ *watchers.CRDInfo) watchers.ResourceWatcher {
 			return NewRequestAuthenticationHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)

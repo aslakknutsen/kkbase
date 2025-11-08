@@ -14,13 +14,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// CRDInfo represents information about a CRD
-type CRDInfo struct {
-	Name    string
-	Group   string
-	Version string
-	Kind    string
-}
+// CRDInfo is now defined in crd_info.go to avoid import cycles
 
 // CRDEventHandler is called when a CRD becomes available or unavailable
 type CRDEventHandler func(crd *CRDInfo)
@@ -157,16 +151,23 @@ func (w *CRDWatcher) handleCRDAdd(obj interface{}) {
 	group := crd.Spec.Group
 	kind := crd.Spec.Names.Kind
 
-	// Get the storage version (preferred version)
+	// Get the storage version (preferred version) and its schema
 	var version string
+	var schema *apiextensionsv1.JSONSchemaProps
 	for _, v := range crd.Spec.Versions {
 		if v.Storage {
 			version = v.Name
+			if v.Schema != nil && v.Schema.OpenAPIV3Schema != nil {
+				schema = v.Schema.OpenAPIV3Schema
+			}
 			break
 		}
 	}
 	if version == "" && len(crd.Spec.Versions) > 0 {
 		version = crd.Spec.Versions[0].Name
+		if crd.Spec.Versions[0].Schema != nil && crd.Spec.Versions[0].Schema.OpenAPIV3Schema != nil {
+			schema = crd.Spec.Versions[0].Schema.OpenAPIV3Schema
+		}
 	}
 
 	key := fmt.Sprintf("%s.%s", group, kind)
@@ -176,6 +177,7 @@ func (w *CRDWatcher) handleCRDAdd(obj interface{}) {
 		Group:   group,
 		Version: version,
 		Kind:    kind,
+		Schema:  schema,
 	}
 
 	// Mark as available

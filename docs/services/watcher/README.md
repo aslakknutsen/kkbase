@@ -9,7 +9,7 @@ The watcher:
 - **Converts** K8s resources to graph nodes (Pod, Service, Deployment, etc.)
 - **Creates** edges for relationships (manages, selects, routes-to, etc.)
 - **Maintains** real-time synchronization with cluster state
-- **Supports** core resources and extensions (Gateway API, Istio)
+- **Supports** core resources and extensions (Gateway API, Istio, Kuadrant)
 
 ## When to Use
 
@@ -75,6 +75,7 @@ Deploy the watcher when you want:
 **Extensions** (optional):
 - **Gateway API**: GatewayClass, Gateway, HTTPRoute, GRPCRoute, TCPRoute, UDPRoute, TLSRoute, ReferenceGrant
 - **Istio**: VirtualService, DestinationRule, Gateway, ServiceEntry, Sidecar, AuthorizationPolicy, PeerAuthentication
+- **Kuadrant**: Kuadrant CR, AuthPolicy, RateLimitPolicy, DNSPolicy, TLSPolicy
 - **Custom CRDs**: Extensible handler framework
 
 ### Relationship Extraction
@@ -104,6 +105,7 @@ pkg/watchers/handlers/core/
 pkg/watchers/handlers/extensions/
 ├── gateway/        # Gateway API
 ├── istio/          # Istio service mesh
+├── kuadrant/       # Kuadrant API management
 └── custom/         # Your CRDs
 ```
 
@@ -234,6 +236,20 @@ istioctl install --set profile=demo
 
 See [Extensions Guide](extensions.md) for details.
 
+### Kuadrant
+
+Automatically enabled when Kuadrant operator is installed:
+
+```bash
+# Install Kuadrant operator (example using Helm)
+helm repo add kuadrant https://kuadrant.io/helm-charts/
+helm install kuadrant-operator kuadrant/kuadrant-operator
+
+# Watcher automatically detects and starts tracking
+```
+
+See [Extensions Guide](extensions.md) for details.
+
 ### Custom Resources
 
 Add handlers for your CRDs:
@@ -357,7 +373,7 @@ kubectl create secret generic kkbase-watcher-secret \
 
 - **[Deployment Guide](deployment.md)** - Step-by-step deployment
 - **[Configuration](configuration.md)** - All configuration options
-- **[Extensions](extensions.md)** - Gateway API and Istio support
+- **[Extensions](extensions.md)** - Gateway API, Istio, and Kuadrant support
 - **[Custom Handlers](custom-handlers.md)** - Add support for custom CRDs
 - **[Architecture Deep Dive](../../development/architecture-deep-dive.md)** - Internal implementation
 

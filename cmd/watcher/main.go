@@ -18,6 +18,7 @@ import (
 	"github.com/kagenti/kkbase/pkg/watchers/handlers/core"
 	"github.com/kagenti/kkbase/pkg/watchers/handlers/extensions/gateway"
 	"github.com/kagenti/kkbase/pkg/watchers/handlers/extensions/istio"
+	"github.com/kagenti/kkbase/pkg/watchers/handlers/extensions/kuadrant"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -132,6 +133,9 @@ func run() error {
 
 	// Register Istio handlers (dynamic registration via CRD watcher)
 	istio.RegisterIstioHandlers(watcherManager, clientset, dynamicClient, factory, graphStore, logger)
+
+	// Register Kuadrant handlers (dynamic registration via CRD watcher)
+	kuadrant.RegisterKuadrantHandlers(watcherManager, clientset, dynamicClient, factory, graphStore, logger)
 
 	logger.Info("handler registration complete")
 

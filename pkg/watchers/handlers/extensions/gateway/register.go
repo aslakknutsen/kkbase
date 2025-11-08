@@ -28,7 +28,7 @@ func RegisterGatewayAPIHandlers(
 			APIGroup:      "gateway.networking.k8s.io",
 			ClusterScoped: true,
 		},
-		func() watchers.ResourceWatcher {
+		func(_ *watchers.CRDInfo) watchers.ResourceWatcher {
 			return NewGatewayClassHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
@@ -41,7 +41,7 @@ func RegisterGatewayAPIHandlers(
 			APIGroup:      "gateway.networking.k8s.io",
 			ClusterScoped: false,
 		},
-		func() watchers.ResourceWatcher {
+		func(_ *watchers.CRDInfo) watchers.ResourceWatcher {
 			return NewGatewayHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
@@ -54,7 +54,7 @@ func RegisterGatewayAPIHandlers(
 			APIGroup:      "gateway.networking.k8s.io",
 			ClusterScoped: false,
 		},
-		func() watchers.ResourceWatcher {
+		func(_ *watchers.CRDInfo) watchers.ResourceWatcher {
 			return NewHTTPRouteHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
@@ -67,7 +67,7 @@ func RegisterGatewayAPIHandlers(
 			APIGroup:      "gateway.networking.k8s.io",
 			ClusterScoped: false,
 		},
-		func() watchers.ResourceWatcher {
+		func(_ *watchers.CRDInfo) watchers.ResourceWatcher {
 			return NewGRPCRouteHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
@@ -80,7 +80,7 @@ func RegisterGatewayAPIHandlers(
 			APIGroup:      "gateway.networking.k8s.io",
 			ClusterScoped: false,
 		},
-		func() watchers.ResourceWatcher {
+		func(_ *watchers.CRDInfo) watchers.ResourceWatcher {
 			return NewTCPRouteHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
@@ -93,7 +93,7 @@ func RegisterGatewayAPIHandlers(
 			APIGroup:      "gateway.networking.k8s.io",
 			ClusterScoped: false,
 		},
-		func() watchers.ResourceWatcher {
+		func(_ *watchers.CRDInfo) watchers.ResourceWatcher {
 			return NewUDPRouteHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
@@ -106,7 +106,7 @@ func RegisterGatewayAPIHandlers(
 			APIGroup:      "gateway.networking.k8s.io",
 			ClusterScoped: false,
 		},
-		func() watchers.ResourceWatcher {
+		func(_ *watchers.CRDInfo) watchers.ResourceWatcher {
 			return NewTLSRouteHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
@@ -119,7 +119,7 @@ func RegisterGatewayAPIHandlers(
 			APIGroup:      "gateway.networking.k8s.io",
 			ClusterScoped: false,
 		},
-		func() watchers.ResourceWatcher {
+		func(_ *watchers.CRDInfo) watchers.ResourceWatcher {
 			return NewReferenceGrantHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)
@@ -132,7 +132,7 @@ func RegisterGatewayAPIHandlers(
 			APIGroup:      "gateway.networking.k8s.io",
 			ClusterScoped: false,
 		},
-		func() watchers.ResourceWatcher {
+		func(_ *watchers.CRDInfo) watchers.ResourceWatcher {
 			return NewBackendTLSPolicyHandler(clientset, dynamicClient, graphStore, logger, factory)
 		},
 	)

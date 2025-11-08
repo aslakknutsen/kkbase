@@ -142,8 +142,9 @@ const (
 
 	// Cross-handler relationships (shared)
 	EdgeTypeAttachesTo EdgeType = "ATTACHES_TO" // Used by Gateway and Istio
-	EdgeTypeAppliesTo  EdgeType = "APPLIES_TO"  // Used by Gateway and Istio
+	EdgeTypeAppliesTo  EdgeType = "APPLIES_TO"  // Used by Gateway, Istio, and Kuadrant
 	EdgeTypeUsesSecret EdgeType = "USES_SECRET" // Used by Core and Gateway
+	EdgeTypeManages    EdgeType = "MANAGES"     // Used by Core (Deployment) and Kuadrant
 
 	// Dynamic relationships
 	EdgeTypeCommunicatesWith EdgeType = "COMMUNICATES_WITH"

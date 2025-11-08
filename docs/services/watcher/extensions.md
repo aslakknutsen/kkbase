@@ -1,6 +1,6 @@
-# Extensions: Gateway API and Istio
+# Extensions: Gateway API, Istio, and Kuadrant
 
-kkbase extends beyond core Kubernetes resources to support modern ingress and service mesh technologies. Extension handlers automatically activate when their CRDs are detected in your cluster.
+kkbase extends beyond core Kubernetes resources to support modern ingress, service mesh, and API management technologies. Extension handlers automatically activate when their CRDs are detected in your cluster.
 
 ## Gateway API Support
 
@@ -169,6 +169,139 @@ Verify in kkbase logs:
 INFO  Istio availability  gateway=true virtualservice=true destinationrule=true
 ```
 
+## Kuadrant Support
+
+[Kuadrant](https://kuadrant.io/) extends the Gateway API with declarative policies for authentication, rate limiting, DNS management, and TLS configuration. kkbase models these policies and their relationships for comprehensive API management diagnostics.
+
+### Supported Resources
+
+| Resource | Description | API Version |
+|----------|-------------|-------------|
+| `Kuadrant` | Kuadrant operator instance | v1beta1 |
+| `AuthPolicy` | Authentication and authorization rules | v1 |
+| `RateLimitPolicy` | Rate limiting policies | v1 |
+| `DNSPolicy` | DNS configuration and load balancing | v1 |
+| `TLSPolicy` | TLS certificate management | v1 |
+
+### Key Relationships
+
+- `AuthPolicy` → `APPLIES_TO` → `Gateway` / `HTTPRoute` (policy enforcement points)
+- `RateLimitPolicy` → `APPLIES_TO` → `Gateway` / `HTTPRoute` (rate limit application)
+- `DNSPolicy` → `APPLIES_TO` → `Gateway` (DNS configuration)
+- `TLSPolicy` → `APPLIES_TO` → `Gateway` (TLS certificate management)
+- `DNSPolicy` → `USES_SECRET` → `Secret` (DNS provider credentials)
+- `Kuadrant` → `MANAGES` → Policies (operator lifecycle management)
+
+### Indexed Properties
+
+For fast diagnostics, kkbase indexes key policy properties:
+
+**All Policies:**
+- `status_accepted`: Policy accepted by controller
+- `status_enforced` / `status_ready`: Policy actively enforced
+- `status_failed`: Policy has failures
+- `status_message`: Failure details
+- `status_stale`: Status out of sync with spec
+
+**AuthPolicy & RateLimitPolicy:**
+- `policy_type`: "defaults" | "overrides" | "implicit_defaults" (precedence control)
+- `authentication_configured`: Auth rules present
+- `limits_count`: Number of rate limit definitions
+
+**DNSPolicy:**
+- `has_load_balancing`: Load balancing configured
+
+**TLSPolicy:**
+- `has_issuer_ref`: Certificate issuer configured
+
+### Example Queries
+
+#### Check Policy Enforcement Status
+
+```cypher
+MATCH (policy:AuthPolicy)-[:APPLIES_TO]->(gw:Gateway)
+WHERE policy.status_enforced = false
+RETURN policy.name, policy.namespace, policy.status_message
+```
+
+This finds policies that exist but aren't being enforced, helping diagnose configuration issues.
+
+#### Find Policy Conflicts (Multiple Policies on Same Target)
+
+```cypher
+MATCH (p1:AuthPolicy)-[:APPLIES_TO]->(target)
+MATCH (p2:AuthPolicy)-[:APPLIES_TO]->(target)
+WHERE id(p1) < id(p2)
+RETURN target.name, target.kind,
+       p1.name as policy1, p1.policy_type as type1,
+       p2.name as policy2, p2.policy_type as type2
+```
+
+Kuadrant policies follow precedence rules (overrides > defaults). This query identifies potential conflicts.
+
+#### Trace Gateway with All Applied Policies
+
+```cypher
+MATCH (gw:Gateway {name: 'api-gateway'})<-[:ATTACHES_TO]-(route:HTTPRoute)
+OPTIONAL MATCH (auth:AuthPolicy)-[:APPLIES_TO]->(route)
+OPTIONAL MATCH (rate:RateLimitPolicy)-[:APPLIES_TO]->(route)
+OPTIONAL MATCH (dns:DNSPolicy)-[:APPLIES_TO]->(gw)
+OPTIONAL MATCH (tls:TLSPolicy)-[:APPLIES_TO]->(gw)
+RETURN gw.name,
+       route.name as route,
+       auth.name as auth_policy,
+       rate.name as rate_limit,
+       dns.name as dns_policy,
+       tls.name as tls_policy
+```
+
+Complete picture of all policies affecting a gateway and its routes.
+
+#### Find DNS Policies with Missing Provider Secrets
+
+```cypher
+MATCH (dns:DNSPolicy)-[:USES_SECRET]->(secret:Secret)
+WHERE NOT EXISTS(secret.creation_timestamp)
+RETURN dns.name, dns.namespace, secret.name
+```
+
+Identifies DNS policies that reference non-existent secrets (placeholder nodes).
+
+#### Find Stale Policy Status
+
+```cypher
+MATCH (policy)
+WHERE policy:AuthPolicy OR policy:RateLimitPolicy OR policy:DNSPolicy OR policy:TLSPolicy
+AND policy.status_stale = true
+RETURN labels(policy)[0] as type, policy.name, policy.namespace,
+       policy.observed_generation as last_seen,
+       policy.status_message
+```
+
+Finds policies where the status hasn't been updated to reflect spec changes.
+
+### Installation
+
+Kuadrant support is automatic when the operator is installed:
+
+```bash
+# Install Kuadrant operator (example using Helm)
+helm repo add kuadrant https://kuadrant.io/helm-charts/
+helm install kuadrant-operator kuadrant/kuadrant-operator
+```
+
+Verify in kkbase logs:
+```
+INFO  creating AuthPolicy handler  version=v1
+INFO  creating RateLimitPolicy handler  version=v1
+INFO  creating DNSPolicy handler  version=v1
+INFO  creating TLSPolicy handler  version=v1
+```
+
+### Version-Agnostic Design
+
+Kuadrant handlers use a version-agnostic architecture that adapts to different API versions automatically. See the [Architecture documentation](../../pkg/watchers/handlers/extensions/kuadrant/ARCHITECTURE.md) for implementation details.
+
 ## Enabling and Disabling Extensions
 
 Extensions automatically activate when their CRDs are detected. No explicit configuration is required.
@@ -198,6 +331,15 @@ To disable watching specific resources, modify the RBAC permissions in `deploy/r
 4. **Debug Traffic Routing** - Trace VirtualService rules to actual pods
 5. **Analyze Service Dependencies** - Map traffic flow through the mesh
 
+### Kuadrant Use Cases
+
+1. **Policy Enforcement Diagnostics** - Check if policies are accepted and enforced
+2. **Authentication Troubleshooting** - Trace auth failures to policy configuration
+3. **Rate Limit Analysis** - Verify rate limits are applied correctly
+4. **DNS Configuration Validation** - Ensure DNS policies and provider credentials are valid
+5. **Policy Precedence Auditing** - Identify which policy wins when multiple apply
+6. **Stale Status Detection** - Find policies with out-of-sync status
+
 ## Troubleshooting Extensions
 
 ### Extension Handlers Not Loading
@@ -207,6 +349,7 @@ Check if CRDs are installed:
 ```bash
 kubectl get crd | grep gateway
 kubectl get crd | grep istio
+kubectl get crd | grep kuadrant
 ```
 
 ### Missing Relationships
@@ -215,6 +358,7 @@ Verify that resources reference each other correctly:
 - HTTPRoutes must reference Gateway names in `parentRefs`
 - VirtualServices must list Service hosts in `spec.hosts`
 - DestinationRule subsets must match Pod labels
+- Kuadrant policies must reference targets in `spec.targetRef`
 
 ### RBAC Errors
 
@@ -226,9 +370,11 @@ kubectl logs deployment/kkbase-watcher | grep -i forbidden
 
 ## Further Reading
 
-- **[Complete Query Reference](../reference/cypher-queries.md)** - All Gateway API and Istio queries
-- **[Graph Schema](../reference/graph-schema.md)** - Extension node and edge types
-- **[Adding Handlers](../development/adding-handlers.md)** - Create your own extension handlers
+- **[Complete Query Reference](../../reference/cypher-queries.md)** - All Gateway API, Istio, and Kuadrant queries
+- **[Graph Schema](../../reference/graph-schema.md)** - Extension node and edge types
+- **[Adding Handlers](../../development/adding-handlers.md)** - Create your own extension handlers
+- **[Kuadrant Architecture](../../../pkg/watchers/handlers/extensions/kuadrant/ARCHITECTURE.md)** - Version-agnostic handler design
 - **[Gateway API Documentation](https://gateway-api.sigs.k8s.io/)**
 - **[Istio Documentation](https://istio.io/latest/docs/)**
+- **[Kuadrant Documentation](https://docs.kuadrant.io/)**
 

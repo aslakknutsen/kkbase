@@ -32,6 +32,7 @@ See [Quick Start Guide](docs/user-guide/quickstart.md) for detailed instructions
 - **Complete Topology** - Models all core Kubernetes resources and their relationships
 - **Gateway API Support** - Tracks ingress resources, routes, and traffic flow
 - **Istio Support** - Models service mesh configuration, security policies, and canary deployments
+- **Kuadrant Support** - Tracks AuthPolicy, RateLimitPolicy, DNSPolicy, and TLSPolicy for enhanced API management
 - **Extensible** - Plugin architecture for custom resources and CRDs
 - **Agent-Ready** - Designed as the knowledge base for autonomous diagnostic systems
 - **MCP Server** - Streaming HTTP server implementing Model Context Protocol for AI agent integration
