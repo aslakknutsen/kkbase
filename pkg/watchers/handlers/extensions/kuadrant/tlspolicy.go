@@ -156,7 +156,8 @@ func (h *TLSPolicyHandler) HandleAdd(obj interface{}) {
 		}
 	}
 
-	// Extract status conditions for quick diagnostics
+	// Extract status conditions with per-condition messages and reasons
+	statusProps := make(map[string]interface{})
 	if h.extractor.HasField("status.conditions") {
 		if conditions, found, _ := h.extractor.ExtractSlice(policy, "status.conditions"); found {
 			// Find key condition types
@@ -164,16 +165,42 @@ func (h *TLSPolicyHandler) HandleAdd(obj interface{}) {
 				if condMap, ok := cond.(map[string]interface{}); ok {
 					condType, _ := condMap["type"].(string)
 					status, _ := condMap["status"].(string)
+					message, _ := condMap["message"].(string)
+					reason, _ := condMap["reason"].(string)
 
 					switch condType {
 					case "Accepted":
 						policyNode.Properties["status_accepted"] = (status == "True")
+						statusProps["status_accepted"] = (status == "True")
+						if message != "" {
+							policyNode.Properties["status_accepted_message"] = message
+							statusProps["status_accepted_message"] = message
+						}
+						if reason != "" {
+							policyNode.Properties["status_accepted_reason"] = reason
+							statusProps["status_accepted_reason"] = reason
+						}
 					case "Ready": // TLSPolicy uses "Ready" instead of "Enforced"
 						policyNode.Properties["status_ready"] = (status == "True")
+						statusProps["status_ready"] = (status == "True")
+						if message != "" {
+							policyNode.Properties["status_ready_message"] = message
+							statusProps["status_ready_message"] = message
+						}
+						if reason != "" {
+							policyNode.Properties["status_ready_reason"] = reason
+							statusProps["status_ready_reason"] = reason
+						}
 					case "Failed":
 						policyNode.Properties["status_failed"] = (status == "True")
-						if msg, ok := condMap["message"].(string); ok && status == "True" {
-							policyNode.Properties["status_message"] = msg
+						statusProps["status_failed"] = (status == "True")
+						if message != "" {
+							policyNode.Properties["status_failed_message"] = message
+							statusProps["status_failed_message"] = message
+						}
+						if reason != "" {
+							policyNode.Properties["status_failed_reason"] = reason
+							statusProps["status_failed_reason"] = reason
 						}
 					}
 				}
@@ -209,7 +236,7 @@ func (h *TLSPolicyHandler) HandleAdd(obj interface{}) {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
-	// Create APPLIES_TO edge (typically to Gateway)
+	// Create APPLIES_TO edge (typically to Gateway) with per-target status
 	if err := h.relationshipBuilder.CreatePolicyAppliesToEdge(
 		ctx,
 		NodeTypeTLSPolicy,
@@ -219,6 +246,7 @@ func (h *TLSPolicyHandler) HandleAdd(obj interface{}) {
 		targetKind,
 		policy.GetNamespace(),
 		targetName,
+		statusProps,
 	); err != nil {
 		h.Logger.Error("failed to create APPLIES_TO edge", zap.Error(err))
 	}

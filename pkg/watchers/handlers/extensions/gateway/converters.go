@@ -28,21 +28,35 @@ func GatewayClassToGraphNode(gatewayClass *gatewayv1.GatewayClass) *models.Graph
 	properties := map[string]interface{}{
 		"name":            gatewayClass.Name,
 		"controller_name": string(gatewayClass.Spec.ControllerName),
+		"created_at":      gatewayClass.CreationTimestamp.Unix(),
 	}
 
 	if gatewayClass.Spec.Description != nil {
 		properties["description"] = *gatewayClass.Spec.Description
 	}
 
-	// Add status conditions
+	// Note: GatewayClass doesn't have top-level ObservedGeneration in v1 API
+
+	// Extract status conditions as booleans with messages and reasons
 	if len(gatewayClass.Status.Conditions) > 0 {
 		for _, condition := range gatewayClass.Status.Conditions {
-			if condition.Type == string(gatewayv1.GatewayClassConditionStatusAccepted) {
-				properties["accepted"] = string(condition.Status)
+			switch condition.Type {
+			case string(gatewayv1.GatewayClassConditionStatusAccepted):
+				properties["status_accepted"] = (condition.Status == "True")
 				if condition.Message != "" {
-					properties["status_message"] = condition.Message
+					properties["status_accepted_message"] = condition.Message
 				}
-				break
+				if condition.Reason != "" {
+					properties["status_accepted_reason"] = string(condition.Reason)
+				}
+			case string(gatewayv1.GatewayClassConditionStatusSupportedVersion):
+				properties["status_supported_version"] = (condition.Status == "True")
+				if condition.Message != "" {
+					properties["status_supported_version_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_supported_version_reason"] = string(condition.Reason)
+				}
 			}
 		}
 	}
@@ -61,6 +75,7 @@ func GatewayToGraphNode(gateway *gatewayv1.Gateway) *models.GraphNode {
 		"name":               gateway.Name,
 		"namespace":          gateway.Namespace,
 		"gateway_class_name": string(gateway.Spec.GatewayClassName),
+		"created_at":         gateway.CreationTimestamp.Unix(),
 	}
 
 	// Add listeners information
@@ -105,13 +120,52 @@ func GatewayToGraphNode(gateway *gatewayv1.Gateway) *models.GraphNode {
 		properties["addresses"] = addresses
 	}
 
-	// Add status conditions
+	// Note: Gateway doesn't have top-level ObservedGeneration in v1 API
+
+	// Extract status conditions as booleans with messages and reasons
 	if len(gateway.Status.Conditions) > 0 {
 		for _, condition := range gateway.Status.Conditions {
-			if condition.Type == string(gatewayv1.GatewayConditionAccepted) {
-				properties["accepted"] = string(condition.Status)
-			} else if condition.Type == string(gatewayv1.GatewayConditionProgrammed) {
-				properties["programmed"] = string(condition.Status)
+			switch condition.Type {
+			case string(gatewayv1.GatewayConditionAccepted):
+				properties["status_accepted"] = (condition.Status == "True")
+				if condition.Message != "" {
+					properties["status_accepted_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_accepted_reason"] = string(condition.Reason)
+				}
+			case string(gatewayv1.GatewayConditionProgrammed):
+				properties["status_programmed"] = (condition.Status == "True")
+				if condition.Message != "" {
+					properties["status_programmed_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_programmed_reason"] = string(condition.Reason)
+				}
+			case string(gatewayv1.GatewayConditionScheduled):
+				properties["status_scheduled"] = (condition.Status == "True")
+				if condition.Message != "" {
+					properties["status_scheduled_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_scheduled_reason"] = string(condition.Reason)
+				}
+			case string(gatewayv1.GatewayConditionReady):
+				properties["status_ready"] = (condition.Status == "True")
+				if condition.Message != "" {
+					properties["status_ready_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_ready_reason"] = string(condition.Reason)
+				}
+			case string(gatewayv1.GatewayConditionAttachedListenerSets):
+				properties["status_attached_listener_sets"] = (condition.Status == "True")
+				if condition.Message != "" {
+					properties["status_attached_listener_sets_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_attached_listener_sets_reason"] = string(condition.Reason)
+				}
 			}
 		}
 	}
@@ -127,8 +181,9 @@ func GatewayToGraphNode(gateway *gatewayv1.Gateway) *models.GraphNode {
 // HTTPRouteToGraphNode converts a Gateway API HTTPRoute to a graph node
 func HTTPRouteToGraphNode(httpRoute *gatewayv1.HTTPRoute) *models.GraphNode {
 	properties := map[string]interface{}{
-		"name":      httpRoute.Name,
-		"namespace": httpRoute.Namespace,
+		"name":       httpRoute.Name,
+		"namespace":  httpRoute.Namespace,
+		"created_at": httpRoute.CreationTimestamp.Unix(),
 	}
 
 	// Add hostnames
@@ -207,16 +262,77 @@ func HTTPRouteToGraphNode(httpRoute *gatewayv1.HTTPRoute) *models.GraphNode {
 		}
 	}
 
-	// Add status
+	// Note: v1 API removed ObservedGeneration from RouteParentStatus
+
+	// Extract status conditions - aggregate across all parents
+	// Set to true if ANY parent has the condition as true
+	statusAccepted := false
+	statusResolvedRefs := false
+	statusPartiallyInvalid := false
+	var acceptedMsg, acceptedReason, resolvedRefsMsg, resolvedRefsReason, partiallyInvalidMsg, partiallyInvalidReason string
+
 	if len(httpRoute.Status.Parents) > 0 {
 		for _, parent := range httpRoute.Status.Parents {
 			for _, condition := range parent.Conditions {
-				if condition.Type == string(gatewayv1.RouteConditionAccepted) {
-					properties["accepted"] = string(condition.Status)
-					break
+				switch condition.Type {
+				case string(gatewayv1.RouteConditionAccepted):
+					if condition.Status == "True" {
+						statusAccepted = true
+					}
+					// Capture first non-empty message/reason
+					if acceptedMsg == "" && condition.Message != "" {
+						acceptedMsg = condition.Message
+					}
+					if acceptedReason == "" && condition.Reason != "" {
+						acceptedReason = string(condition.Reason)
+					}
+				case string(gatewayv1.RouteConditionResolvedRefs):
+					if condition.Status == "True" {
+						statusResolvedRefs = true
+					}
+					if resolvedRefsMsg == "" && condition.Message != "" {
+						resolvedRefsMsg = condition.Message
+					}
+					if resolvedRefsReason == "" && condition.Reason != "" {
+						resolvedRefsReason = string(condition.Reason)
+					}
+				case string(gatewayv1.RouteConditionPartiallyInvalid):
+					if condition.Status == "True" {
+						statusPartiallyInvalid = true
+					}
+					if partiallyInvalidMsg == "" && condition.Message != "" {
+						partiallyInvalidMsg = condition.Message
+					}
+					if partiallyInvalidReason == "" && condition.Reason != "" {
+						partiallyInvalidReason = string(condition.Reason)
+					}
 				}
 			}
 		}
+	}
+
+	properties["status_accepted"] = statusAccepted
+	if acceptedMsg != "" {
+		properties["status_accepted_message"] = acceptedMsg
+	}
+	if acceptedReason != "" {
+		properties["status_accepted_reason"] = acceptedReason
+	}
+
+	properties["status_resolved_refs"] = statusResolvedRefs
+	if resolvedRefsMsg != "" {
+		properties["status_resolved_refs_message"] = resolvedRefsMsg
+	}
+	if resolvedRefsReason != "" {
+		properties["status_resolved_refs_reason"] = resolvedRefsReason
+	}
+
+	properties["status_partially_invalid"] = statusPartiallyInvalid
+	if partiallyInvalidMsg != "" {
+		properties["status_partially_invalid_message"] = partiallyInvalidMsg
+	}
+	if partiallyInvalidReason != "" {
+		properties["status_partially_invalid_reason"] = partiallyInvalidReason
 	}
 
 	// Add labels
@@ -230,8 +346,9 @@ func HTTPRouteToGraphNode(httpRoute *gatewayv1.HTTPRoute) *models.GraphNode {
 // GRPCRouteToGraphNode converts a Gateway API GRPCRoute to a graph node
 func GRPCRouteToGraphNode(grpcRoute *gatewayv1.GRPCRoute) *models.GraphNode {
 	properties := map[string]interface{}{
-		"name":      grpcRoute.Name,
-		"namespace": grpcRoute.Namespace,
+		"name":       grpcRoute.Name,
+		"namespace":  grpcRoute.Namespace,
+		"created_at": grpcRoute.CreationTimestamp.Unix(),
 	}
 
 	// Add hostnames
@@ -312,16 +429,75 @@ func GRPCRouteToGraphNode(grpcRoute *gatewayv1.GRPCRoute) *models.GraphNode {
 		}
 	}
 
-	// Add status
+	// Note: v1 API removed ObservedGeneration from RouteParentStatus
+
+	// Extract status conditions - aggregate across all parents
+	statusAccepted := false
+	statusResolvedRefs := false
+	statusPartiallyInvalid := false
+	var acceptedMsg, acceptedReason, resolvedRefsMsg, resolvedRefsReason, partiallyInvalidMsg, partiallyInvalidReason string
+
 	if len(grpcRoute.Status.Parents) > 0 {
 		for _, parent := range grpcRoute.Status.Parents {
 			for _, condition := range parent.Conditions {
-				if condition.Type == string(gatewayv1.RouteConditionAccepted) {
-					properties["accepted"] = string(condition.Status)
-					break
+				switch condition.Type {
+				case string(gatewayv1.RouteConditionAccepted):
+					if condition.Status == "True" {
+						statusAccepted = true
+					}
+					if acceptedMsg == "" && condition.Message != "" {
+						acceptedMsg = condition.Message
+					}
+					if acceptedReason == "" && condition.Reason != "" {
+						acceptedReason = string(condition.Reason)
+					}
+				case string(gatewayv1.RouteConditionResolvedRefs):
+					if condition.Status == "True" {
+						statusResolvedRefs = true
+					}
+					if resolvedRefsMsg == "" && condition.Message != "" {
+						resolvedRefsMsg = condition.Message
+					}
+					if resolvedRefsReason == "" && condition.Reason != "" {
+						resolvedRefsReason = string(condition.Reason)
+					}
+				case string(gatewayv1.RouteConditionPartiallyInvalid):
+					if condition.Status == "True" {
+						statusPartiallyInvalid = true
+					}
+					if partiallyInvalidMsg == "" && condition.Message != "" {
+						partiallyInvalidMsg = condition.Message
+					}
+					if partiallyInvalidReason == "" && condition.Reason != "" {
+						partiallyInvalidReason = string(condition.Reason)
+					}
 				}
 			}
 		}
+	}
+
+	properties["status_accepted"] = statusAccepted
+	if acceptedMsg != "" {
+		properties["status_accepted_message"] = acceptedMsg
+	}
+	if acceptedReason != "" {
+		properties["status_accepted_reason"] = acceptedReason
+	}
+
+	properties["status_resolved_refs"] = statusResolvedRefs
+	if resolvedRefsMsg != "" {
+		properties["status_resolved_refs_message"] = resolvedRefsMsg
+	}
+	if resolvedRefsReason != "" {
+		properties["status_resolved_refs_reason"] = resolvedRefsReason
+	}
+
+	properties["status_partially_invalid"] = statusPartiallyInvalid
+	if partiallyInvalidMsg != "" {
+		properties["status_partially_invalid_message"] = partiallyInvalidMsg
+	}
+	if partiallyInvalidReason != "" {
+		properties["status_partially_invalid_reason"] = partiallyInvalidReason
 	}
 
 	// Add labels
@@ -335,8 +511,9 @@ func GRPCRouteToGraphNode(grpcRoute *gatewayv1.GRPCRoute) *models.GraphNode {
 // TCPRouteToGraphNode converts a Gateway API TCPRoute to a graph node
 func TCPRouteToGraphNode(tcpRoute *gatewayv1alpha2.TCPRoute) *models.GraphNode {
 	properties := map[string]interface{}{
-		"name":      tcpRoute.Name,
-		"namespace": tcpRoute.Namespace,
+		"name":       tcpRoute.Name,
+		"namespace":  tcpRoute.Namespace,
+		"created_at": tcpRoute.CreationTimestamp.Unix(),
 	}
 
 	// Add parent refs
@@ -363,6 +540,77 @@ func TCPRouteToGraphNode(tcpRoute *gatewayv1alpha2.TCPRoute) *models.GraphNode {
 		properties["rule_count"] = len(tcpRoute.Spec.Rules)
 	}
 
+	// Note: v1 API removed ObservedGeneration from RouteParentStatus
+
+	// Extract status conditions - aggregate across all parents
+	statusAccepted := false
+	statusResolvedRefs := false
+	statusPartiallyInvalid := false
+	var acceptedMsg, acceptedReason, resolvedRefsMsg, resolvedRefsReason, partiallyInvalidMsg, partiallyInvalidReason string
+
+	if len(tcpRoute.Status.Parents) > 0 {
+		for _, parent := range tcpRoute.Status.Parents {
+			for _, condition := range parent.Conditions {
+				switch condition.Type {
+				case "Accepted":
+					if condition.Status == "True" {
+						statusAccepted = true
+					}
+					if acceptedMsg == "" && condition.Message != "" {
+						acceptedMsg = condition.Message
+					}
+					if acceptedReason == "" && condition.Reason != "" {
+						acceptedReason = string(condition.Reason)
+					}
+				case "ResolvedRefs":
+					if condition.Status == "True" {
+						statusResolvedRefs = true
+					}
+					if resolvedRefsMsg == "" && condition.Message != "" {
+						resolvedRefsMsg = condition.Message
+					}
+					if resolvedRefsReason == "" && condition.Reason != "" {
+						resolvedRefsReason = string(condition.Reason)
+					}
+				case "PartiallyInvalid":
+					if condition.Status == "True" {
+						statusPartiallyInvalid = true
+					}
+					if partiallyInvalidMsg == "" && condition.Message != "" {
+						partiallyInvalidMsg = condition.Message
+					}
+					if partiallyInvalidReason == "" && condition.Reason != "" {
+						partiallyInvalidReason = string(condition.Reason)
+					}
+				}
+			}
+		}
+	}
+
+	properties["status_accepted"] = statusAccepted
+	if acceptedMsg != "" {
+		properties["status_accepted_message"] = acceptedMsg
+	}
+	if acceptedReason != "" {
+		properties["status_accepted_reason"] = acceptedReason
+	}
+
+	properties["status_resolved_refs"] = statusResolvedRefs
+	if resolvedRefsMsg != "" {
+		properties["status_resolved_refs_message"] = resolvedRefsMsg
+	}
+	if resolvedRefsReason != "" {
+		properties["status_resolved_refs_reason"] = resolvedRefsReason
+	}
+
+	properties["status_partially_invalid"] = statusPartiallyInvalid
+	if partiallyInvalidMsg != "" {
+		properties["status_partially_invalid_message"] = partiallyInvalidMsg
+	}
+	if partiallyInvalidReason != "" {
+		properties["status_partially_invalid_reason"] = partiallyInvalidReason
+	}
+
 	// Add labels
 	if len(tcpRoute.Labels) > 0 {
 		properties["labels"] = serializeMap(tcpRoute.Labels)
@@ -374,8 +622,9 @@ func TCPRouteToGraphNode(tcpRoute *gatewayv1alpha2.TCPRoute) *models.GraphNode {
 // UDPRouteToGraphNode converts a Gateway API UDPRoute to a graph node
 func UDPRouteToGraphNode(udpRoute *gatewayv1alpha2.UDPRoute) *models.GraphNode {
 	properties := map[string]interface{}{
-		"name":      udpRoute.Name,
-		"namespace": udpRoute.Namespace,
+		"name":       udpRoute.Name,
+		"namespace":  udpRoute.Namespace,
+		"created_at": udpRoute.CreationTimestamp.Unix(),
 	}
 
 	// Add parent refs
@@ -402,6 +651,77 @@ func UDPRouteToGraphNode(udpRoute *gatewayv1alpha2.UDPRoute) *models.GraphNode {
 		properties["rule_count"] = len(udpRoute.Spec.Rules)
 	}
 
+	// Note: v1 API removed ObservedGeneration from RouteParentStatus
+
+	// Extract status conditions - aggregate across all parents
+	statusAccepted := false
+	statusResolvedRefs := false
+	statusPartiallyInvalid := false
+	var acceptedMsg, acceptedReason, resolvedRefsMsg, resolvedRefsReason, partiallyInvalidMsg, partiallyInvalidReason string
+
+	if len(udpRoute.Status.Parents) > 0 {
+		for _, parent := range udpRoute.Status.Parents {
+			for _, condition := range parent.Conditions {
+				switch condition.Type {
+				case "Accepted":
+					if condition.Status == "True" {
+						statusAccepted = true
+					}
+					if acceptedMsg == "" && condition.Message != "" {
+						acceptedMsg = condition.Message
+					}
+					if acceptedReason == "" && condition.Reason != "" {
+						acceptedReason = string(condition.Reason)
+					}
+				case "ResolvedRefs":
+					if condition.Status == "True" {
+						statusResolvedRefs = true
+					}
+					if resolvedRefsMsg == "" && condition.Message != "" {
+						resolvedRefsMsg = condition.Message
+					}
+					if resolvedRefsReason == "" && condition.Reason != "" {
+						resolvedRefsReason = string(condition.Reason)
+					}
+				case "PartiallyInvalid":
+					if condition.Status == "True" {
+						statusPartiallyInvalid = true
+					}
+					if partiallyInvalidMsg == "" && condition.Message != "" {
+						partiallyInvalidMsg = condition.Message
+					}
+					if partiallyInvalidReason == "" && condition.Reason != "" {
+						partiallyInvalidReason = string(condition.Reason)
+					}
+				}
+			}
+		}
+	}
+
+	properties["status_accepted"] = statusAccepted
+	if acceptedMsg != "" {
+		properties["status_accepted_message"] = acceptedMsg
+	}
+	if acceptedReason != "" {
+		properties["status_accepted_reason"] = acceptedReason
+	}
+
+	properties["status_resolved_refs"] = statusResolvedRefs
+	if resolvedRefsMsg != "" {
+		properties["status_resolved_refs_message"] = resolvedRefsMsg
+	}
+	if resolvedRefsReason != "" {
+		properties["status_resolved_refs_reason"] = resolvedRefsReason
+	}
+
+	properties["status_partially_invalid"] = statusPartiallyInvalid
+	if partiallyInvalidMsg != "" {
+		properties["status_partially_invalid_message"] = partiallyInvalidMsg
+	}
+	if partiallyInvalidReason != "" {
+		properties["status_partially_invalid_reason"] = partiallyInvalidReason
+	}
+
 	// Add labels
 	if len(udpRoute.Labels) > 0 {
 		properties["labels"] = serializeMap(udpRoute.Labels)
@@ -413,8 +733,9 @@ func UDPRouteToGraphNode(udpRoute *gatewayv1alpha2.UDPRoute) *models.GraphNode {
 // TLSRouteToGraphNode converts a Gateway API TLSRoute to a graph node
 func TLSRouteToGraphNode(tlsRoute *gatewayv1alpha2.TLSRoute) *models.GraphNode {
 	properties := map[string]interface{}{
-		"name":      tlsRoute.Name,
-		"namespace": tlsRoute.Namespace,
+		"name":       tlsRoute.Name,
+		"namespace":  tlsRoute.Namespace,
+		"created_at": tlsRoute.CreationTimestamp.Unix(),
 	}
 
 	// Add hostnames
@@ -450,6 +771,77 @@ func TLSRouteToGraphNode(tlsRoute *gatewayv1alpha2.TLSRoute) *models.GraphNode {
 		properties["rule_count"] = len(tlsRoute.Spec.Rules)
 	}
 
+	// Note: v1 API removed ObservedGeneration from RouteParentStatus
+
+	// Extract status conditions - aggregate across all parents
+	statusAccepted := false
+	statusResolvedRefs := false
+	statusPartiallyInvalid := false
+	var acceptedMsg, acceptedReason, resolvedRefsMsg, resolvedRefsReason, partiallyInvalidMsg, partiallyInvalidReason string
+
+	if len(tlsRoute.Status.Parents) > 0 {
+		for _, parent := range tlsRoute.Status.Parents {
+			for _, condition := range parent.Conditions {
+				switch condition.Type {
+				case "Accepted":
+					if condition.Status == "True" {
+						statusAccepted = true
+					}
+					if acceptedMsg == "" && condition.Message != "" {
+						acceptedMsg = condition.Message
+					}
+					if acceptedReason == "" && condition.Reason != "" {
+						acceptedReason = string(condition.Reason)
+					}
+				case "ResolvedRefs":
+					if condition.Status == "True" {
+						statusResolvedRefs = true
+					}
+					if resolvedRefsMsg == "" && condition.Message != "" {
+						resolvedRefsMsg = condition.Message
+					}
+					if resolvedRefsReason == "" && condition.Reason != "" {
+						resolvedRefsReason = string(condition.Reason)
+					}
+				case "PartiallyInvalid":
+					if condition.Status == "True" {
+						statusPartiallyInvalid = true
+					}
+					if partiallyInvalidMsg == "" && condition.Message != "" {
+						partiallyInvalidMsg = condition.Message
+					}
+					if partiallyInvalidReason == "" && condition.Reason != "" {
+						partiallyInvalidReason = string(condition.Reason)
+					}
+				}
+			}
+		}
+	}
+
+	properties["status_accepted"] = statusAccepted
+	if acceptedMsg != "" {
+		properties["status_accepted_message"] = acceptedMsg
+	}
+	if acceptedReason != "" {
+		properties["status_accepted_reason"] = acceptedReason
+	}
+
+	properties["status_resolved_refs"] = statusResolvedRefs
+	if resolvedRefsMsg != "" {
+		properties["status_resolved_refs_message"] = resolvedRefsMsg
+	}
+	if resolvedRefsReason != "" {
+		properties["status_resolved_refs_reason"] = resolvedRefsReason
+	}
+
+	properties["status_partially_invalid"] = statusPartiallyInvalid
+	if partiallyInvalidMsg != "" {
+		properties["status_partially_invalid_message"] = partiallyInvalidMsg
+	}
+	if partiallyInvalidReason != "" {
+		properties["status_partially_invalid_reason"] = partiallyInvalidReason
+	}
+
 	// Add labels
 	if len(tlsRoute.Labels) > 0 {
 		properties["labels"] = serializeMap(tlsRoute.Labels)
@@ -461,8 +853,9 @@ func TLSRouteToGraphNode(tlsRoute *gatewayv1alpha2.TLSRoute) *models.GraphNode {
 // ReferenceGrantToGraphNode converts a Gateway API ReferenceGrant to a graph node
 func ReferenceGrantToGraphNode(referenceGrant *gatewayv1beta1.ReferenceGrant) *models.GraphNode {
 	properties := map[string]interface{}{
-		"name":      referenceGrant.Name,
-		"namespace": referenceGrant.Namespace,
+		"name":       referenceGrant.Name,
+		"namespace":  referenceGrant.Namespace,
+		"created_at": referenceGrant.CreationTimestamp.Unix(),
 	}
 
 	// Add from references (who can reference)
@@ -510,8 +903,9 @@ func ReferenceGrantToGraphNode(referenceGrant *gatewayv1beta1.ReferenceGrant) *m
 // BackendTLSPolicyToGraphNode converts a Gateway API BackendTLSPolicy to a graph node
 func BackendTLSPolicyToGraphNode(backendTLSPolicy *gatewayv1.BackendTLSPolicy) *models.GraphNode {
 	properties := map[string]interface{}{
-		"name":      backendTLSPolicy.Name,
-		"namespace": backendTLSPolicy.Namespace,
+		"name":       backendTLSPolicy.Name,
+		"namespace":  backendTLSPolicy.Namespace,
+		"created_at": backendTLSPolicy.CreationTimestamp.Unix(),
 	}
 
 	// Add target refs (what backends this policy applies to)
@@ -552,6 +946,58 @@ func BackendTLSPolicyToGraphNode(backendTLSPolicy *gatewayv1.BackendTLSPolicy) *
 	// Add well-known CA certificates if present
 	if backendTLSPolicy.Spec.Validation.WellKnownCACertificates != nil {
 		properties["well_known_ca_certificates"] = string(*backendTLSPolicy.Spec.Validation.WellKnownCACertificates)
+	}
+
+	// Note: v1 API removed ObservedGeneration from PolicyAncestorStatus
+
+	// Extract status conditions - aggregate across all ancestors
+	statusAccepted := false
+	statusResolvedRefs := false
+	var acceptedMsg, acceptedReason, resolvedRefsMsg, resolvedRefsReason string
+
+	if len(backendTLSPolicy.Status.Ancestors) > 0 {
+		for _, ancestor := range backendTLSPolicy.Status.Ancestors {
+			for _, condition := range ancestor.Conditions {
+				switch string(condition.Type) {
+				case "Accepted":
+					if condition.Status == "True" {
+						statusAccepted = true
+					}
+					if acceptedMsg == "" && condition.Message != "" {
+						acceptedMsg = condition.Message
+					}
+					if acceptedReason == "" && condition.Reason != "" {
+						acceptedReason = string(condition.Reason)
+					}
+				case "ResolvedRefs":
+					if condition.Status == "True" {
+						statusResolvedRefs = true
+					}
+					if resolvedRefsMsg == "" && condition.Message != "" {
+						resolvedRefsMsg = condition.Message
+					}
+					if resolvedRefsReason == "" && condition.Reason != "" {
+						resolvedRefsReason = string(condition.Reason)
+					}
+				}
+			}
+		}
+	}
+
+	properties["status_accepted"] = statusAccepted
+	if acceptedMsg != "" {
+		properties["status_accepted_message"] = acceptedMsg
+	}
+	if acceptedReason != "" {
+		properties["status_accepted_reason"] = acceptedReason
+	}
+
+	properties["status_resolved_refs"] = statusResolvedRefs
+	if resolvedRefsMsg != "" {
+		properties["status_resolved_refs_message"] = resolvedRefsMsg
+	}
+	if resolvedRefsReason != "" {
+		properties["status_resolved_refs_reason"] = resolvedRefsReason
 	}
 
 	// Add labels

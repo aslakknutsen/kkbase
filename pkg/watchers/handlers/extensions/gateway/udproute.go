@@ -81,7 +81,7 @@ func (h *UDPRouteHandler) HandleAdd(obj interface{}) {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
-	// Create ATTACHES_TO edges to parent Gateways
+	// Create ATTACHES_TO edges to parent Gateways with per-parent status
 	for _, parentRef := range udpRoute.Spec.ParentRefs {
 		gatewayNamespace := udpRoute.Namespace
 		if parentRef.Namespace != nil {
@@ -95,6 +95,9 @@ func (h *UDPRouteHandler) HandleAdd(obj interface{}) {
 			sectionName = &sn
 		}
 
+		// Find matching parent status
+		statusProps := extractParentStatusProps(udpRoute.Status.Parents, parentRef, udpRoute.Namespace)
+
 		if err := h.relationshipBuilder.CreateRouteAttachesToEdge(
 			ctx,
 			NodeTypeUDPRoute,
@@ -103,6 +106,7 @@ func (h *UDPRouteHandler) HandleAdd(obj interface{}) {
 			gatewayNamespace,
 			gatewayName,
 			sectionName,
+			statusProps,
 		); err != nil {
 			h.Logger.Error("failed to create ATTACHES_TO edge",
 				zap.Error(err),

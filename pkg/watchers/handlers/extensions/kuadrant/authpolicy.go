@@ -202,7 +202,8 @@ func (h *AuthPolicyHandler) HandleAdd(obj interface{}) {
 		policyNode.Properties["policy_type"] = "implicit_defaults"
 	}
 
-	// Extract status conditions for quick diagnostics
+	// Extract status conditions with per-condition messages and reasons
+	statusProps := make(map[string]interface{})
 	if h.extractor.HasField("status.conditions") {
 		if conditions, found, _ := h.extractor.ExtractSlice(policy, "status.conditions"); found {
 			// Find key condition types
@@ -210,16 +211,42 @@ func (h *AuthPolicyHandler) HandleAdd(obj interface{}) {
 				if condMap, ok := cond.(map[string]interface{}); ok {
 					condType, _ := condMap["type"].(string)
 					status, _ := condMap["status"].(string)
+					message, _ := condMap["message"].(string)
+					reason, _ := condMap["reason"].(string)
 
 					switch condType {
 					case "Accepted":
 						policyNode.Properties["status_accepted"] = (status == "True")
+						statusProps["status_accepted"] = (status == "True")
+						if message != "" {
+							policyNode.Properties["status_accepted_message"] = message
+							statusProps["status_accepted_message"] = message
+						}
+						if reason != "" {
+							policyNode.Properties["status_accepted_reason"] = reason
+							statusProps["status_accepted_reason"] = reason
+						}
 					case "Enforced":
 						policyNode.Properties["status_enforced"] = (status == "True")
+						statusProps["status_enforced"] = (status == "True")
+						if message != "" {
+							policyNode.Properties["status_enforced_message"] = message
+							statusProps["status_enforced_message"] = message
+						}
+						if reason != "" {
+							policyNode.Properties["status_enforced_reason"] = reason
+							statusProps["status_enforced_reason"] = reason
+						}
 					case "Failed":
 						policyNode.Properties["status_failed"] = (status == "True")
-						if msg, ok := condMap["message"].(string); ok && status == "True" {
-							policyNode.Properties["status_message"] = msg
+						statusProps["status_failed"] = (status == "True")
+						if message != "" {
+							policyNode.Properties["status_failed_message"] = message
+							statusProps["status_failed_message"] = message
+						}
+						if reason != "" {
+							policyNode.Properties["status_failed_reason"] = reason
+							statusProps["status_failed_reason"] = reason
 						}
 					}
 				}
@@ -256,7 +283,7 @@ func (h *AuthPolicyHandler) HandleAdd(obj interface{}) {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
-	// Create APPLIES_TO edge to target (Gateway or HTTPRoute)
+	// Create APPLIES_TO edge to target (Gateway or HTTPRoute) with per-target status
 	targetNamespace := policy.GetNamespace() // Local policy
 
 	if err := h.relationshipBuilder.CreatePolicyAppliesToEdge(
@@ -268,6 +295,7 @@ func (h *AuthPolicyHandler) HandleAdd(obj interface{}) {
 		targetKind,
 		targetNamespace,
 		targetName,
+		statusProps,
 	); err != nil {
 		h.Logger.Error("failed to create APPLIES_TO edge",
 			zap.Error(err),
@@ -276,9 +304,28 @@ func (h *AuthPolicyHandler) HandleAdd(obj interface{}) {
 		)
 	}
 
-	// TODO: Create ENFORCED_BY edge to Authorino service
-	// This requires understanding how Kuadrant discovers Authorino instances
-	// See relationships.go for investigation notes
+	// Create ENFORCED_BY edge to Authorino service
+	// Discover Authorino service by label (app=authorino)
+	if authorinoNs, authorinoName, found := h.relationshipBuilder.FindServiceByLabel(ctx, "app=authorino"); found {
+		if err := h.relationshipBuilder.CreatePolicyEnforcedByEdge(
+			ctx,
+			NodeTypeAuthPolicy,
+			policy.GetNamespace(),
+			policy.GetName(),
+			authorinoNs,
+			authorinoName,
+		); err != nil {
+			h.Logger.Error("failed to create ENFORCED_BY edge",
+				zap.Error(err),
+				zap.String("authorino_service", authorinoName),
+				zap.String("authorino_namespace", authorinoNs),
+			)
+		}
+	} else {
+		h.Logger.Debug("authorino service not found, skipping ENFORCED_BY edge",
+			zap.String("policy", policy.GetName()),
+		)
+	}
 }
 
 // HandleUpdate processes an updated AuthPolicy

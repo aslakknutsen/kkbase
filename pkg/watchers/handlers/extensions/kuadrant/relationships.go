@@ -5,22 +5,26 @@ import (
 
 	"github.com/kagenti/kkbase/pkg/graph"
 	"github.com/kagenti/kkbase/pkg/models"
-	"github.com/kagenti/kkbase/pkg/watchers/handlers/core"
 	coretypes "github.com/kagenti/kkbase/pkg/watchers/handlers/core"
 	gatewaytypes "github.com/kagenti/kkbase/pkg/watchers/handlers/extensions/gateway"
 	"go.uber.org/zap"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
 
 // RelationshipBuilder helps build relationships for Kuadrant resources
 type RelationshipBuilder struct {
-	base *core.RelationshipBuilder
+	base      *coretypes.RelationshipBuilder
+	clientset *kubernetes.Clientset
+	logger    *zap.Logger
 }
 
 // NewRelationshipBuilder creates a new kuadrant relationship builder
 func NewRelationshipBuilder(clientset *kubernetes.Clientset, graphStore graph.GraphStore, logger *zap.Logger) *RelationshipBuilder {
 	return &RelationshipBuilder{
-		base: core.NewRelationshipBuilder(clientset, graphStore, logger),
+		base:      coretypes.NewRelationshipBuilder(clientset, graphStore, logger),
+		clientset: clientset,
+		logger:    logger,
 	}
 }
 
@@ -31,6 +35,7 @@ func (rb *RelationshipBuilder) CreatePolicyAppliesToEdge(
 	policyType models.NodeType,
 	policyNamespace, policyName string,
 	targetGroup, targetKind, targetNamespace, targetName string,
+	statusProps map[string]interface{},
 ) error {
 	policyID := models.GetNodeID(policyType, policyNamespace, policyName)
 
@@ -53,6 +58,11 @@ func (rb *RelationshipBuilder) CreatePolicyAppliesToEdge(
 	}
 	if targetGroup != "" {
 		properties["target_group"] = targetGroup
+	}
+
+	// Add per-target status properties
+	for k, v := range statusProps {
+		properties[k] = v
 	}
 
 	return rb.base.GraphStore.UpsertEdge(
@@ -87,42 +97,51 @@ func (rb *RelationshipBuilder) CreatePolicyManagedByEdge(
 	)
 }
 
-// TODO: CreatePolicyEnforcedByEdge creates ENFORCED_BY edge from Policy to enforcement Service
-// This requires investigating the Kuadrant operator source code to understand how policies
-// discover their enforcement services (Authorino for AuthPolicy, Limitador for RateLimitPolicy).
-//
-// Possible discovery mechanisms to investigate:
-// - Kuadrant CR contains explicit service references
-// - Label selectors (e.g., app.kubernetes.io/component=authorino)
-// - Naming conventions (e.g., "authorino" service in same namespace)
-// - ConfigMap-based discovery
-// - Operator-managed Service objects with known names
-//
-// Source to investigate:
-// - github.com/Kuadrant/kuadrant-operator/api/v1beta1/kuadrant_types.go
-// - github.com/Kuadrant/kuadrant-operator/controllers/*_controller.go
-//
-// Once the mechanism is understood, implement:
-//
-// func (rb *RelationshipBuilder) CreatePolicyEnforcedByEdge(
-//     ctx context.Context,
-//     policyType models.NodeType,
-//     policyNamespace, policyName string,
-//     serviceNamespace, serviceName string,
-// ) error {
-//     policyID := models.GetNodeID(policyType, policyNamespace, policyName)
-//     serviceID := models.GetNodeID(coretypes.NodeTypeService, serviceNamespace, serviceName)
-//
-//     return rb.base.GraphStore.UpsertEdge(
-//         ctx,
-//         string(policyType),
-//         policyID,
-//         string(EdgeTypeEnforcedBy),
-//         string(coretypes.NodeTypeService),
-//         serviceID,
-//         nil,
-//     )
-// }
+// FindServiceByLabel searches cluster-wide for a Service with the given label selector
+// Returns the first matching service found, or nil if none exist
+func (rb *RelationshipBuilder) FindServiceByLabel(ctx context.Context, labelSelector string) (namespace, name string, found bool) {
+	services, err := rb.clientset.CoreV1().Services("").List(ctx, metav1.ListOptions{
+		LabelSelector: labelSelector,
+	})
+	if err != nil {
+		rb.logger.Error("failed to list services by label",
+			zap.String("label_selector", labelSelector),
+			zap.Error(err),
+		)
+		return "", "", false
+	}
+
+	if len(services.Items) == 0 {
+		return "", "", false
+	}
+
+	// Return the first service found
+	// If multiple exist, they should all be equivalent enforcement services
+	svc := services.Items[0]
+	return svc.Namespace, svc.Name, true
+}
+
+// CreatePolicyEnforcedByEdge creates ENFORCED_BY edge from Policy to enforcement Service
+// This links policies to their enforcement services (Authorino for AuthPolicy, Limitador for RateLimitPolicy)
+func (rb *RelationshipBuilder) CreatePolicyEnforcedByEdge(
+	ctx context.Context,
+	policyType models.NodeType,
+	policyNamespace, policyName string,
+	serviceNamespace, serviceName string,
+) error {
+	policyID := models.GetNodeID(policyType, policyNamespace, policyName)
+	serviceID := models.GetNodeID(coretypes.NodeTypeService, serviceNamespace, serviceName)
+
+	return rb.base.GraphStore.UpsertEdge(
+		ctx,
+		string(policyType),
+		policyID,
+		string(EdgeTypeEnforcedBy),
+		string(coretypes.NodeTypeService),
+		serviceID,
+		nil,
+	)
+}
 
 // CreateKuadrantManagesServiceEdge creates MANAGES edge from Kuadrant CR to Service
 // This links the Kuadrant operator to its managed components (Authorino, Limitador)
@@ -144,4 +163,3 @@ func (rb *RelationshipBuilder) CreateKuadrantManagesServiceEdge(
 		nil,
 	)
 }
-

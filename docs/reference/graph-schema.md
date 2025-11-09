@@ -59,6 +59,30 @@ See [Architecture > Resource Type Registry](../development/architecture.md#resou
 
 ## Node Types
 
+### Standardized Properties
+
+All resources now include these standardized properties:
+
+- **`created_at`**: Unix timestamp from Kubernetes resource `metadata.creationTimestamp`
+- **`updated_at`**: Unix timestamp of last graph update (managed by graph store)
+- **`observed_generation`**: For resources with status, tracks if controller has processed latest spec
+- **`status_stale`**: Boolean flag set when `observed_generation` != `metadata.generation`
+- **Status conditions as booleans**: e.g., `status_ready`, `status_accepted`, `status_progressing`
+- **Per-condition messages**: e.g., `status_ready_message`, `status_accepted_message` (human-readable details)
+- **Per-condition reasons**: e.g., `status_ready_reason`, `status_accepted_reason` (machine-readable codes)
+
+### Status Properties on Relationships
+
+For resources with per-parent or per-ancestor status (routes, policies):
+
+- **Node properties**: Aggregate status across all parents/ancestors (e.g., `status_accepted=true` if ANY parent accepts)
+- **Edge properties**: Per-parent/ancestor status with messages and reasons stored on ATTACHES_TO/APPLIES_TO relationships
+
+Example: An HTTPRoute attached to two Gateways will have:
+- Node: `status_accepted=true` (aggregate)
+- Edge to Gateway A: `status_accepted=true`, `status_accepted_message="", status_accepted_reason="Accepted"`
+- Edge to Gateway B: `status_accepted=false`, `status_accepted_message="Invalid route rule", status_accepted_reason="UnsupportedValue"`
+
 ### Core Kubernetes Resources
 
 #### Compute & Infrastructure
@@ -69,17 +93,17 @@ See [Architecture > Resource Type Registry](../development/architecture.md#resou
 
 **Node**
 - Worker or master machines in the cluster
-- Properties: `name`, `status`, `internal_ip`, `external_ip`, `cpu_capacity`, `memory_capacity`, `conditions`, `labels`
+- Properties: `name`, `status`, `internal_ip`, `external_ip`, `cpu_capacity`, `memory_capacity`, `created_at`, `status_ready`, `status_memory_pressure`, `status_disk_pressure`, `status_pid_pressure`, `status_network_unavailable`, `labels`
 
 **Namespace**
 - Logical isolation boundary
-- Properties: `name`, `status`, `labels`, `annotations`
+- Properties: `name`, `status`, `created_at`, `status_deletion_discovery_failure`, `status_deletion_content_failure`, `status_deletion_gv_parsing_failure`, `status_content_remaining`, `status_finalizers_remaining`, `labels`
 
 #### Workload Resources
 
 **Pod**
 - Smallest deployable unit
-- Properties: `name`, `namespace`, `uid`, `status`, `ip`, `node_name`, `host_ip`, `phase`, `qos_class`, `restart_policy`, `labels`, `annotations`, `created`, `started`
+- Properties: `name`, `namespace`, `status`, `ip`, `node_name`, `host_ip`, `cpu_request`, `memory_request`, `cpu_limit`, `memory_limit`, `created_at`, `status_pod_scheduled`, `status_containers_ready`, `status_initialized`, `status_ready`, `labels`, `owners`
 
 **Container**
 - Individual container within a Pod
@@ -87,19 +111,19 @@ See [Architecture > Resource Type Registry](../development/architecture.md#resou
 
 **Deployment**
 - Manages ReplicaSets for declarative updates
-- Properties: `name`, `namespace`, `uid`, `replicas`, `ready_replicas`, `available_replicas`, `updated_replicas`, `labels`, `annotations`, `created`, `generation`
+- Properties: `name`, `namespace`, `desired_replicas`, `ready_replicas`, `available_replicas`, `updated_replicas`, `strategy`, `created_at`, `observed_generation`, `status_stale`, `status_available`, `status_progressing`, `status_replica_failure`, `status_message`, `labels`, `selector`
 
 **ReplicaSet**
 - Ensures specified number of pod replicas
-- Properties: `name`, `namespace`, `uid`, `replicas`, `ready_replicas`, `available_replicas`, `labels`, `annotations`, `created`
+- Properties: `name`, `namespace`, `desired_replicas`, `current_replicas`, `ready_replicas`, `created_at`, `observed_generation`, `status_stale`, `status_replica_failure`, `status_message`, `labels`, `selector`, `owners`
 
 **StatefulSet**
 - Manages stateful applications
-- Properties: `name`, `namespace`, `uid`, `replicas`, `ready_replicas`, `labels`, `annotations`, `created`
+- Properties: `name`, `namespace`, `desired_replicas`, `current_replicas`, `ready_replicas`, `created_at`, `observed_generation`, `status_stale`, `status_replicas_ready`, `labels`, `selector`
 
 **DaemonSet**
 - Ensures pods run on all/selected nodes
-- Properties: `name`, `namespace`, `uid`, `desired_number_scheduled`, `current_number_scheduled`, `number_ready`, `labels`, `annotations`, `created`
+- Properties: `name`, `namespace`, `desired_scheduled`, `current_scheduled`, `number_ready`, `number_available`, `created_at`, `observed_generation`, `status_stale`, `status_available`, `labels`, `selector`
 
 **Job**
 - Run-to-completion workloads
@@ -109,7 +133,7 @@ See [Architecture > Resource Type Registry](../development/architecture.md#resou
 
 **Service**
 - Exposes applications running on Pods
-- Properties: `name`, `namespace`, `uid`, `type`, `cluster_ip`, `external_ips`, `ports`, `selector`, `session_affinity`, `labels`, `annotations`, `created`
+- Properties: `name`, `namespace`, `type`, `cluster_ip`, `external_ips`, `ports`, `selector`, `created_at`, `labels`
 
 **Ingress**
 - HTTP/HTTPS routing to services
@@ -127,25 +151,25 @@ See [Architecture > Resource Type Registry](../development/architecture.md#resou
 
 **PersistentVolume (PV)**
 - Cluster-scoped storage resource
-- Properties: `name`, `capacity`, `access_modes`, `reclaim_policy`, `status`, `storage_class`, `volume_mode`, `labels`, `annotations`, `created`
+- Properties: `name`, `capacity`, `access_modes`, `reclaim_policy`, `status`, `storage_class`, `volume_mode`, `created_at`, `status_ready`, `labels`
 
 **PersistentVolumeClaim (PVC)**
 - Request for storage by a user
-- Properties: `name`, `namespace`, `uid`, `status`, `capacity`, `access_modes`, `storage_class`, `volume_name`, `labels`, `annotations`, `created`
+- Properties: `name`, `namespace`, `status`, `requested_storage`, `capacity`, `access_modes`, `storage_class`, `volume_name`, `created_at`, `status_resizing`, `status_filesystem_resize_pending`, `labels`
 
 **StorageClass**
 - Storage provisioning template
-- Properties: `name`, `provisioner`, `parameters`, `reclaim_policy`, `volume_binding_mode`, `allow_volume_expansion`, `labels`, `annotations`, `created`
+- Properties: `name`, `provisioner`, `parameters`, `reclaim_policy`, `volume_binding_mode`, `allow_volume_expansion`, `created_at`, `labels`
 
 #### Configuration Resources
 
 **ConfigMap**
 - Non-confidential configuration data
-- Properties: `name`, `namespace`, `uid`, `data_keys`, `labels`, `annotations`, `created`
+- Properties: `name`, `namespace`, `data_keys`, `created_at`, `labels`
 
 **Secret**
 - Sensitive information storage
-- Properties: `name`, `namespace`, `uid`, `type`, `data_keys`, `labels`, `annotations`, `created`
+- Properties: `name`, `namespace`, `type`, `data_keys`, `created_at`, `labels`
 
 #### Observability Resources
 
@@ -175,35 +199,39 @@ See [Architecture > Resource Type Registry](../development/architecture.md#resou
 
 **GatewayClass**
 - Gateway implementation template (cluster-scoped)
-- Properties: `name`, `controller_name`, `description`, `accepted`, `status_message`, `labels`, `annotations`, `created`
+- Properties: `name`, `controller_name`, `description`, `created_at`, `observed_generation`, `status_stale`, `status_accepted`, `status_supported_version`, `status_message`, `labels`
 
 **Gateway**
 - Load balancer configuration
-- Properties: `name`, `namespace`, `uid`, `gateway_class_name`, `listeners`, `addresses`, `accepted`, `programmed`, `labels`, `annotations`, `created`
+- Properties: `name`, `namespace`, `gateway_class_name`, `listeners`, `addresses`, `created_at`, `observed_generation`, `status_stale`, `status_accepted`, `status_programmed`, `status_scheduled`, `status_ready`, `status_attached_listener_sets`, `labels`
 
 **HTTPRoute**
 - HTTP/HTTPS routing rules
-- Properties: `name`, `namespace`, `uid`, `hostnames`, `parent_refs`, `rules`, `rule_count`, `accepted`, `labels`, `annotations`, `created`
+- Properties: `name`, `namespace`, `hostnames`, `parent_refs`, `rules`, `rule_count`, `created_at`, `observed_generation`, `status_stale`, `status_accepted`, `status_resolved_refs`, `status_partially_invalid`, `status_message`, `labels`
 
 **GRPCRoute**
 - gRPC routing rules
-- Properties: `name`, `namespace`, `uid`, `hostnames`, `parent_refs`, `rules`, `rule_count`, `accepted`, `labels`, `annotations`, `created`
+- Properties: `name`, `namespace`, `hostnames`, `parent_refs`, `rules`, `rule_count`, `created_at`, `observed_generation`, `status_stale`, `status_accepted`, `status_resolved_refs`, `status_partially_invalid`, `status_message`, `labels`
 
 **TCPRoute**
 - TCP routing rules
-- Properties: `name`, `namespace`, `uid`, `parent_refs`, `rules`, `rule_count`, `accepted`, `labels`, `annotations`, `created`
+- Properties: `name`, `namespace`, `parent_refs`, `rule_count`, `created_at`, `observed_generation`, `status_stale`, `status_accepted`, `status_resolved_refs`, `status_partially_invalid`, `status_message`, `labels`
 
 **UDPRoute**
 - UDP routing rules
-- Properties: `name`, `namespace`, `uid`, `parent_refs`, `rules`, `rule_count`, `accepted`, `labels`, `annotations`, `created`
+- Properties: `name`, `namespace`, `parent_refs`, `rule_count`, `created_at`, `observed_generation`, `status_stale`, `status_accepted`, `status_resolved_refs`, `status_partially_invalid`, `status_message`, `labels`
 
 **TLSRoute**
 - TLS routing rules
-- Properties: `name`, `namespace`, `uid`, `hostnames`, `parent_refs`, `rules`, `rule_count`, `accepted`, `labels`, `annotations`, `created`
+- Properties: `name`, `namespace`, `hostnames`, `parent_refs`, `rule_count`, `created_at`, `observed_generation`, `status_stale`, `status_accepted`, `status_resolved_refs`, `status_partially_invalid`, `status_message`, `labels`
+
+**BackendTLSPolicy**
+- Backend TLS validation policy
+- Properties: `name`, `namespace`, `target_refs`, `hostname`, `ca_certificate_refs`, `well_known_ca_certificates`, `created_at`, `observed_generation`, `status_stale`, `status_accepted`, `status_resolved_refs`, `status_message`, `labels`
 
 **ReferenceGrant**
 - Cross-namespace reference permissions
-- Properties: `name`, `namespace`, `uid`, `from`, `to`, `labels`, `annotations`, `created`
+- Properties: `name`, `namespace`, `from`, `to`, `created_at`, `labels`
 
 ### Istio Resources
 

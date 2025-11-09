@@ -27,13 +27,57 @@ func serializeMap(m map[string]string) string {
 // NodeToGraphNode converts a Kubernetes Node to a graph node
 func NodeToGraphNode(node *corev1.Node) *models.GraphNode {
 	properties := map[string]interface{}{
-		"name":   node.Name,
-		"status": getNodeStatus(node),
+		"name":       node.Name,
+		"status":     getNodeStatus(node),
+		"created_at": node.CreationTimestamp.Unix(),
 	}
 
-	// Add conditions
-	for _, condition := range node.Status.Conditions {
-		properties[string(condition.Type)] = string(condition.Status)
+	// Extract conditions as booleans with status_ prefix, messages and reasons
+	if len(node.Status.Conditions) > 0 {
+		for _, condition := range node.Status.Conditions {
+			switch condition.Type {
+			case corev1.NodeReady:
+				properties["status_ready"] = (condition.Status == corev1.ConditionTrue)
+				if condition.Message != "" {
+					properties["status_ready_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_ready_reason"] = condition.Reason
+				}
+			case corev1.NodeMemoryPressure:
+				properties["status_memory_pressure"] = (condition.Status == corev1.ConditionTrue)
+				if condition.Message != "" {
+					properties["status_memory_pressure_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_memory_pressure_reason"] = condition.Reason
+				}
+			case corev1.NodeDiskPressure:
+				properties["status_disk_pressure"] = (condition.Status == corev1.ConditionTrue)
+				if condition.Message != "" {
+					properties["status_disk_pressure_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_disk_pressure_reason"] = condition.Reason
+				}
+			case corev1.NodePIDPressure:
+				properties["status_pid_pressure"] = (condition.Status == corev1.ConditionTrue)
+				if condition.Message != "" {
+					properties["status_pid_pressure_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_pid_pressure_reason"] = condition.Reason
+				}
+			case corev1.NodeNetworkUnavailable:
+				properties["status_network_unavailable"] = (condition.Status == corev1.ConditionTrue)
+				if condition.Message != "" {
+					properties["status_network_unavailable_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_network_unavailable_reason"] = condition.Reason
+				}
+			}
+		}
 	}
 
 	// Add capacity
@@ -62,10 +106,11 @@ func NodeToGraphNode(node *corev1.Node) *models.GraphNode {
 // PodToGraphNode converts a Kubernetes Pod to a graph node
 func PodToGraphNode(pod *corev1.Pod) *models.GraphNode {
 	properties := map[string]interface{}{
-		"name":      pod.Name,
-		"namespace": pod.Namespace,
-		"status":    string(pod.Status.Phase),
-		"node_name": pod.Spec.NodeName,
+		"name":       pod.Name,
+		"namespace":  pod.Namespace,
+		"status":     string(pod.Status.Phase),
+		"node_name":  pod.Spec.NodeName,
+		"created_at": pod.CreationTimestamp.Unix(),
 	}
 
 	if pod.Status.PodIP != "" {
@@ -74,6 +119,46 @@ func PodToGraphNode(pod *corev1.Pod) *models.GraphNode {
 
 	if pod.Status.HostIP != "" {
 		properties["host_ip"] = pod.Status.HostIP
+	}
+
+	// Extract pod conditions as booleans with messages and reasons
+	if len(pod.Status.Conditions) > 0 {
+		for _, condition := range pod.Status.Conditions {
+			switch condition.Type {
+			case corev1.PodScheduled:
+				properties["status_pod_scheduled"] = (condition.Status == corev1.ConditionTrue)
+				if condition.Message != "" {
+					properties["status_pod_scheduled_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_pod_scheduled_reason"] = condition.Reason
+				}
+			case corev1.ContainersReady:
+				properties["status_containers_ready"] = (condition.Status == corev1.ConditionTrue)
+				if condition.Message != "" {
+					properties["status_containers_ready_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_containers_ready_reason"] = condition.Reason
+				}
+			case corev1.PodInitialized:
+				properties["status_initialized"] = (condition.Status == corev1.ConditionTrue)
+				if condition.Message != "" {
+					properties["status_initialized_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_initialized_reason"] = condition.Reason
+				}
+			case corev1.PodReady:
+				properties["status_ready"] = (condition.Status == corev1.ConditionTrue)
+				if condition.Message != "" {
+					properties["status_ready_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_ready_reason"] = condition.Reason
+				}
+			}
+		}
 	}
 
 	// Add resource requests and limits
@@ -167,10 +252,49 @@ func DeploymentToGraphNode(deployment *appsv1.Deployment) *models.GraphNode {
 		"available_replicas": deployment.Status.AvailableReplicas,
 		"ready_replicas":     deployment.Status.ReadyReplicas,
 		"updated_replicas":   deployment.Status.UpdatedReplicas,
+		"created_at":         deployment.CreationTimestamp.Unix(),
 	}
 
 	if deployment.Spec.Strategy.Type != "" {
 		properties["strategy"] = string(deployment.Spec.Strategy.Type)
+	}
+
+	// Extract observedGeneration for staleness detection
+	properties["observed_generation"] = deployment.Status.ObservedGeneration
+	if deployment.Generation != deployment.Status.ObservedGeneration {
+		properties["status_stale"] = true
+	}
+
+	// Extract status conditions as booleans with messages and reasons
+	if len(deployment.Status.Conditions) > 0 {
+		for _, condition := range deployment.Status.Conditions {
+			switch condition.Type {
+			case appsv1.DeploymentAvailable:
+				properties["status_available"] = (condition.Status == "True")
+				if condition.Message != "" {
+					properties["status_available_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_available_reason"] = condition.Reason
+				}
+			case appsv1.DeploymentProgressing:
+				properties["status_progressing"] = (condition.Status == "True")
+				if condition.Message != "" {
+					properties["status_progressing_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_progressing_reason"] = condition.Reason
+				}
+			case appsv1.DeploymentReplicaFailure:
+				properties["status_replica_failure"] = (condition.Status == "True")
+				if condition.Message != "" {
+					properties["status_replica_failure_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_replica_failure_reason"] = condition.Reason
+				}
+			}
+		}
 	}
 
 	// Add labels and selectors
@@ -192,6 +316,29 @@ func ReplicaSetToGraphNode(replicaSet *appsv1.ReplicaSet) *models.GraphNode {
 		"desired_replicas": *replicaSet.Spec.Replicas,
 		"current_replicas": replicaSet.Status.Replicas,
 		"ready_replicas":   replicaSet.Status.ReadyReplicas,
+		"created_at":       replicaSet.CreationTimestamp.Unix(),
+	}
+
+	// Extract observedGeneration for staleness detection
+	properties["observed_generation"] = replicaSet.Status.ObservedGeneration
+	if replicaSet.Generation != replicaSet.Status.ObservedGeneration {
+		properties["status_stale"] = true
+	}
+
+	// Extract status conditions as booleans with messages and reasons
+	if len(replicaSet.Status.Conditions) > 0 {
+		for _, condition := range replicaSet.Status.Conditions {
+			switch condition.Type {
+			case appsv1.ReplicaSetReplicaFailure:
+				properties["status_replica_failure"] = (condition.Status == "True")
+				if condition.Message != "" {
+					properties["status_replica_failure_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_replica_failure_reason"] = condition.Reason
+				}
+			}
+		}
 	}
 
 	// Add labels and selectors
@@ -222,6 +369,29 @@ func StatefulSetToGraphNode(statefulSet *appsv1.StatefulSet) *models.GraphNode {
 		"desired_replicas": *statefulSet.Spec.Replicas,
 		"current_replicas": statefulSet.Status.Replicas,
 		"ready_replicas":   statefulSet.Status.ReadyReplicas,
+		"created_at":       statefulSet.CreationTimestamp.Unix(),
+	}
+
+	// Extract observedGeneration for staleness detection
+	properties["observed_generation"] = statefulSet.Status.ObservedGeneration
+	if statefulSet.Generation != statefulSet.Status.ObservedGeneration {
+		properties["status_stale"] = true
+	}
+
+	// Extract status conditions as booleans with messages and reasons
+	if len(statefulSet.Status.Conditions) > 0 {
+		for _, condition := range statefulSet.Status.Conditions {
+			// StatefulSet doesn't have standard condition type constants
+			if string(condition.Type) == "ReplicasReady" {
+				properties["status_replicas_ready"] = (condition.Status == "True")
+				if condition.Message != "" {
+					properties["status_replicas_ready_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_replicas_ready_reason"] = condition.Reason
+				}
+			}
+		}
 	}
 
 	// Add labels and selectors
@@ -244,6 +414,29 @@ func DaemonSetToGraphNode(daemonSet *appsv1.DaemonSet) *models.GraphNode {
 		"current_scheduled": daemonSet.Status.CurrentNumberScheduled,
 		"number_ready":      daemonSet.Status.NumberReady,
 		"number_available":  daemonSet.Status.NumberAvailable,
+		"created_at":        daemonSet.CreationTimestamp.Unix(),
+	}
+
+	// Extract observedGeneration for staleness detection
+	properties["observed_generation"] = daemonSet.Status.ObservedGeneration
+	if daemonSet.Generation != daemonSet.Status.ObservedGeneration {
+		properties["status_stale"] = true
+	}
+
+	// Extract status conditions as booleans with messages and reasons
+	if len(daemonSet.Status.Conditions) > 0 {
+		for _, condition := range daemonSet.Status.Conditions {
+			// DaemonSet doesn't have standard condition type constants, check string
+			if condition.Type == "Available" {
+				properties["status_available"] = (condition.Status == "True")
+				if condition.Message != "" {
+					properties["status_available_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_available_reason"] = condition.Reason
+				}
+			}
+		}
 	}
 
 	// Add labels and selectors
@@ -260,9 +453,10 @@ func DaemonSetToGraphNode(daemonSet *appsv1.DaemonSet) *models.GraphNode {
 // ServiceToGraphNode converts a Kubernetes Service to a graph node
 func ServiceToGraphNode(service *corev1.Service) *models.GraphNode {
 	properties := map[string]interface{}{
-		"name":      service.Name,
-		"namespace": service.Namespace,
-		"type":      string(service.Spec.Type),
+		"name":       service.Name,
+		"namespace":  service.Namespace,
+		"type":       string(service.Spec.Type),
+		"created_at": service.CreationTimestamp.Unix(),
 	}
 
 	if service.Spec.ClusterIP != "" {
@@ -354,9 +548,12 @@ func NetworkPolicyToGraphNode(networkPolicy *networkingv1.NetworkPolicy) *models
 // PersistentVolumeToGraphNode converts a Kubernetes PersistentVolume to a graph node
 func PersistentVolumeToGraphNode(pv *corev1.PersistentVolume) *models.GraphNode {
 	properties := map[string]interface{}{
-		"name":   pv.Name,
-		"status": string(pv.Status.Phase),
+		"name":       pv.Name,
+		"status":     string(pv.Status.Phase),
+		"created_at": pv.CreationTimestamp.Unix(),
 	}
+
+	// Note: PersistentVolume doesn't have status.conditions in the API
 
 	if pv.Spec.Capacity != nil {
 		if storage := pv.Spec.Capacity.Storage(); storage != nil {
@@ -388,9 +585,34 @@ func PersistentVolumeToGraphNode(pv *corev1.PersistentVolume) *models.GraphNode 
 // PersistentVolumeClaimToGraphNode converts a Kubernetes PersistentVolumeClaim to a graph node
 func PersistentVolumeClaimToGraphNode(pvc *corev1.PersistentVolumeClaim) *models.GraphNode {
 	properties := map[string]interface{}{
-		"name":      pvc.Name,
-		"namespace": pvc.Namespace,
-		"status":    string(pvc.Status.Phase),
+		"name":       pvc.Name,
+		"namespace":  pvc.Namespace,
+		"status":     string(pvc.Status.Phase),
+		"created_at": pvc.CreationTimestamp.Unix(),
+	}
+
+	// Extract PVC conditions as booleans with messages and reasons
+	if len(pvc.Status.Conditions) > 0 {
+		for _, condition := range pvc.Status.Conditions {
+			switch condition.Type {
+			case corev1.PersistentVolumeClaimResizing:
+				properties["status_resizing"] = (condition.Status == corev1.ConditionTrue)
+				if condition.Message != "" {
+					properties["status_resizing_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_resizing_reason"] = condition.Reason
+				}
+			case corev1.PersistentVolumeClaimFileSystemResizePending:
+				properties["status_filesystem_resize_pending"] = (condition.Status == corev1.ConditionTrue)
+				if condition.Message != "" {
+					properties["status_filesystem_resize_pending_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_filesystem_resize_pending_reason"] = condition.Reason
+				}
+			}
+		}
 	}
 
 	if pvc.Spec.Resources.Requests != nil {
@@ -429,6 +651,7 @@ func StorageClassToGraphNode(sc *storagev1.StorageClass) *models.GraphNode {
 	properties := map[string]interface{}{
 		"name":        sc.Name,
 		"provisioner": sc.Provisioner,
+		"created_at":  sc.CreationTimestamp.Unix(),
 	}
 
 	if sc.VolumeBindingMode != nil {
@@ -450,8 +673,9 @@ func StorageClassToGraphNode(sc *storagev1.StorageClass) *models.GraphNode {
 // ConfigMapToGraphNode converts a Kubernetes ConfigMap to a graph node
 func ConfigMapToGraphNode(cm *corev1.ConfigMap) *models.GraphNode {
 	properties := map[string]interface{}{
-		"name":      cm.Name,
-		"namespace": cm.Namespace,
+		"name":       cm.Name,
+		"namespace":  cm.Namespace,
+		"created_at": cm.CreationTimestamp.Unix(),
 	}
 
 	if len(cm.Data) > 0 {
@@ -473,9 +697,10 @@ func ConfigMapToGraphNode(cm *corev1.ConfigMap) *models.GraphNode {
 // SecretToGraphNode converts a Kubernetes Secret to a graph node
 func SecretToGraphNode(secret *corev1.Secret) *models.GraphNode {
 	properties := map[string]interface{}{
-		"name":      secret.Name,
-		"namespace": secret.Namespace,
-		"type":      string(secret.Type),
+		"name":       secret.Name,
+		"namespace":  secret.Namespace,
+		"type":       string(secret.Type),
+		"created_at": secret.CreationTimestamp.Unix(),
 	}
 
 	if len(secret.Data) > 0 {
@@ -499,12 +724,13 @@ func EventToGraphNode(event *corev1.Event) *models.GraphNode {
 	eventID := fmt.Sprintf("Event/%s/%s/%s", event.Namespace, event.InvolvedObject.Name, event.Name)
 
 	properties := map[string]interface{}{
-		"name":      event.Name,
-		"namespace": event.Namespace,
-		"reason":    event.Reason,
-		"message":   event.Message,
-		"type":      event.Type,
-		"count":     event.Count,
+		"name":       event.Name,
+		"namespace":  event.Namespace,
+		"reason":     event.Reason,
+		"message":    event.Message,
+		"type":       event.Type,
+		"count":      event.Count,
+		"created_at": event.CreationTimestamp.Unix(),
 	}
 
 	if !event.FirstTimestamp.IsZero() {
@@ -527,8 +753,57 @@ func EventToGraphNode(event *corev1.Event) *models.GraphNode {
 // NamespaceToGraphNode converts a Kubernetes Namespace to a graph node
 func NamespaceToGraphNode(namespace *corev1.Namespace) *models.GraphNode {
 	properties := map[string]interface{}{
-		"name":   namespace.Name,
-		"status": string(namespace.Status.Phase),
+		"name":       namespace.Name,
+		"status":     string(namespace.Status.Phase),
+		"created_at": namespace.CreationTimestamp.Unix(),
+	}
+
+	// Extract Namespace conditions as booleans with messages and reasons (deletion-related conditions)
+	if len(namespace.Status.Conditions) > 0 {
+		for _, condition := range namespace.Status.Conditions {
+			switch condition.Type {
+			case corev1.NamespaceDeletionDiscoveryFailure:
+				properties["status_deletion_discovery_failure"] = (condition.Status == corev1.ConditionTrue)
+				if condition.Message != "" {
+					properties["status_deletion_discovery_failure_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_deletion_discovery_failure_reason"] = condition.Reason
+				}
+			case corev1.NamespaceDeletionContentFailure:
+				properties["status_deletion_content_failure"] = (condition.Status == corev1.ConditionTrue)
+				if condition.Message != "" {
+					properties["status_deletion_content_failure_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_deletion_content_failure_reason"] = condition.Reason
+				}
+			case corev1.NamespaceDeletionGVParsingFailure:
+				properties["status_deletion_gv_parsing_failure"] = (condition.Status == corev1.ConditionTrue)
+				if condition.Message != "" {
+					properties["status_deletion_gv_parsing_failure_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_deletion_gv_parsing_failure_reason"] = condition.Reason
+				}
+			case corev1.NamespaceContentRemaining:
+				properties["status_content_remaining"] = (condition.Status == corev1.ConditionTrue)
+				if condition.Message != "" {
+					properties["status_content_remaining_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_content_remaining_reason"] = condition.Reason
+				}
+			case corev1.NamespaceFinalizersRemaining:
+				properties["status_finalizers_remaining"] = (condition.Status == corev1.ConditionTrue)
+				if condition.Message != "" {
+					properties["status_finalizers_remaining_message"] = condition.Message
+				}
+				if condition.Reason != "" {
+					properties["status_finalizers_remaining_reason"] = condition.Reason
+				}
+			}
+		}
 	}
 
 	// Add labels

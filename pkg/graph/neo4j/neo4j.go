@@ -115,18 +115,21 @@ func (s *Store) UpsertNode(ctx context.Context, nodeType, id string, properties 
 			props[k] = v
 		}
 		props["id"] = id
+		// Fallback: use Neo4j timestamp if handler didn't provide K8s creationTimestamp
+		if _, exists := props["created_at"]; !exists {
+			props["created_at"] = time.Now().Unix()
+		}
 		props["updated_at"] = time.Now().Unix()
 		// When we have full data, mark as not a placeholder
 		props["placeholder"] = false
 
 		query := fmt.Sprintf(`
-			MERGE (n:%s {id: $id})
-			ON CREATE SET 
-				n = $properties,
-				n.created_at = timestamp()
-			ON MATCH SET 
-				n += $properties
-		`, nodeType)
+		MERGE (n:%s {id: $id})
+		ON CREATE SET 
+			n = $properties
+		ON MATCH SET 
+			n = $properties
+	`, nodeType)
 
 		params := map[string]interface{}{
 			"id":         id,

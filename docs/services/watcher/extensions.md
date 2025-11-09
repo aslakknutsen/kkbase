@@ -186,11 +186,13 @@ INFO  Istio availability  gateway=true virtualservice=true destinationrule=true
 ### Key Relationships
 
 - `AuthPolicy` → `APPLIES_TO` → `Gateway` / `HTTPRoute` (policy enforcement points)
+- `AuthPolicy` → `ENFORCED_BY` → `Service` (Authorino service that enforces auth)
 - `RateLimitPolicy` → `APPLIES_TO` → `Gateway` / `HTTPRoute` (rate limit application)
+- `RateLimitPolicy` → `ENFORCED_BY` → `Service` (Limitador service that enforces rate limits)
 - `DNSPolicy` → `APPLIES_TO` → `Gateway` (DNS configuration)
 - `TLSPolicy` → `APPLIES_TO` → `Gateway` (TLS certificate management)
 - `DNSPolicy` → `USES_SECRET` → `Secret` (DNS provider credentials)
-- `Kuadrant` → `MANAGES` → Policies (operator lifecycle management)
+- `Kuadrant` → `MANAGES` → `Service` (Authorino and Limitador services)
 
 ### Indexed Properties
 
@@ -279,6 +281,31 @@ RETURN labels(policy)[0] as type, policy.name, policy.namespace,
 ```
 
 Finds policies where the status hasn't been updated to reflect spec changes.
+
+#### Trace Policy to Enforcement Service
+
+```cypher
+MATCH (policy:AuthPolicy {name: 'api-auth'})-[:ENFORCED_BY]->(svc:Service)
+MATCH (svc)-[:SELECTS_PODS]->(pod:Pod)
+RETURN policy.name, policy.namespace,
+       svc.name as authorino_service,
+       svc.namespace as authorino_namespace,
+       collect(pod.name) as authorino_pods,
+       collect(pod.status) as pod_statuses
+```
+
+Traces from an AuthPolicy to the Authorino service and its pods to diagnose enforcement issues.
+
+#### Find Policies Without Enforcement Services
+
+```cypher
+MATCH (policy)
+WHERE (policy:AuthPolicy OR policy:RateLimitPolicy)
+AND NOT (policy)-[:ENFORCED_BY]->(:Service)
+RETURN labels(policy)[0] as type, policy.name, policy.namespace
+```
+
+Identifies policies that can't find their enforcement services (Authorino/Limitador not running or misconfigured).
 
 ### Installation
 

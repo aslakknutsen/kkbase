@@ -130,12 +130,37 @@ func (h *KuadrantHandler) HandleAdd(obj interface{}) {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
-	// TODO: Create MANAGES edges to Authorino/Limitador deployments
-	// This requires understanding how Kuadrant operator deploys these components
-	// Possible approaches:
-	// 1. Look for Deployments with specific labels (e.g., app.kubernetes.io/component=authorino)
-	// 2. Check the Kuadrant CR status for references to deployed components
-	// 3. Use naming conventions (e.g., authorino-<kuadrant-name>, limitador-<kuadrant-name>)
+	// Create MANAGES edges to Authorino and Limitador services
+	// Discover services by label (app=authorino, app=limitador)
+	if authorinoNs, authorinoName, found := h.relationshipBuilder.FindServiceByLabel(ctx, "app=authorino"); found {
+		if err := h.relationshipBuilder.CreateKuadrantManagesServiceEdge(
+			ctx,
+			kuadrant.GetNamespace(),
+			kuadrant.GetName(),
+			authorinoNs,
+			authorinoName,
+		); err != nil {
+			h.Logger.Error("failed to create MANAGES edge to Authorino",
+				zap.Error(err),
+				zap.String("authorino_service", authorinoName),
+			)
+		}
+	}
+
+	if limitadorNs, limitadorName, found := h.relationshipBuilder.FindServiceByLabel(ctx, "app=limitador"); found {
+		if err := h.relationshipBuilder.CreateKuadrantManagesServiceEdge(
+			ctx,
+			kuadrant.GetNamespace(),
+			kuadrant.GetName(),
+			limitadorNs,
+			limitadorName,
+		); err != nil {
+			h.Logger.Error("failed to create MANAGES edge to Limitador",
+				zap.Error(err),
+				zap.String("limitador_service", limitadorName),
+			)
+		}
+	}
 }
 
 // HandleUpdate processes an updated Kuadrant CR

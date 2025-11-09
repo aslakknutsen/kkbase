@@ -81,7 +81,7 @@ func (h *TCPRouteHandler) HandleAdd(obj interface{}) {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
-	// Create ATTACHES_TO edges to parent Gateways
+	// Create ATTACHES_TO edges to parent Gateways with per-parent status
 	for _, parentRef := range tcpRoute.Spec.ParentRefs {
 		gatewayNamespace := tcpRoute.Namespace
 		if parentRef.Namespace != nil {
@@ -95,6 +95,9 @@ func (h *TCPRouteHandler) HandleAdd(obj interface{}) {
 			sectionName = &sn
 		}
 
+		// Find matching parent status
+		statusProps := extractParentStatusProps(tcpRoute.Status.Parents, parentRef, tcpRoute.Namespace)
+
 		if err := h.relationshipBuilder.CreateRouteAttachesToEdge(
 			ctx,
 			NodeTypeTCPRoute,
@@ -103,6 +106,7 @@ func (h *TCPRouteHandler) HandleAdd(obj interface{}) {
 			gatewayNamespace,
 			gatewayName,
 			sectionName,
+			statusProps,
 		); err != nil {
 			h.Logger.Error("failed to create ATTACHES_TO edge",
 				zap.Error(err),

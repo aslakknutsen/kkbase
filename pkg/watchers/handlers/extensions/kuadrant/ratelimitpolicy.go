@@ -198,7 +198,8 @@ func (h *RateLimitPolicyHandler) HandleAdd(obj interface{}) {
 		policyNode.Properties["policy_type"] = "implicit_defaults"
 	}
 
-	// Extract status conditions for quick diagnostics
+	// Extract status conditions with per-condition messages and reasons
+	statusProps := make(map[string]interface{})
 	if h.extractor.HasField("status.conditions") {
 		if conditions, found, _ := h.extractor.ExtractSlice(policy, "status.conditions"); found {
 			// Find key condition types
@@ -206,16 +207,42 @@ func (h *RateLimitPolicyHandler) HandleAdd(obj interface{}) {
 				if condMap, ok := cond.(map[string]interface{}); ok {
 					condType, _ := condMap["type"].(string)
 					status, _ := condMap["status"].(string)
+					message, _ := condMap["message"].(string)
+					reason, _ := condMap["reason"].(string)
 
 					switch condType {
 					case "Accepted":
 						policyNode.Properties["status_accepted"] = (status == "True")
+						statusProps["status_accepted"] = (status == "True")
+						if message != "" {
+							policyNode.Properties["status_accepted_message"] = message
+							statusProps["status_accepted_message"] = message
+						}
+						if reason != "" {
+							policyNode.Properties["status_accepted_reason"] = reason
+							statusProps["status_accepted_reason"] = reason
+						}
 					case "Enforced":
 						policyNode.Properties["status_enforced"] = (status == "True")
+						statusProps["status_enforced"] = (status == "True")
+						if message != "" {
+							policyNode.Properties["status_enforced_message"] = message
+							statusProps["status_enforced_message"] = message
+						}
+						if reason != "" {
+							policyNode.Properties["status_enforced_reason"] = reason
+							statusProps["status_enforced_reason"] = reason
+						}
 					case "Failed":
 						policyNode.Properties["status_failed"] = (status == "True")
-						if msg, ok := condMap["message"].(string); ok && status == "True" {
-							policyNode.Properties["status_message"] = msg
+						statusProps["status_failed"] = (status == "True")
+						if message != "" {
+							policyNode.Properties["status_failed_message"] = message
+							statusProps["status_failed_message"] = message
+						}
+						if reason != "" {
+							policyNode.Properties["status_failed_reason"] = reason
+							statusProps["status_failed_reason"] = reason
 						}
 					}
 				}
@@ -251,7 +278,7 @@ func (h *RateLimitPolicyHandler) HandleAdd(obj interface{}) {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
-	// Create APPLIES_TO edge
+	// Create APPLIES_TO edge with per-target status
 	if err := h.relationshipBuilder.CreatePolicyAppliesToEdge(
 		ctx,
 		NodeTypeRateLimitPolicy,
@@ -261,8 +288,32 @@ func (h *RateLimitPolicyHandler) HandleAdd(obj interface{}) {
 		targetKind,
 		policy.GetNamespace(),
 		targetName,
+		statusProps,
 	); err != nil {
 		h.Logger.Error("failed to create APPLIES_TO edge", zap.Error(err))
+	}
+
+	// Create ENFORCED_BY edge to Limitador service
+	// Discover Limitador service by label (app=limitador)
+	if limitadorNs, limitadorName, found := h.relationshipBuilder.FindServiceByLabel(ctx, "app=limitador"); found {
+		if err := h.relationshipBuilder.CreatePolicyEnforcedByEdge(
+			ctx,
+			NodeTypeRateLimitPolicy,
+			policy.GetNamespace(),
+			policy.GetName(),
+			limitadorNs,
+			limitadorName,
+		); err != nil {
+			h.Logger.Error("failed to create ENFORCED_BY edge",
+				zap.Error(err),
+				zap.String("limitador_service", limitadorName),
+				zap.String("limitador_namespace", limitadorNs),
+			)
+		}
+	} else {
+		h.Logger.Debug("limitador service not found, skipping ENFORCED_BY edge",
+			zap.String("policy", policy.GetName()),
+		)
 	}
 }
 
@@ -309,4 +360,3 @@ func (h *RateLimitPolicyHandler) HandleDelete(obj interface{}) {
 		h.Logger.Error("failed to delete ratelimitpolicy node", zap.Error(err))
 	}
 }
-

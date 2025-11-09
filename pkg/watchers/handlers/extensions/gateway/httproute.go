@@ -14,6 +14,69 @@ import (
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
+// extractParentStatusProps extracts status properties for a specific parent ref
+func extractParentStatusProps(parents []gatewayv1.RouteParentStatus, parentRef gatewayv1.ParentReference, routeNamespace string) map[string]interface{} {
+	props := make(map[string]interface{})
+
+	// Find matching parent status
+	for _, parent := range parents {
+		// Match by name and namespace
+		parentNs := routeNamespace
+		if parent.ParentRef.Namespace != nil {
+			parentNs = string(*parent.ParentRef.Namespace)
+		}
+		refNs := routeNamespace
+		if parentRef.Namespace != nil {
+			refNs = string(*parentRef.Namespace)
+		}
+
+		if string(parent.ParentRef.Name) == string(parentRef.Name) && parentNs == refNs {
+			// Match by section name if specified
+			if parentRef.SectionName != nil && parent.ParentRef.SectionName != nil {
+				if *parentRef.SectionName != *parent.ParentRef.SectionName {
+					continue
+				}
+			} else if parentRef.SectionName != nil || parent.ParentRef.SectionName != nil {
+				// One has section name, the other doesn't - not a match
+				continue
+			}
+
+			// Extract conditions for this parent
+			for _, condition := range parent.Conditions {
+				switch string(condition.Type) {
+				case string(gatewayv1.RouteConditionAccepted):
+					props["status_accepted"] = (condition.Status == "True")
+					if condition.Message != "" {
+						props["status_accepted_message"] = condition.Message
+					}
+					if condition.Reason != "" {
+						props["status_accepted_reason"] = string(condition.Reason)
+					}
+				case string(gatewayv1.RouteConditionResolvedRefs):
+					props["status_resolved_refs"] = (condition.Status == "True")
+					if condition.Message != "" {
+						props["status_resolved_refs_message"] = condition.Message
+					}
+					if condition.Reason != "" {
+						props["status_resolved_refs_reason"] = string(condition.Reason)
+					}
+				case string(gatewayv1.RouteConditionPartiallyInvalid):
+					props["status_partially_invalid"] = (condition.Status == "True")
+					if condition.Message != "" {
+						props["status_partially_invalid_message"] = condition.Message
+					}
+					if condition.Reason != "" {
+						props["status_partially_invalid_reason"] = string(condition.Reason)
+					}
+				}
+			}
+			break
+		}
+	}
+
+	return props
+}
+
 // HTTPRouteHandler handles HTTPRoute resources
 type HTTPRouteHandler struct {
 	*watchers.BaseWatcher
@@ -77,7 +140,7 @@ func (h *HTTPRouteHandler) HandleAdd(obj interface{}) {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
-	// Create ATTACHES_TO edges to parent Gateways
+	// Create ATTACHES_TO edges to parent Gateways with per-parent status
 	for _, parentRef := range httpRoute.Spec.ParentRefs {
 		gatewayNamespace := httpRoute.Namespace
 		if parentRef.Namespace != nil {
@@ -91,6 +154,9 @@ func (h *HTTPRouteHandler) HandleAdd(obj interface{}) {
 			sectionName = &sn
 		}
 
+		// Find matching parent status
+		statusProps := extractParentStatusProps(httpRoute.Status.Parents, parentRef, httpRoute.Namespace)
+
 		if err := h.relationshipBuilder.CreateRouteAttachesToEdge(
 			ctx,
 			NodeTypeHTTPRoute,
@@ -99,6 +165,7 @@ func (h *HTTPRouteHandler) HandleAdd(obj interface{}) {
 			gatewayNamespace,
 			gatewayName,
 			sectionName,
+			statusProps,
 		); err != nil {
 			h.Logger.Error("failed to create ATTACHES_TO edge",
 				zap.Error(err),

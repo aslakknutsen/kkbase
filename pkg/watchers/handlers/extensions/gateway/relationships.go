@@ -60,13 +60,18 @@ func (rb *RelationshipBuilder) CreateGatewayTLSEdge(ctx context.Context, gateway
 }
 
 // CreateRouteAttachesToEdge creates ATTACHES_TO edge from Route to Gateway
-func (rb *RelationshipBuilder) CreateRouteAttachesToEdge(ctx context.Context, routeType models.NodeType, routeNamespace, routeName, gatewayNamespace, gatewayName string, sectionName *string) error {
+func (rb *RelationshipBuilder) CreateRouteAttachesToEdge(ctx context.Context, routeType models.NodeType, routeNamespace, routeName, gatewayNamespace, gatewayName string, sectionName *string, statusProps map[string]interface{}) error {
 	routeID := models.GetNodeID(routeType, routeNamespace, routeName)
 	gatewayID := models.GetNodeID(NodeTypeGateway, gatewayNamespace, gatewayName)
 
 	properties := map[string]interface{}{}
 	if sectionName != nil {
 		properties["section_name"] = *sectionName
+	}
+
+	// Add per-parent status properties
+	for k, v := range statusProps {
+		properties[k] = v
 	}
 
 	return rb.base.GraphStore.UpsertEdge(

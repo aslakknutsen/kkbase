@@ -78,7 +78,7 @@ func (h *GRPCRouteHandler) HandleAdd(obj interface{}) {
 		h.Logger.Error("failed to create namespace edge", zap.Error(err))
 	}
 
-	// Create ATTACHES_TO edges to parent Gateways
+	// Create ATTACHES_TO edges to parent Gateways with per-parent status
 	for _, parentRef := range grpcRoute.Spec.ParentRefs {
 		gatewayNamespace := grpcRoute.Namespace
 		if parentRef.Namespace != nil {
@@ -92,6 +92,9 @@ func (h *GRPCRouteHandler) HandleAdd(obj interface{}) {
 			sectionName = &sn
 		}
 
+		// Find matching parent status
+		statusProps := extractParentStatusProps(grpcRoute.Status.Parents, parentRef, grpcRoute.Namespace)
+
 		if err := h.relationshipBuilder.CreateRouteAttachesToEdge(
 			ctx,
 			NodeTypeGRPCRoute,
@@ -100,6 +103,7 @@ func (h *GRPCRouteHandler) HandleAdd(obj interface{}) {
 			gatewayNamespace,
 			gatewayName,
 			sectionName,
+			statusProps,
 		); err != nil {
 			h.Logger.Error("failed to create ATTACHES_TO edge",
 				zap.Error(err),
