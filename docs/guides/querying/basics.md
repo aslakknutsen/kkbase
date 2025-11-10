@@ -2,7 +2,7 @@
 
 This guide covers the most common query patterns for exploring and troubleshooting your cluster using Cypher queries in Neo4j.
 
-For a complete query reference, see [Cypher Queries Reference](../reference/cypher-queries.md).
+For a complete query reference, see [Cypher Queries Reference](../../reference/cypher-queries.md).
 
 ## Getting Started
 
@@ -273,8 +273,8 @@ RETURN pod.name,
 
 ## Next Steps
 
-- **[Complete Query Reference](../reference/cypher-queries.md)** - 100+ queries for all scenarios
-- **[Graph Schema](../reference/graph-schema.md)** - All node and edge types
-- **[Extensions Guide](extensions.md)** - Gateway API and Istio specific queries
+- **[Complete Query Reference](../../reference/cypher-queries.md)** - 100+ queries for all scenarios
+- **[Graph Schema](../../reference/graph-schema.md)** - All node and edge types
+- **[Extensions Guide](../../services/watcher/extensions.md)** - Gateway API and Istio specific queries
 - **[Neo4j Cypher Documentation](https://neo4j.com/docs/cypher-manual/)** - Learn more Cypher
 

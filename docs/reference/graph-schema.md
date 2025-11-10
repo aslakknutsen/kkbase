@@ -195,6 +195,36 @@ Example: An HTTPRoute attached to two Gateways will have:
 - Aggregated service-to-service call metrics
 - Properties: `from_service`, `from_namespace`, `to_service`, `to_namespace`, `protocol`, `call_count`, `error_count`, `error_rate`, `avg_latency_ms`, `p95_latency_ms`, `window`, `last_seen`, `first_seen`
 
+#### Agent Session Resources
+
+These nodes track AI agent diagnostic sessions and their findings.
+
+**AgentSession**
+- Complete AI agent diagnostic session
+- Properties: `id`, `initial_symptom`, `initial_resource`, `status`, `created_at`, `completed_at`, `current_stage`, `query_count`, `finding_count`, `summary`
+- Status values: `active`, `completed`, `timeout`, `incomplete`, `abandoned`
+
+**Hypothesis**
+- Versioned hypothesis at a specific investigation stage
+- Properties: `id`, `stage`, `text`, `status`, `created_at`
+- Status values: `active`, `superseded`, `confirmed`
+
+**QueryExecution**
+- Single query executed by the agent with reasoning
+- Properties: `id`, `query`, `reasoning`, `params`, `result_count`, `duration`, `executed_at`, `findings` (JSON array of finding IDs)
+
+**Finding**
+- Discovered issue during investigation
+- Properties: `id`, `type`, `severity`, `resource_id`, `resource_type`, `description`, `evidence`, `detection_method`, `discovered_at`
+- Type values: `failed_dependency`, `unhealthy_pod`, `error_spike`, `deployment_change`, `resource_exhaustion`, `misconfiguration`
+- Severity values: `critical`, `warning`, `info`
+- Detection method: `automatic` (extracted from queries), `agent_recorded` (explicitly recorded)
+
+**Investigation**
+- Metrics-focused investigation session for RCA
+- Properties: `id`, `resource_type`, `resource_id`, `symptom`, `start_time`, `lookback_duration`, `status`, `created_at`
+- Status values: `active`, `completed`, `abandoned`
+
 ### Gateway API Resources
 
 **GatewayClass**
@@ -343,6 +373,32 @@ Example: An HTTPRoute attached to two Gateways will have:
 - Description: Event involves a specific resource
 - Properties: None
 
+### Agent Session Relationships
+
+**HAS_HYPOTHESIS**
+- From: `AgentSession`
+- To: `Hypothesis`
+- Description: Session has a hypothesis at a specific stage
+- Properties: None
+
+**EXECUTED_QUERY**
+- From: `AgentSession`
+- To: `QueryExecution`
+- Description: Agent executed this query during the session
+- Properties: `sequence` (execution order)
+
+**HAS_FINDING**
+- From: `AgentSession`
+- To: `Finding`
+- Description: Session discovered this finding
+- Properties: None
+
+**AFFECTS**
+- From: `Finding`
+- To: Any Kubernetes resource
+- Description: Finding affects this specific resource
+- Properties: None
+
 **HAS_RECOMMENDATION**
 - From: `AgentSession`
 - To: `Recommendation`
@@ -353,6 +409,12 @@ Example: An HTTPRoute attached to two Gateways will have:
 - From: `Recommendation`
 - To: `Finding`
 - Description: Recommendation is based on these findings
+- Properties: None
+
+**INVESTIGATES**
+- From: `Investigation`
+- To: Any Kubernetes resource
+- Description: Investigation session focuses on this resource
 - Properties: None
 
 ### Trace Relationships
@@ -544,6 +606,6 @@ RETURN d, p
 ## Further Reading
 
 - **[Cypher Query Reference](cypher-queries.md)** - Complete query library
-- **[Query Guide](../user-guide/querying.md)** - Common query patterns
-- **[Extensions Guide](../user-guide/extensions.md)** - Gateway API and Istio specifics
+- **[Query Guide](../guides/querying/basics.md)** - Common query patterns
+- **[Extensions Guide](../services/watcher/extensions.md)** - Gateway API and Istio specifics
 

@@ -375,7 +375,7 @@ kubectl create secret generic kkbase-watcher-secret \
 - **[Configuration](configuration.md)** - All configuration options
 - **[Extensions](extensions.md)** - Gateway API, Istio, and Kuadrant support
 - **[Custom Handlers](custom-handlers.md)** - Add support for custom CRDs
-- **[Architecture Deep Dive](../../development/architecture-deep-dive.md)** - Internal implementation
+- **[Architecture Deep Dive](../../development/deep-dive.md)** - Internal implementation
 
 ## Quick Links
 

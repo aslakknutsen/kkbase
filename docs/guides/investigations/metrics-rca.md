@@ -225,7 +225,7 @@ RETURN
 ORDER BY metric_time ASC
 ```
 
-See [metrics-rca-queries.md](../reference/metrics-rca-queries.md) for comprehensive query examples.
+See [metrics-rca-queries.md](../../reference/metrics-rca-queries.md) for comprehensive query examples.
 
 ---
 
@@ -472,7 +472,7 @@ ORDER BY time ASC
 
 ## Next Steps
 
-- Review [Metrics RCA Queries](../reference/metrics-rca-queries.md) for query examples
-- Check [Graph Schema](../reference/graph-schema.md) for complete data model
-- See [Architecture](../development/architecture.md) for system design details
+- Review [Metrics RCA Queries](../../reference/metrics-rca-queries.md) for query examples
+- Check [Graph Schema](../../reference/graph-schema.md) for complete data model
+- See [Architecture](../../development/architecture.md) for system design details
 

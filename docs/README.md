@@ -13,7 +13,7 @@ kkbase syncs your Kubernetes cluster state into a Neo4j knowledge graph, enablin
 **Start here** to get kkbase running in 5 minutes:
 
 1. **[Overview](getting-started/overview.md)** - What kkbase does and why
-2. **[Quick Start](getting-started/quickstart.md)** - 5-minute Kubernetes deployment
+2. **[Quick Start](getting-started/quickstart-minimal.md)** - 5-minute Kubernetes deployment
 3. **[Core Concepts](getting-started/concepts.md)** - Understanding the knowledge graph
 
 ### 👥 By User Type
@@ -44,7 +44,7 @@ kkbase syncs your Kubernetes cluster state into a Neo4j knowledge graph, enablin
 
 Essential guides for new users:
 - [Overview](getting-started/overview.md) - Introduction and use cases
-- [Quick Start](getting-started/quickstart.md) - Deploy in 5 minutes
+- [Quick Start](getting-started/quickstart-minimal.md) - Deploy in 5 minutes
 - [Core Concepts](getting-started/concepts.md) - Knowledge graph fundamentals
 - [Local Development](getting-started/local-development.md) - Run locally
 
@@ -113,7 +113,7 @@ kubectl apply -f https://raw.githubusercontent.com/aslakknutsen/kkbase/main/depl
 kubectl apply -f https://raw.githubusercontent.com/aslakknutsen/kkbase/main/deploy/mcp-server.yaml
 ```
 
-See: [Quick Start Guide](getting-started/quickstart.md)
+See: [Quick Start Guide](getting-started/quickstart-minimal.md)
 
 ### Query the Graph
 
@@ -237,7 +237,7 @@ See: [Architecture Document](ARCHITECTURE.md)
 
 ## License
 
-[Apache 2.0](../LICENSE)
+[MIT License](../LICENSE)
 
 ## Quick Links
 

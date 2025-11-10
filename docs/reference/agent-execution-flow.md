@@ -198,6 +198,6 @@ Each investigation is a **sub-flow**, not a separate investigation session.
 ## See Also
 
 - [Complete MCP Tools Reference](./agent-mcp-tools.md)
-- [Detailed Workflow Guide](../user-guide/agent-investigation-workflow.md)
+- [Detailed Workflow Guide](../guides/investigations/workflow.md)
 - [Graph Schema Reference](./graph-schema.md)
 

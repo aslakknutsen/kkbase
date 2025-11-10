@@ -434,7 +434,7 @@ rules:
 
 ## See Also
 
-- **[Installation Guide](../user-guide/installation.md)** - Step-by-step deployment
-- **[Quick Start](../user-guide/quickstart.md)** - Fast setup guide
+- **[Getting Started](../getting-started/)** - Step-by-step deployment
+- **[Quick Start](../getting-started/quickstart-minimal.md)** - Fast setup guide
 - **[Architecture](../development/architecture.md)** - How configuration is used internally
 

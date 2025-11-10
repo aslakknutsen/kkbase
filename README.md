@@ -24,7 +24,7 @@ kubectl port-forward svc/neo4j 7474:7474
 # MATCH (pod:Pod)-[:SCHEDULED_ON]->(node:Node) RETURN pod, node LIMIT 10
 ```
 
-See [Quick Start Guide](docs/user-guide/quickstart.md) for detailed instructions.
+See [Quick Start Guide](docs/getting-started/quickstart-minimal.md) for detailed instructions.
 
 ## Key Features
 
@@ -63,12 +63,12 @@ export NEO4J_PASSWORD="changeme"
 - `query` - Execute read-only Cypher queries
 - `structure` - Get complete graph schema
 
-See [MCP Server Guide](docs/user-guide/mcp-server.md) for integration with Claude Desktop, MCP Inspector, and other AI tools.
+See [MCP Server Guide](docs/services/mcp-server/README.md) for integration with Claude Desktop, MCP Inspector, and other AI tools.
 
 ## Documentation
 
-- **[User Guide](docs/user-guide/)** - Installation, configuration, and querying
-- **[Concepts](docs/concepts/knowledge-graph.md)** - Understanding the knowledge graph model
+- **[Getting Started](docs/getting-started/)** - Installation, configuration, and querying
+- **[Concepts](docs/getting-started/concepts.md)** - Understanding the knowledge graph model
 - **[Reference](docs/reference/)** - Complete query library, schema, and configuration
 - **[Development](docs/development/)** - Architecture and extending kkbase
 
@@ -82,7 +82,7 @@ WHERE p.status <> 'Running'
 RETURN s.namespace, s.name, count(p) as unhealthy_pods
 ```
 
-See [Query Guide](docs/user-guide/querying.md) for more examples.
+See [Query Guide](docs/guides/querying/basics.md) for more examples.
 
 ## Requirements
 

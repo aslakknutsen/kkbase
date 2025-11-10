@@ -369,7 +369,7 @@ Add new diagnostic capabilities:
 - Register with MCP server
 - Add tests
 
-See: [Extending MCP Server](development/extending-mcp.md)
+See: [Extending MCP Server](development/extending.md)
 
 ### Contributing
 
@@ -387,7 +387,7 @@ See: [Development Guide](development/) for architecture deep-dive, building, and
 - [MCP Tools Reference](services/mcp-server/tools-reference.md)
 
 ### For Platform Developers
-- [Architecture Deep Dive](development/architecture-deep-dive.md)
+- [Architecture Deep Dive](development/deep-dive.md)
 - [Local Development](getting-started/local-development.md)
 - [Custom Handlers](services/watcher/custom-handlers.md)
 

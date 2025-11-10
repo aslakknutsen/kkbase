@@ -855,7 +855,7 @@ Breaking changes will increment major version and require Cursor MCP config upda
 
 ## See Also
 
-- [Agent Investigation Workflow](../user-guide/agent-investigation-workflow.md)
-- [Neo4j Schema Reference](./agent-session-schema.md)
-- [Dashboard User Guide](../user-guide/dashboard-user-guide.md)
+- [Agent Investigation Workflow](../../guides/investigations/workflow.md)
+- [Graph Schema Reference](../../reference/graph-schema.md)
+- [Dashboard User Guide](dashboard.md)
 

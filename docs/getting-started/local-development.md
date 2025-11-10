@@ -398,7 +398,7 @@ npm run lint
 4. Add tests in `pkg/mcp/tools_test.go`
 5. Update documentation
 
-See [Extending MCP Server](../development/extending-mcp.md)
+See [Extending MCP Server](../development/extending.md)
 
 ### Adding a Custom Handler
 
@@ -545,9 +545,9 @@ test: add integration tests for agent sessions
 ## Resources
 
 - [System Architecture](../ARCHITECTURE.md)
-- [Development Deep Dive](../development/architecture-deep-dive.md)
+- [Development Deep Dive](../development/deep-dive.md)
 - [Custom Handlers](../services/watcher/custom-handlers.md)
-- [Extending MCP](../development/extending-mcp.md)
+- [Extending MCP](../development/extending.md)
 - [Testing Guide](../development/testing.md)
 
 ## Clean Up
@@ -573,5 +573,5 @@ You now have:
 - ✅ Testing framework ready
 - ✅ Ready to contribute
 
-**Start coding!** See [Architecture Deep Dive](../development/architecture-deep-dive.md) for implementation details.
+**Start coding!** See [Architecture Deep Dive](../development/deep-dive.md) for implementation details.
 

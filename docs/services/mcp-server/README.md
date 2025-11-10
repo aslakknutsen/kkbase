@@ -431,7 +431,7 @@ See [Troubleshooting Guide](../../guides/operations/troubleshooting.md) for more
 4. Add tests
 5. Update documentation
 
-See [Extending MCP Guide](../../development/extending-mcp.md)
+See [Extending MCP Guide](../../development/extending.md)
 
 ## Best Practices
 

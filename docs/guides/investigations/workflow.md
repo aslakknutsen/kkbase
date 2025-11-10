@@ -554,7 +554,7 @@ memory leak in recent deployment
 
 ## Next Steps
 
-- See [MCP Tools Reference](../reference/agent-mcp-tools.md) for complete API
-- See [Neo4j Schema](../reference/agent-session-schema.md) for data model
-- See [Dashboard Guide](./dashboard-user-guide.md) for UI features
+- See [MCP Tools Reference](../../reference/agent-mcp-tools.md) for complete API
+- See [Graph Schema Reference](../../reference/graph-schema.md) for data model
+- See [Dashboard Guide](../../services/mcp-server/dashboard.md) for UI features
 

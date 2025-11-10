@@ -327,7 +327,7 @@ INFO  creating TLSPolicy handler  version=v1
 
 ### Version-Agnostic Design
 
-Kuadrant handlers use a version-agnostic architecture that adapts to different API versions automatically. See the [Architecture documentation](../../pkg/watchers/handlers/extensions/kuadrant/ARCHITECTURE.md) for implementation details.
+Kuadrant handlers use a version-agnostic architecture that adapts to different API versions automatically. See the [Architecture documentation](../../../pkg/watchers/handlers/extensions/kuadrant/ARCHITECTURE.md) for implementation details.
 
 ## Enabling and Disabling Extensions
 

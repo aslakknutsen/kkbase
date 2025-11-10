@@ -345,7 +345,7 @@ if (status.status !== "active") {
 
 ## See Also
 
-- [Investigation Tools Guide](../user-guide/investigation-tools.md) - Detailed guide
+- [Investigation Workflow Guide](../guides/investigations/workflow.md) - Detailed guide
 - [Metrics RCA Queries](./metrics-rca-queries.md) - Comprehensive query examples
-- [MCP Server Documentation](../user-guide/mcp-server.md) - General MCP usage
+- [MCP Server Documentation](../services/mcp-server/README.md) - General MCP usage
 

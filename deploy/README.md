@@ -347,7 +347,7 @@ The MCP server is stateless - all data is in Neo4j. Ensure you have:
 
 ## Next Steps
 
-- [MCP Server User Guide](../docs/user-guide/mcp-server.md)
-- [Deployment Options Comparison](../docs/user-guide/mcp-deployment-options.md)
+- [MCP Server User Guide](../docs/services/mcp-server/README.md)
+- [Service Documentation](../docs/services/)
 - [Cypher Query Examples](../docs/reference/cypher-queries.md)
 
