@@ -22,7 +22,7 @@ Technical documentation for kkbase developers.
 ### Clone and Build
 
 ```bash
-git clone https://github.com/kagenti/kkbase.git
+git clone https://github.com/aslakknutsen/kkbase.git
 cd kkbase
 
 # Build all services

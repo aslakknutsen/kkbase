@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/kagenti/kkbase/pkg/observability"
+	"github.com/aslakknutsen/kkbase/pkg/observability"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 )

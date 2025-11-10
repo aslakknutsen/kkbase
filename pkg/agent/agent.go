@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/kagenti/kkbase/pkg/agent/mcp"
-	"github.com/kagenti/kkbase/pkg/agenttypes"
-	"github.com/kagenti/kkbase/pkg/llm"
+	"github.com/aslakknutsen/kkbase/pkg/agent/mcp"
+	"github.com/aslakknutsen/kkbase/pkg/agenttypes"
+	"github.com/aslakknutsen/kkbase/pkg/llm"
 	"go.uber.org/zap"
 )
 

@@ -340,7 +340,7 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 ### GitHub Container Registry
 
 ```bash
-export DOCKER_REGISTRY=ghcr.io/kagenti
+export DOCKER_REGISTRY=ghcr.io/aslakknutsen
 docker login ghcr.io
 make docker-release
 ```

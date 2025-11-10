@@ -9,7 +9,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	storagev1 "k8s.io/api/storage/v1"
 
-	"github.com/kagenti/kkbase/pkg/models"
+	"github.com/aslakknutsen/kkbase/pkg/models"
 )
 
 // serializeMap converts a map to JSON string for Neo4j storage

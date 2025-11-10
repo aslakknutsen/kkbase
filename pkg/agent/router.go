@@ -3,8 +3,8 @@ package agent
 import (
 	"time"
 
-	"github.com/kagenti/kkbase/pkg/agenttypes"
-	"github.com/kagenti/kkbase/pkg/config"
+	"github.com/aslakknutsen/kkbase/pkg/agenttypes"
+	"github.com/aslakknutsen/kkbase/pkg/config"
 	"go.uber.org/zap"
 )
 

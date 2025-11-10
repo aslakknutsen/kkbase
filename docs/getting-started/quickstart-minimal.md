@@ -79,8 +79,8 @@ EOF
 
 ```bash
 # Deploy RBAC, ConfigMap, Secret, and Watcher
-kubectl apply -f https://raw.githubusercontent.com/kagenti/kkbase/main/deploy/rbac.yaml
-kubectl apply -f https://raw.githubusercontent.com/kagenti/kkbase/main/deploy/deployment.yaml
+kubectl apply -f https://raw.githubusercontent.com/aslakknutsen/kkbase/main/deploy/rbac.yaml
+kubectl apply -f https://raw.githubusercontent.com/aslakknutsen/kkbase/main/deploy/deployment.yaml
 
 # Wait for deployment
 kubectl wait --for=condition=available deployment/kkbase-watcher --timeout=120s
@@ -309,7 +309,7 @@ Common issues:
 kubectl delete deployment kkbase-watcher
 kubectl delete configmap kkbase-watcher-config
 kubectl delete secret kkbase-watcher-secret
-kubectl delete -f https://raw.githubusercontent.com/kagenti/kkbase/main/deploy/rbac.yaml
+kubectl delete -f https://raw.githubusercontent.com/aslakknutsen/kkbase/main/deploy/rbac.yaml
 
 # Remove Neo4j
 helm uninstall neo4j

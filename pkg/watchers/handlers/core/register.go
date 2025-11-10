@@ -1,9 +1,9 @@
 package core
 
 import (
-	"github.com/kagenti/kkbase/pkg/graph"
-	"github.com/kagenti/kkbase/pkg/models"
-	"github.com/kagenti/kkbase/pkg/watchers"
+	"github.com/aslakknutsen/kkbase/pkg/graph"
+	"github.com/aslakknutsen/kkbase/pkg/models"
+	"github.com/aslakknutsen/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/kubernetes"

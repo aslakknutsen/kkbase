@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/kagenti/kkbase/pkg/agenttypes"
+	"github.com/aslakknutsen/kkbase/pkg/agenttypes"
 	"go.uber.org/zap"
 )
 

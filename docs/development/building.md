@@ -16,7 +16,7 @@ Build and test kkbase services.
 
 ```bash
 # Clone repository
-git clone https://github.com/kagenti/kkbase.git
+git clone https://github.com/aslakknutsen/kkbase.git
 cd kkbase
 
 # Install dependencies

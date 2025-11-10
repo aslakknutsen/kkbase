@@ -6,7 +6,7 @@ import (
 	istiov1 "istio.io/client-go/pkg/apis/networking/v1"
 	istiosecurityv1 "istio.io/client-go/pkg/apis/security/v1"
 
-	"github.com/kagenti/kkbase/pkg/models"
+	"github.com/aslakknutsen/kkbase/pkg/models"
 )
 
 // serializeMap converts a map to JSON string for Neo4j storage

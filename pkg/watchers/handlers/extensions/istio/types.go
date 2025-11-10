@@ -1,6 +1,6 @@
 package istio
 
-import "github.com/kagenti/kkbase/pkg/models"
+import "github.com/aslakknutsen/kkbase/pkg/models"
 
 // Istio NodeTypes
 // These constants are co-located with Istio handlers conceptually,

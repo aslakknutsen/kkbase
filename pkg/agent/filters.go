@@ -1,6 +1,6 @@
 package agent
 
-import "github.com/kagenti/kkbase/pkg/agenttypes"
+import "github.com/aslakknutsen/kkbase/pkg/agenttypes"
 
 // FilterFunc is a function that filters events
 type FilterFunc func(agenttypes.Event) bool

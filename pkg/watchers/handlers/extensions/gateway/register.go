@@ -1,8 +1,8 @@
 package gateway
 
 import (
-	"github.com/kagenti/kkbase/pkg/graph"
-	"github.com/kagenti/kkbase/pkg/watchers"
+	"github.com/aslakknutsen/kkbase/pkg/graph"
+	"github.com/aslakknutsen/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"

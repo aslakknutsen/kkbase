@@ -11,11 +11,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kagenti/kkbase/pkg/config"
-	"github.com/kagenti/kkbase/pkg/graph/neo4j"
-	"github.com/kagenti/kkbase/pkg/mcp"
-	"github.com/kagenti/kkbase/pkg/observability"
-	"github.com/kagenti/kkbase/pkg/observability/prometheus"
+	"github.com/aslakknutsen/kkbase/pkg/config"
+	"github.com/aslakknutsen/kkbase/pkg/graph/neo4j"
+	"github.com/aslakknutsen/kkbase/pkg/mcp"
+	"github.com/aslakknutsen/kkbase/pkg/observability"
+	"github.com/aslakknutsen/kkbase/pkg/observability/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )

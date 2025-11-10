@@ -88,9 +88,9 @@ import (
     "context"
     "time"
 
-    "github.com/kagenti/kkbase/pkg/graph/neo4j"
-    "github.com/kagenti/kkbase/pkg/observability"
-    "github.com/kagenti/kkbase/pkg/observability/prometheus"
+    "github.com/aslakknutsen/kkbase/pkg/graph/neo4j"
+    "github.com/aslakknutsen/kkbase/pkg/observability"
+    "github.com/aslakknutsen/kkbase/pkg/observability/prometheus"
     "go.uber.org/zap"
 )
 

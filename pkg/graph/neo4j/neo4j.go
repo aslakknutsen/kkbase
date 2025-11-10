@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kagenti/kkbase/pkg/graph"
+	"github.com/aslakknutsen/kkbase/pkg/graph"
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	"go.uber.org/zap"
 )

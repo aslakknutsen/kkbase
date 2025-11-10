@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/kagenti/kkbase/pkg/agenttypes"
+	"github.com/aslakknutsen/kkbase/pkg/agenttypes"
 	"go.uber.org/zap"
 )
 

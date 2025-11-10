@@ -8,7 +8,7 @@ import (
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gatewayv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
-	"github.com/kagenti/kkbase/pkg/models"
+	"github.com/aslakknutsen/kkbase/pkg/models"
 )
 
 // serializeMap converts a map to JSON string for Neo4j storage

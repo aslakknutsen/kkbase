@@ -3,10 +3,10 @@ package kuadrant
 import (
 	"context"
 
-	"github.com/kagenti/kkbase/pkg/graph"
-	"github.com/kagenti/kkbase/pkg/models"
-	coretypes "github.com/kagenti/kkbase/pkg/watchers/handlers/core"
-	gatewaytypes "github.com/kagenti/kkbase/pkg/watchers/handlers/extensions/gateway"
+	"github.com/aslakknutsen/kkbase/pkg/graph"
+	"github.com/aslakknutsen/kkbase/pkg/models"
+	coretypes "github.com/aslakknutsen/kkbase/pkg/watchers/handlers/core"
+	gatewaytypes "github.com/aslakknutsen/kkbase/pkg/watchers/handlers/extensions/gateway"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"

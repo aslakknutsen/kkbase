@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	agentmcp "github.com/kagenti/kkbase/pkg/agent/mcp"
-	"github.com/kagenti/kkbase/pkg/agenttypes"
+	agentmcp "github.com/aslakknutsen/kkbase/pkg/agent/mcp"
+	"github.com/aslakknutsen/kkbase/pkg/agenttypes"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
 	"golang.org/x/time/rate"

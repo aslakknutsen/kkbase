@@ -22,7 +22,7 @@ Set up a local development environment for contributing to kkbase or developing 
 ### Step 1: Clone Repository
 
 ```bash
-git clone https://github.com/kagenti/kkbase.git
+git clone https://github.com/aslakknutsen/kkbase.git
 cd kkbase
 ```
 

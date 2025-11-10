@@ -104,13 +104,13 @@ Historical documentation from previous versions.
 
 ```bash
 # Deploy Neo4j
-kubectl apply -f https://raw.githubusercontent.com/kagenti/kkbase/main/deploy/neo4j.yaml
+kubectl apply -f https://raw.githubusercontent.com/aslakknutsen/kkbase/main/deploy/neo4j.yaml
 
 # Deploy watcher
-kubectl apply -f https://raw.githubusercontent.com/kagenti/kkbase/main/deploy/watcher.yaml
+kubectl apply -f https://raw.githubusercontent.com/aslakknutsen/kkbase/main/deploy/watcher.yaml
 
 # Deploy MCP server
-kubectl apply -f https://raw.githubusercontent.com/kagenti/kkbase/main/deploy/mcp-server.yaml
+kubectl apply -f https://raw.githubusercontent.com/aslakknutsen/kkbase/main/deploy/mcp-server.yaml
 ```
 
 See: [Quick Start Guide](getting-started/quickstart.md)
@@ -231,8 +231,8 @@ See: [Architecture Document](ARCHITECTURE.md)
 
 ## Support and Community
 
-- **Issues**: [GitHub Issues](https://github.com/kagenti/kkbase/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/kagenti/kkbase/discussions)
+- **Issues**: [GitHub Issues](https://github.com/aslakknutsen/kkbase/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/aslakknutsen/kkbase/discussions)
 - **Contributing**: [Contributing Guide](../CONTRIBUTING.md)
 
 ## License

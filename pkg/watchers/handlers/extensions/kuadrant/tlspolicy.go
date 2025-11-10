@@ -3,10 +3,10 @@ package kuadrant
 import (
 	"context"
 
-	"github.com/kagenti/kkbase/pkg/graph"
-	"github.com/kagenti/kkbase/pkg/models"
-	"github.com/kagenti/kkbase/pkg/watchers"
-	"github.com/kagenti/kkbase/pkg/watchers/schema"
+	"github.com/aslakknutsen/kkbase/pkg/graph"
+	"github.com/aslakknutsen/kkbase/pkg/models"
+	"github.com/aslakknutsen/kkbase/pkg/watchers"
+	"github.com/aslakknutsen/kkbase/pkg/watchers/schema"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sschema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -295,4 +295,3 @@ func (h *TLSPolicyHandler) HandleDelete(obj interface{}) {
 		h.Logger.Error("failed to delete tlspolicy node", zap.Error(err))
 	}
 }
-

@@ -259,7 +259,7 @@ metadata:
 spec:
   source:
     git:
-      uri: https://github.com/kagenti/kkbase.git
+      uri: https://github.com/aslakknutsen/kkbase.git
     contextDir: .
   strategy:
     dockerStrategy:

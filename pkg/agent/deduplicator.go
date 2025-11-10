@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kagenti/kkbase/pkg/agenttypes"
+	"github.com/aslakknutsen/kkbase/pkg/agenttypes"
 )
 
 // Deduplicator prevents duplicate events from being processed

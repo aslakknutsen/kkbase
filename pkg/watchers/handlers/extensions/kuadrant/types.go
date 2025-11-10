@@ -1,6 +1,6 @@
 package kuadrant
 
-import "github.com/kagenti/kkbase/pkg/models"
+import "github.com/aslakknutsen/kkbase/pkg/models"
 
 // Kuadrant NodeTypes
 // These constants represent node types for Kuadrant resources including

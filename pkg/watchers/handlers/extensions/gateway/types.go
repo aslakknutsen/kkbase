@@ -1,6 +1,6 @@
 package gateway
 
-import "github.com/kagenti/kkbase/pkg/models"
+import "github.com/aslakknutsen/kkbase/pkg/models"
 
 // Gateway API NodeTypes
 // These constants are co-located with Gateway API handlers conceptually,

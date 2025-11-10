@@ -1,7 +1,7 @@
 package llm
 
 import (
-	"github.com/kagenti/kkbase/pkg/agent/mcp"
+	"github.com/aslakknutsen/kkbase/pkg/agent/mcp"
 	"go.uber.org/zap"
 )
 

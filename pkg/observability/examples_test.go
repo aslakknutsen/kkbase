@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kagenti/kkbase/pkg/observability"
-	kktesting "github.com/kagenti/kkbase/pkg/testing"
+	"github.com/aslakknutsen/kkbase/pkg/observability"
+	kktesting "github.com/aslakknutsen/kkbase/pkg/testing"
 	"go.uber.org/zap"
 )
 

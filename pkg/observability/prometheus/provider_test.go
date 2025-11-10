@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kagenti/kkbase/pkg/observability"
+	"github.com/aslakknutsen/kkbase/pkg/observability"
 	"go.uber.org/zap"
 )
 

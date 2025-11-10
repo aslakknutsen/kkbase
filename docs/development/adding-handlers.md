@@ -26,9 +26,9 @@ package extensions
 import (
 	"context"
 	
-	"github.com/kagenti/kkbase/pkg/graph"
-	"github.com/kagenti/kkbase/pkg/models"
-	"github.com/kagenti/kkbase/pkg/watchers"
+	"github.com/aslakknutsen/kkbase/pkg/graph"
+	"github.com/aslakknutsen/kkbase/pkg/models"
+	"github.com/aslakknutsen/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -240,9 +240,9 @@ For extension/CRD handlers, use `RegisterHandlerFactory` with `ResourceTypeInfo`
 package myresource
 
 import (
-	"github.com/kagenti/kkbase/pkg/graph"
-	"github.com/kagenti/kkbase/pkg/models"
-	"github.com/kagenti/kkbase/pkg/watchers"
+	"github.com/aslakknutsen/kkbase/pkg/graph"
+	"github.com/aslakknutsen/kkbase/pkg/models"
+	"github.com/aslakknutsen/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
@@ -312,7 +312,7 @@ Update `cmd/watcher/main.go`:
 ```go
 import (
 	// ... existing imports ...
-	"github.com/kagenti/kkbase/pkg/watchers/handlers/extensions/myresource"
+	"github.com/aslakknutsen/kkbase/pkg/watchers/handlers/extensions/myresource"
 )
 
 func run() error {
@@ -386,9 +386,9 @@ Here's a real example from the codebase for watching Istio VirtualServices:
 package istio
 
 import (
-	"github.com/kagenti/kkbase/pkg/graph"
-	"github.com/kagenti/kkbase/pkg/models"
-	"github.com/kagenti/kkbase/pkg/watchers"
+	"github.com/aslakknutsen/kkbase/pkg/graph"
+	"github.com/aslakknutsen/kkbase/pkg/models"
+	"github.com/aslakknutsen/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"

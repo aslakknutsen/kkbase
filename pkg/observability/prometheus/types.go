@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/kagenti/kkbase/pkg/observability"
+	"github.com/aslakknutsen/kkbase/pkg/observability"
 )
 
 // PrometheusResponse represents the top-level response from Prometheus API

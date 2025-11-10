@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	kktesting "github.com/kagenti/kkbase/pkg/testing"
+	kktesting "github.com/aslakknutsen/kkbase/pkg/testing"
 	"go.uber.org/zap"
 )
 

@@ -3,9 +3,9 @@ package gateway
 import (
 	"testing"
 
-	"github.com/kagenti/kkbase/pkg/models"
-	kktesting "github.com/kagenti/kkbase/pkg/testing"
-	"github.com/kagenti/kkbase/pkg/watchers"
+	"github.com/aslakknutsen/kkbase/pkg/models"
+	kktesting "github.com/aslakknutsen/kkbase/pkg/testing"
+	"github.com/aslakknutsen/kkbase/pkg/watchers"
 	"go.uber.org/zap"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )

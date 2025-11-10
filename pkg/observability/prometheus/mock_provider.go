@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kagenti/kkbase/pkg/observability"
+	"github.com/aslakknutsen/kkbase/pkg/observability"
 )
 
 // MockProvider is a mock implementation of MetricsProvider for testing

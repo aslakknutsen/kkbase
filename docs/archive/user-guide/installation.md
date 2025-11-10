@@ -154,7 +154,7 @@ You should see your cluster resources populating the graph.
 
 ```bash
 # Clone repository
-git clone https://github.com/kagenti/kkbase.git
+git clone https://github.com/aslakknutsen/kkbase.git
 cd kkbase
 
 # Build

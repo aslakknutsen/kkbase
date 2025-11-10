@@ -3,7 +3,7 @@ package sources
 import (
 	"context"
 
-	"github.com/kagenti/kkbase/pkg/agenttypes"
+	"github.com/aslakknutsen/kkbase/pkg/agenttypes"
 )
 
 // EventSource is the interface for all event sources

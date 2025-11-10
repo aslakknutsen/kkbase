@@ -105,13 +105,13 @@ Using integrated deployment:
 
 ```bash
 # Deploy RBAC
-kubectl apply -f https://raw.githubusercontent.com/kagenti/kkbase/main/deploy/rbac.yaml
+kubectl apply -f https://raw.githubusercontent.com/aslakknutsen/kkbase/main/deploy/rbac.yaml
 
 # Deploy integrated watcher+MCP server
-kubectl apply -f https://raw.githubusercontent.com/kagenti/kkbase/main/deploy/deployment-integrated.yaml
+kubectl apply -f https://raw.githubusercontent.com/aslakknutsen/kkbase/main/deploy/deployment-integrated.yaml
 
 # Expose MCP server
-kubectl apply -f https://raw.githubusercontent.com/kagenti/kkbase/main/deploy/service-integrated.yaml
+kubectl apply -f https://raw.githubusercontent.com/aslakknutsen/kkbase/main/deploy/service-integrated.yaml
 
 # Wait for deployment
 kubectl wait --for=condition=available deployment/kkbase --timeout=120s
@@ -404,10 +404,10 @@ Deploy watcher and MCP server separately:
 
 ```bash
 # Deploy watcher only
-kubectl apply -f https://raw.githubusercontent.com/kagenti/kkbase/main/deploy/deployment.yaml
+kubectl apply -f https://raw.githubusercontent.com/aslakknutsen/kkbase/main/deploy/deployment.yaml
 
 # Deploy MCP server separately
-kubectl apply -f https://raw.githubusercontent.com/kagenti/kkbase/main/deploy/mcp-server-deployment.yaml
+kubectl apply -f https://raw.githubusercontent.com/aslakknutsen/kkbase/main/deploy/mcp-server-deployment.yaml
 ```
 
 See [MCP Deployment Options](../services/mcp-server/deployment.md)
@@ -448,7 +448,7 @@ kubectl delete deployment kkbase
 kubectl delete service kkbase
 kubectl delete configmap kkbase-config
 kubectl delete secret kkbase-secret
-kubectl delete -f https://raw.githubusercontent.com/kagenti/kkbase/main/deploy/rbac.yaml
+kubectl delete -f https://raw.githubusercontent.com/aslakknutsen/kkbase/main/deploy/rbac.yaml
 
 # Remove Neo4j
 helm uninstall neo4j

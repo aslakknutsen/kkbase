@@ -3,10 +3,10 @@ package gateway
 import (
 	"context"
 
-	"github.com/kagenti/kkbase/pkg/graph"
-	"github.com/kagenti/kkbase/pkg/models"
-	"github.com/kagenti/kkbase/pkg/watchers/handlers/core"
-	coretypes "github.com/kagenti/kkbase/pkg/watchers/handlers/core"
+	"github.com/aslakknutsen/kkbase/pkg/graph"
+	"github.com/aslakknutsen/kkbase/pkg/models"
+	"github.com/aslakknutsen/kkbase/pkg/watchers/handlers/core"
+	coretypes "github.com/aslakknutsen/kkbase/pkg/watchers/handlers/core"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
 )

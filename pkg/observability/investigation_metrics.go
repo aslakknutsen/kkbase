@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kagenti/kkbase/pkg/graph"
+	"github.com/aslakknutsen/kkbase/pkg/graph"
 	"go.uber.org/zap"
 )
 
