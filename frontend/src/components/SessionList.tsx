@@ -39,9 +39,19 @@ export function SessionList({ sessions, selected, onSelect }: SessionListProps) 
             }`}
           >
             <div className="flex items-start justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 flex-1 pr-2">
-                {session.initial_symptom}
-              </h3>
+              <div className="flex-1 pr-2">
+                <h3 className="text-sm font-semibold text-gray-900 line-clamp-2">
+                  {session.initial_symptom}
+                </h3>
+                {session.event_source && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 mt-1">
+                    {session.event_source === 'k8s-events' ? 'k8s' : 
+                     session.event_source === 'alertmanager' ? 'alert' :
+                     session.event_source === 'prometheus' ? 'prom' : 
+                     session.event_source}
+                  </span>
+                )}
+              </div>
               {isCompleted && (
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 whitespace-nowrap">
                   ✓ Complete

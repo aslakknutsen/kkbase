@@ -136,6 +136,25 @@ export function SessionView({ sessionId, observer }: SessionViewProps) {
             <p className="text-sm text-gray-500">
               Started {new Date(sessionDetail.session.created_at).toLocaleString()}
             </p>
+            {sessionDetail.session.event_id && (
+              <p className="text-xs text-gray-500 mt-1 flex items-center gap-2 flex-wrap">
+                <span>Triggered by:</span>
+                {sessionDetail.session.event_source && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                    {sessionDetail.session.event_source}
+                  </span>
+                )}
+                <span>Event ID: <code className="bg-gray-100 px-1 py-0.5 rounded">{sessionDetail.session.event_id.slice(0, 16)}...</code></span>
+                {sessionDetail.session.event_timestamp && (
+                  <span>at {new Date(sessionDetail.session.event_timestamp).toLocaleTimeString()}</span>
+                )}
+                {sessionDetail.session.processing_delay && (
+                  <span className="text-gray-600">
+                    (Delay: {(sessionDetail.session.processing_delay / 1e9).toFixed(1)}s)
+                  </span>
+                )}
+              </p>
+            )}
             {sessionDetail.session.initial_resource && (
               <p className="text-xs text-gray-500 mt-1">
                 Initial resource: <code className="bg-gray-100 px-1 py-0.5 rounded">{sessionDetail.session.initial_resource}</code>

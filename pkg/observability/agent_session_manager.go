@@ -41,11 +41,13 @@ func NewAgentSessionManager(
 }
 
 // CreateSession creates a new agent investigation session
-func (asm *AgentSessionManager) CreateSession(ctx context.Context, symptom, initialResource string) (*AgentSession, error) {
+func (asm *AgentSessionManager) CreateSession(ctx context.Context, symptom, initialResource, eventID, eventSource, eventTimestamp string) (*AgentSession, error) {
 	session := &AgentSession{
 		ID:              generateSessionID(),
 		InitialSymptom:  symptom,
 		InitialResource: initialResource,
+		EventID:         eventID,
+		EventSource:     eventSource,
 		Status:          "active",
 		CreatedAt:       time.Now(),
 		CurrentStage:    0,
@@ -53,9 +55,22 @@ func (asm *AgentSessionManager) CreateSession(ctx context.Context, symptom, init
 		FindingCount:    0,
 	}
 
+	// Parse and set event timestamp if provided
+	if eventTimestamp != "" {
+		parsedTime, err := time.Parse(time.RFC3339, eventTimestamp)
+		if err == nil {
+			session.EventTimestamp = &parsedTime
+			// Calculate processing delay
+			delay := session.CreatedAt.Sub(parsedTime)
+			session.ProcessingDelay = &delay
+		}
+	}
+
 	asm.logger.Info("creating agent session",
 		zap.String("session_id", session.ID),
-		zap.String("symptom", symptom))
+		zap.String("symptom", symptom),
+		zap.String("event_id", eventID),
+		zap.String("event_source", eventSource))
 
 	// Create session node in Neo4j
 	query := `
@@ -63,6 +78,9 @@ func (asm *AgentSessionManager) CreateSession(ctx context.Context, symptom, init
 			id: $id,
 			initial_symptom: $symptom,
 			initial_resource: $initial_resource,
+			event_id: $event_id,
+			event_source: $event_source,
+			event_timestamp: datetime($event_timestamp),
 			status: $status,
 			created_at: datetime($created_at),
 			current_stage: $stage,
@@ -73,14 +91,25 @@ func (asm *AgentSessionManager) CreateSession(ctx context.Context, symptom, init
 		RETURN s
 	`
 
-	_, err := asm.graphStore.Query(ctx, query, map[string]interface{}{
+	params := map[string]interface{}{
 		"id":               session.ID,
 		"symptom":          symptom,
 		"initial_resource": initialResource,
+		"event_id":         eventID,
+		"event_source":     eventSource,
 		"status":           "active",
 		"created_at":       session.CreatedAt.Format(time.RFC3339),
 		"stage":            0,
-	})
+	}
+
+	// Only add event_timestamp if it was provided and parsed successfully
+	if session.EventTimestamp != nil {
+		params["event_timestamp"] = session.EventTimestamp.Format(time.RFC3339)
+	} else {
+		params["event_timestamp"] = nil
+	}
+
+	_, err := asm.graphStore.Query(ctx, query, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session node: %w", err)
 	}
@@ -499,6 +528,9 @@ func (asm *AgentSessionManager) GetActiveSessions(ctx context.Context) ([]Active
 		   OR datetime(s.completed_at) > datetime() - duration({minutes: $retention_minutes})
 		RETURN s.id as id,
 			   s.initial_symptom as symptom,
+			   s.event_id as event_id,
+			   s.event_source as event_source,
+			   s.event_timestamp as event_timestamp,
 			   s.status as status,
 			   s.created_at as created_at,
 			   s.completed_at as completed_at,
@@ -889,6 +921,12 @@ func parseAgentSession(data interface{}) *AgentSession {
 	if resource, ok := props["initial_resource"].(string); ok {
 		session.InitialResource = resource
 	}
+	if eventID, ok := props["event_id"].(string); ok {
+		session.EventID = eventID
+	}
+	if eventSource, ok := props["event_source"].(string); ok {
+		session.EventSource = eventSource
+	}
 	if status, ok := props["status"].(string); ok {
 		session.Status = status
 	}
@@ -912,6 +950,21 @@ func parseAgentSession(data interface{}) *AgentSession {
 		}
 	} else if createdAt, ok := props["created_at"].(time.Time); ok {
 		session.CreatedAt = createdAt
+	}
+
+	// Parse event_timestamp (optional)
+	if eventTimestamp, ok := props["event_timestamp"].(string); ok {
+		if t, err := time.Parse(time.RFC3339, eventTimestamp); err == nil {
+			session.EventTimestamp = &t
+			// Calculate processing delay
+			delay := session.CreatedAt.Sub(t)
+			session.ProcessingDelay = &delay
+		}
+	} else if eventTimestamp, ok := props["event_timestamp"].(time.Time); ok {
+		session.EventTimestamp = &eventTimestamp
+		// Calculate processing delay
+		delay := session.CreatedAt.Sub(eventTimestamp)
+		session.ProcessingDelay = &delay
 	}
 
 	// Parse completed_at (optional)
@@ -1108,6 +1161,12 @@ func parseActiveSessionInfo(result map[string]interface{}) ActiveSessionInfo {
 	if symptom, ok := result["symptom"].(string); ok {
 		info.InitialSymptom = symptom
 	}
+	if eventID, ok := result["event_id"].(string); ok {
+		info.EventID = eventID
+	}
+	if eventSource, ok := result["event_source"].(string); ok {
+		info.EventSource = eventSource
+	}
 	if status, ok := result["status"].(string); ok {
 		info.Status = status
 	}
@@ -1128,6 +1187,21 @@ func parseActiveSessionInfo(result map[string]interface{}) ActiveSessionInfo {
 		}
 	} else if createdAt, ok := result["created_at"].(time.Time); ok {
 		info.CreatedAt = createdAt
+	}
+
+	// Parse event_timestamp (optional)
+	if eventTimestamp, ok := result["event_timestamp"].(string); ok {
+		if t, err := time.Parse(time.RFC3339, eventTimestamp); err == nil {
+			info.EventTimestamp = &t
+			// Calculate processing delay
+			delay := info.CreatedAt.Sub(t)
+			info.ProcessingDelay = &delay
+		}
+	} else if eventTimestamp, ok := result["event_timestamp"].(time.Time); ok {
+		info.EventTimestamp = &eventTimestamp
+		// Calculate processing delay
+		delay := info.CreatedAt.Sub(eventTimestamp)
+		info.ProcessingDelay = &delay
 	}
 
 	// Parse completed_at timestamp (optional)

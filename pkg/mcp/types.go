@@ -85,6 +85,9 @@ type GetInvestigationStatusOutput struct {
 type StartAgentSessionInput struct {
 	Symptom         string `json:"symptom" jsonschema:"description:Initial symptom being investigated (e.g. 'Orders failing for last 1m')"`
 	InitialResource string `json:"initial_resource,omitempty" jsonschema:"description:Optional initial resource to investigate (e.g. 'Service/sf-orders/order-management')"`
+	EventID         string `json:"event_id,omitempty" jsonschema:"description:Original event ID that triggered this investigation"`
+	EventSource     string `json:"event_source,omitempty" jsonschema:"description:Event source name (e.g. 'k8s-events', 'alertmanager', 'prometheus')"`
+	EventTimestamp  string `json:"event_timestamp,omitempty" jsonschema:"description:When the original event occurred (ISO 8601 format)"`
 }
 
 // StartAgentSessionOutput defines the output from starting an agent session

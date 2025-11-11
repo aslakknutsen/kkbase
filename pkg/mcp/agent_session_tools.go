@@ -24,9 +24,11 @@ func (s *Server) registerAgentSessionTools(sessionManager *observability.AgentSe
 			"The session automatically tracks hypotheses, queries, findings, and dynamically calculates blast zone as the investigation progresses.",
 	}, func(ctx context.Context, request *mcp.CallToolRequest, input StartAgentSessionInput) (*mcp.CallToolResult, any, error) {
 		s.logger.Info("starting agent session",
-			zap.String("symptom", input.Symptom))
+			zap.String("symptom", input.Symptom),
+			zap.String("event_id", input.EventID),
+			zap.String("event_source", input.EventSource))
 
-		session, err := sessionManager.CreateSession(ctx, input.Symptom, input.InitialResource)
+		session, err := sessionManager.CreateSession(ctx, input.Symptom, input.InitialResource, input.EventID, input.EventSource, input.EventTimestamp)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to start agent session: %w", err)
 		}

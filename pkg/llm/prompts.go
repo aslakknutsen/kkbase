@@ -75,6 +75,7 @@ Use these tools iteratively following the session workflow to build a complete u
 const EventAnalysisPromptTemplate = `Analyze this Kubernetes event and provide a comprehensive investigation:
 
 Event Details:
+- Event ID: %s
 - Type: %s
 - Severity: %s
 - Source: %s
@@ -96,6 +97,9 @@ STEP 1: Start Session
 Call start_agent_session with:
 - symptom: A clear description of the problem from the event above
 - initial_resource: The affected resource in format "Type/Namespace/Name"
+- event_id: The event ID from the event details above (if available)
+- event_source: The event source from the event details above (if available)
+- event_timestamp: The event timestamp from the event details above (if available, in ISO 8601 format)
 Create an initial hypothesis about the root cause of the problem
 
 STEP 1.5: Try to identify which components/frameworks might be used by this project to better understand how every piece of the puzzle fits together.

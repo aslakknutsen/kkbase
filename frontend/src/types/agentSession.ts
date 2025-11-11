@@ -4,6 +4,10 @@ export interface AgentSession {
   id: string;
   initial_symptom: string;
   initial_resource?: string;
+  event_id?: string;
+  event_source?: string;
+  event_timestamp?: string;
+  processing_delay?: number; // nanoseconds from Go
   status: 'active' | 'completed' | 'abandoned' | 'timeout' | 'incomplete';
   created_at: string;
   completed_at?: string;
@@ -65,6 +69,10 @@ export interface Recommendation {
 export interface ActiveSessionInfo {
   id: string;
   initial_symptom: string;
+  event_id?: string;
+  event_source?: string;
+  event_timestamp?: string;
+  processing_delay?: number; // nanoseconds from Go
   status: string;
   created_at: string;
   completed_at?: string;

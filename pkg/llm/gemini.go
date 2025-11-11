@@ -113,6 +113,7 @@ func (c *GeminiClient) buildEventPrompt(event agenttypes.Event) string {
 	}
 
 	return fmt.Sprintf(EventAnalysisPromptTemplate,
+		event.ID,
 		event.Type,
 		event.Severity,
 		event.Source,

@@ -7,16 +7,20 @@ import (
 
 // AgentSession represents a complete AI agent diagnostic session
 type AgentSession struct {
-	ID              string     `json:"id"`
-	InitialSymptom  string     `json:"initial_symptom"`
-	InitialResource string     `json:"initial_resource,omitempty"`
-	Status          string     `json:"status"` // "active", "completed", "timeout", "incomplete", "abandoned"
-	CreatedAt       time.Time  `json:"created_at"`
-	CompletedAt     *time.Time `json:"completed_at,omitempty"`
-	CurrentStage    int        `json:"current_stage"`
-	QueryCount      int        `json:"query_count"`
-	FindingCount    int        `json:"finding_count"`
-	Summary         string     `json:"summary,omitempty"`
+	ID              string         `json:"id"`
+	InitialSymptom  string         `json:"initial_symptom"`
+	InitialResource string         `json:"initial_resource,omitempty"`
+	EventID         string         `json:"event_id,omitempty"`
+	EventSource     string         `json:"event_source,omitempty"`
+	EventTimestamp  *time.Time     `json:"event_timestamp,omitempty"`
+	ProcessingDelay *time.Duration `json:"processing_delay,omitempty"`
+	Status          string         `json:"status"` // "active", "completed", "timeout", "incomplete", "abandoned"
+	CreatedAt       time.Time      `json:"created_at"`
+	CompletedAt     *time.Time     `json:"completed_at,omitempty"`
+	CurrentStage    int            `json:"current_stage"`
+	QueryCount      int            `json:"query_count"`
+	FindingCount    int            `json:"finding_count"`
+	Summary         string         `json:"summary,omitempty"`
 }
 
 // Hypothesis represents a versioned hypothesis at a specific investigation stage
@@ -30,7 +34,7 @@ type Hypothesis struct {
 
 // QueryExecution represents a single query executed by the agent with reasoning
 type QueryExecution struct {
-	ID          string                 `json:"id"`
+	ID          string                   `json:"id"`
 	Query       string                   `json:"query"`
 	Reasoning   string                   `json:"reasoning"`
 	Params      map[string]interface{}   `json:"params,omitempty"`
@@ -124,14 +128,18 @@ type SessionSummary struct {
 
 // ActiveSessionInfo represents summary info for listing active sessions
 type ActiveSessionInfo struct {
-	ID             string     `json:"id"`
-	InitialSymptom string     `json:"initial_symptom"`
-	Status         string     `json:"status"`
-	CreatedAt      time.Time  `json:"created_at"`
-	CompletedAt    *time.Time `json:"completed_at,omitempty"`
-	QueryCount     int        `json:"query_count"`
-	FindingCount   int        `json:"finding_count"`
-	CurrentStage   int        `json:"current_stage"`
+	ID              string         `json:"id"`
+	InitialSymptom  string         `json:"initial_symptom"`
+	EventID         string         `json:"event_id,omitempty"`
+	EventSource     string         `json:"event_source,omitempty"`
+	EventTimestamp  *time.Time     `json:"event_timestamp,omitempty"`
+	ProcessingDelay *time.Duration `json:"processing_delay,omitempty"`
+	Status          string         `json:"status"`
+	CreatedAt       time.Time      `json:"created_at"`
+	CompletedAt     *time.Time     `json:"completed_at,omitempty"`
+	QueryCount      int            `json:"query_count"`
+	FindingCount    int            `json:"finding_count"`
+	CurrentStage    int            `json:"current_stage"`
 }
 
 // SessionDetail represents complete session data with all related entities
