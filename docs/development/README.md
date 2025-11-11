@@ -142,10 +142,10 @@ make build-agent
 
 ```bash
 # Standard builds
-docker build -f Dockerfile.watcher -t kkbase-watcher .
+docker build -f build/Containerfile.watcher -t kkbase-watcher .
 
-# Fast builds (for iteration)
-docker build -f Dockerfile.watcher.fast -t kkbase-watcher .
+# Dev builds (for iteration)
+docker build -f build/Containerfile.watcher.dev -t kkbase-watcher .
 ```
 
 See [Building Guide](building.md#docker-builds)

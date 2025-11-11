@@ -3,10 +3,10 @@
 ## TL;DR
 
 ```bash
-# Local development (fast)
-make docker-build-fast        # Build both images (~30s)
-make docker-build-watcher-fast
-make docker-build-mcp-server-fast
+# Local development (dev)
+make docker-build-dev        # Build both images (~30s)
+make docker-build-watcher-dev
+make docker-build-mcp-server-dev
 
 # Production/CI (full rebuild)
 make docker-build-all         # Build both images (~5min)
@@ -20,7 +20,7 @@ make docker-push-mcp-server
 
 # Build + push
 make docker-release           # Full build + push
-make docker-release-fast      # Fast build + push
+make docker-release-dev      # Dev build + push
 ```
 
 ## Makefile Targets Cheat Sheet
@@ -32,9 +32,9 @@ make docker-release-fast      # Fast build + push
 | `docker-build-all` | Build both images (full) | ~5 min | CI/CD, production |
 | `docker-build-watcher` | Build watcher (full) | ~3 min | Production watcher |
 | `docker-build-mcp-server` | Build mcp-server (full) | ~5 min | Production mcp-server |
-| `docker-build-fast` | Build both (fast) | ~30 sec | Local development |
-| `docker-build-watcher-fast` | Build watcher (fast) | ~15 sec | Quick watcher iteration |
-| `docker-build-mcp-server-fast` | Build mcp-server (fast) | ~20 sec | Quick mcp-server iteration |
+| `docker-build-dev` | Build both (dev) | ~30 sec | Local development |
+| `docker-build-watcher-dev` | Build watcher (dev) | ~15 sec | Quick watcher iteration |
+| `docker-build-mcp-server-dev` | Build mcp-server (dev) | ~20 sec | Quick mcp-server iteration |
 
 ### Push Targets
 
@@ -49,7 +49,7 @@ make docker-release-fast      # Fast build + push
 | Target | Description | When to Use |
 |--------|-------------|-------------|
 | `docker-release` | Full build + push both | Production releases |
-| `docker-release-fast` | Fast build + push both | Quick test deployments |
+| `docker-release-dev` | Dev build + push both | Quick test deployments |
 
 ## Common Workflows
 
@@ -60,7 +60,7 @@ make docker-release-fast      # Fast build + push
 vim pkg/mcp/server.go
 
 # Quick rebuild
-make docker-build-mcp-server-fast  # ~20s
+make docker-build-mcp-server-dev  # ~20s
 
 # Test locally
 docker run -it --rm \
@@ -78,7 +78,7 @@ docker run -it --rm \
 vim frontend/src/components/BlastZoneGraph.tsx
 
 # Rebuild (includes npm build)
-make docker-build-mcp-server-fast  # ~25s
+make docker-build-mcp-server-dev  # ~25s
 
 # Push and deploy
 make docker-push-mcp-server
@@ -147,7 +147,7 @@ make docker-build-all
 - Docker installed
 - No other requirements (builds in container)
 
-### For Fast Build
+### For Dev Build
 
 - Docker installed
 - **Go 1.21+** installed locally
@@ -168,17 +168,17 @@ make docker-build-all
 | Build Mode | Context Size | Upload Time |
 |------------|--------------|-------------|
 | Full | ~50 MB | ~5s |
-| Fast (watcher) | ~15 MB | ~1s |
-| Fast (mcp-server) | ~17 MB | ~2s |
+| Dev (watcher) | ~15 MB | ~1s |
+| Dev (mcp-server) | ~17 MB | ~2s |
 
 ## Troubleshooting
 
-### Problem: "Binary not found" in fast build
+### Problem: "Binary not found" in dev build
 
 ```bash
 # Solution: Build binary first
 make build-watcher
-make docker-build-watcher-fast
+make docker-build-watcher-dev
 ```
 
 ### Problem: "Permission denied" when running
@@ -211,7 +211,7 @@ make docker-build-all
 # Solution: Use docker buildx
 docker buildx create --use
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -f Dockerfile.watcher \
+  -f build/Containerfile.watcher \
   -t quay.io/aslakknutsen/kkbase-watcher:latest \
   --push .
 ```
@@ -222,26 +222,26 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 
 ```bash
 # Watcher
-docker build -f Dockerfile.watcher \
+docker build -f build/Containerfile.watcher \
   -t quay.io/aslakknutsen/kkbase-watcher:latest .
 
 # MCP Server
-docker build -f Dockerfile.mcp-server \
+docker build -f build/Containerfile.mcp-server \
   -t quay.io/aslakknutsen/kkbase-mcp-server:latest .
 ```
 
-### Fast Build
+### Dev Build
 
 ```bash
 # Build binaries first
-go build -o watcher ./cmd/watcher
-go build -o mcp-server ./cmd/mcp-server
+go build -o out/watcher ./cmd/watcher
+go build -o out/mcp-server ./cmd/mcp-server
 
 # Build images
-docker build -f Dockerfile.watcher.fast \
+docker build -f build/Containerfile.watcher.dev \
   -t quay.io/aslakknutsen/kkbase-watcher:latest .
 
-docker build -f Dockerfile.mcp-server.fast \
+docker build -f build/Containerfile.mcp-server.dev \
   -t quay.io/aslakknutsen/kkbase-mcp-server:latest .
 ```
 
@@ -269,7 +269,7 @@ docker pull quay.io/aslakknutsen/kkbase-watcher:latest
 
 # Build with cache
 docker build --cache-from quay.io/aslakknutsen/kkbase-watcher:latest \
-  -f Dockerfile.watcher \
+  -f build/Containerfile.watcher \
   -t quay.io/aslakknutsen/kkbase-watcher:latest .
 ```
 
@@ -282,11 +282,11 @@ make docker-build-mcp-server & \
 wait
 ```
 
-### 4. Use Fast Build for Development
+### 4. Use Dev Build for Development
 
 ```bash
 # 10x faster iteration
-make docker-build-fast
+make docker-build-dev
 ```
 
 ## Security Scanning
@@ -325,12 +325,12 @@ docker buildx inspect --bootstrap
 ```bash
 # Build for AMD64 and ARM64
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -f Dockerfile.watcher \
+  -f build/Containerfile.watcher \
   -t quay.io/aslakknutsen/kkbase-watcher:latest \
   --push .
 
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -f Dockerfile.mcp-server \
+  -f build/Containerfile.mcp-server \
   -t quay.io/aslakknutsen/kkbase-mcp-server:latest \
   --push .
 ```
@@ -367,7 +367,7 @@ make docker-release
 
 ```bash
 # Development
-make docker-build-fast           # ~30s
+make docker-build-dev           # ~30s
 
 # Production
 make docker-release              # ~5min
@@ -376,8 +376,8 @@ make docker-release              # ~5min
 make docker-push-all
 
 # Individual images
-make docker-build-watcher-fast   # ~15s
-make docker-build-mcp-server-fast # ~20s
+make docker-build-watcher-dev   # ~15s
+make docker-build-mcp-server-dev # ~20s
 ```
 
 **Default Images:**

@@ -5,18 +5,18 @@
 KKBase provides two Docker build modes optimized for different use cases:
 
 1. **Full Build** - Complete rebuild in container (CI/CD, production releases)
-2. **Fast Build** - Uses pre-built binaries from local machine (local development)
+2. **Dev Build** - Uses pre-built binaries from local machine (local development)
 
 ## Build Modes Comparison
 
-| Feature | Full Build | Fast Build |
+| Feature | Full Build | Dev Build |
 |---------|-----------|------------|
-| **Dockerfiles** | `Dockerfile.watcher`<br/>`Dockerfile.mcp-server` | `Dockerfile.watcher.fast`<br/>`Dockerfile.mcp-server.fast` |
+| **Containerfiles** | `build/Containerfile.watcher`<br/>`build/Containerfile.mcp-server` | `build/Containerfile.watcher.dev`<br/>`build/Containerfile.mcp-server.dev` |
 | **Build Time** | ~3-5 minutes | ~10-20 seconds |
 | **Go Compilation** | Inside container | On local machine |
 | **Use Case** | CI/CD, production | Local development iteration |
 | **Reproducibility** | High (hermetic) | Medium (depends on local Go version) |
-| **Makefile Targets** | `make docker-build-all` | `make docker-build-fast` |
+| **Makefile Targets** | `make docker-build-all` | `make docker-build-dev` |
 
 ## Full Build (Production)
 
@@ -87,7 +87,7 @@ make docker-release
 ❌ Large builder images (~850 MB)  
 ❌ Network overhead (downloading dependencies)  
 
-## Fast Build (Local Development)
+## Dev Build (Local Development)
 
 ### How It Works
 
@@ -119,14 +119,14 @@ Docker Build:
 
 ```bash
 # Build both images using pre-built binaries
-make docker-build-fast
+make docker-build-dev
 
 # Build individual images
-make docker-build-watcher-fast
-make docker-build-mcp-server-fast
+make docker-build-watcher-dev
+make docker-build-mcp-server-dev
 
 # Build locally, then build Docker images
-make all docker-build-fast
+make all docker-build-dev
 ```
 
 ### Build Time
@@ -174,7 +174,7 @@ vim pkg/mcp/server.go
 
 # Quick rebuild
 make build-mcp-server           # Rebuild binary (~10s)
-make docker-build-mcp-server-fast  # Rebuild image (~15s)
+make docker-build-mcp-server-dev  # Rebuild image (~15s)
 
 # Test locally
 docker run -it --rm kkbase-mcp-server:latest
@@ -189,10 +189,10 @@ kubectl rollout restart deployment/kkbase-integrated
 ```bash
 # Rebuild frontend + binary + image
 make build-mcp-server           # Includes npm build
-make docker-build-mcp-server-fast
+make docker-build-mcp-server-dev
 
 # Or in one command
-make docker-build-mcp-server-fast  # Automatically runs build-mcp-server
+make docker-build-mcp-server-dev  # Automatically runs build-mcp-server
 ```
 
 ### Example 4: CI/CD Pipeline
@@ -216,7 +216,7 @@ build:
 - Need reproducible builds
 - Building on different architecture
 
-### Use Fast Build If:
+### Use Dev Build If:
 
 - Developing locally
 - Iterating on code changes
@@ -238,7 +238,7 @@ build:
 Total: ~5 minutes
 ```
 
-### Fast Build Timeline
+### Dev Build Timeline
 
 ```
 [0s - 10s]   Local go build (watcher)
@@ -251,9 +251,9 @@ Total: ~1 minute
 
 **Speed improvement: 5x - 10x faster**
 
-## Dockerfile Comparison
+## Containerfile Comparison
 
-### Full Build (Dockerfile.watcher)
+### Full Build (build/Containerfile.watcher)
 
 ```dockerfile
 # Stage 1: Builder
@@ -276,35 +276,35 @@ USER 1000
 ENTRYPOINT ["./watcher"]
 ```
 
-### Fast Build (Dockerfile.watcher.fast)
+### Dev Build (build/Containerfile.watcher.dev)
 
 ```dockerfile
 # Single stage: Runtime only
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 RUN microdnf install -y ca-certificates && microdnf clean all
 WORKDIR /app
-COPY watcher .  # Copy pre-built binary from local context
+COPY out/watcher .  # Copy pre-built binary from local context
 RUN useradd -u 1000 -r -s /sbin/nologin kkbase
 RUN chown -R kkbase:kkbase /app && chmod +x /app/watcher
 USER 1000
 ENTRYPOINT ["./watcher"]
 ```
 
-**Key difference**: Fast build skips entire Go build stage.
+**Key difference**: Dev build skips entire Go build stage.
 
 ## Best Practices
 
 ### For Local Development
 
-1. **Use fast build by default**:
+1. **Use dev build by default**:
    ```bash
-   alias dfast='make docker-build-fast'
+   alias ddev='make docker-build-dev'
    ```
 
 2. **Keep binaries fresh**:
    ```bash
    # Rebuild binaries before Docker build
-   make all && make docker-build-fast
+   make all && make docker-build-dev
    ```
 
 3. **Use BuildKit for caching**:
@@ -349,19 +349,19 @@ ENTRYPOINT ["./watcher"]
 
 ## Troubleshooting
 
-### Fast Build: Binary not found
+### Dev Build: Binary not found
 
 ```
-Error: COPY failed: file not found in build context: watcher
+Error: COPY failed: file not found in build context: out/watcher
 ```
 
 **Solution**: Build binary first:
 ```bash
 make build-watcher
-make docker-build-watcher-fast
+make docker-build-watcher-dev
 ```
 
-### Fast Build: Binary incompatible with container
+### Dev Build: Binary incompatible with container
 
 ```
 Error: exec format error
@@ -371,8 +371,8 @@ Error: exec format error
 
 **Solution**: Build for Linux:
 ```bash
-GOOS=linux GOARCH=amd64 go build -o watcher ./cmd/watcher
-make docker-build-watcher-fast
+GOOS=linux GOARCH=amd64 go build -o out/watcher ./cmd/watcher
+make docker-build-watcher-dev
 ```
 
 Or use full build (cross-compiles in container):
@@ -403,13 +403,13 @@ export BUILDKIT_PROGRESS=plain
 
 | Scenario | Recommended Mode | Command |
 |----------|------------------|---------|
-| **Local development** | Fast | `make docker-build-fast` |
+| **Local development** | Dev | `make docker-build-dev` |
 | **CI/CD pipeline** | Full | `make docker-build-all` |
 | **Production release** | Full | `make docker-release` |
 | **First-time build** | Full | `make docker-build-all` |
-| **Quick iteration** | Fast | `make docker-build-fast` |
-| **Testing changes** | Fast | `make docker-build-fast` |
+| **Quick iteration** | Dev | `make docker-build-dev` |
+| **Testing changes** | Dev | `make docker-build-dev` |
 | **Cross-platform** | Full | `docker buildx build ...` |
 
-**Key Takeaway**: Use **fast build for speed**, **full build for reproducibility**.
+**Key Takeaway**: Use **dev build for speed**, **full build for reproducibility**.
 

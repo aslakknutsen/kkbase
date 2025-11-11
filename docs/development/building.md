@@ -62,21 +62,21 @@ export LLM_API_KEY=your-key
 
 ```bash
 # Watcher
-docker build -f Dockerfile.watcher -t kkbase-watcher:latest .
+docker build -f build/Containerfile.watcher -t kkbase-watcher:latest .
 
 # MCP Server
-docker build -f Dockerfile.mcp-server -t kkbase-mcp-server:latest .
+docker build -f build/Containerfile.mcp-server -t kkbase-mcp-server:latest .
 
 # Agent
-docker build -f Dockerfile.agent -t kkbase-agent:latest .
+docker build -f build/Containerfile.agent -t kkbase-agent:latest .
 ```
 
-### Fast Builds (Development)
+### Dev Builds (Development)
 
 For faster iteration:
 
 ```bash
-docker build -f Dockerfile.watcher.fast -t kkbase-watcher:dev .
+docker build -f build/Containerfile.watcher.dev -t kkbase-watcher:dev .
 ```
 
 See [Docker Build Modes](docker-build-modes.md) for details.
