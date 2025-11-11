@@ -1,14 +1,14 @@
 .PHONY: build build-watcher build-mcp-server build-agent build-frontend all run run-mcp-server test clean clean-frontend \
 	docker-build-all docker-build-watcher docker-build-mcp-server docker-build-agent \
-	docker-build-fast docker-build-watcher-fast docker-build-mcp-server-fast docker-build-agent-fast \
+	docker-build-dev docker-build-watcher-dev docker-build-mcp-server-dev docker-build-agent-dev \
 	docker-push-all docker-push-watcher docker-push-mcp-server docker-push-agent \
-	docker-release docker-release-fast \
+	docker-release docker-release-dev \
 	deploy deploy-mcp-standalone deploy-integrated deploy-all undeploy fmt vet deps logs help
 
 # Variables
-BINARY_NAME=watcher
-MCP_BINARY_NAME=mcp-server
-AGENT_BINARY_NAME=agent
+BINARY_NAME=out/watcher
+MCP_BINARY_NAME=out/mcp-server
+AGENT_BINARY_NAME=out/agent
 DOCKER_REGISTRY=quay.io/aslakknutsen
 DOCKER_TAG=latest
 FRONTEND_DIR=frontend
@@ -58,7 +58,7 @@ test:
 
 # Clean build artifacts
 clean: clean-frontend
-	rm -f $(BINARY_NAME) $(MCP_BINARY_NAME) $(AGENT_BINARY_NAME)
+	rm -rf out/
 	rm -rf cmd/mcp-server/frontend
 	go clean
 
@@ -73,35 +73,35 @@ docker-build-all: docker-build-watcher docker-build-mcp-server docker-build-agen
 # Docker: Build watcher image (full rebuild)
 docker-build-watcher:
 	@echo "Building watcher image (full rebuild)..."
-	docker build -f Dockerfile.watcher -t $(WATCHER_IMAGE):$(DOCKER_TAG) .
+	docker build -f build/Containerfile.watcher -t $(WATCHER_IMAGE):$(DOCKER_TAG) .
 
 # Docker: Build MCP server image (full rebuild)
 docker-build-mcp-server:
 	@echo "Building MCP server image (full rebuild)..."
-	docker build -f Dockerfile.mcp-server -t $(MCP_SERVER_IMAGE):$(DOCKER_TAG) .
+	docker build -f build/Containerfile.mcp-server -t $(MCP_SERVER_IMAGE):$(DOCKER_TAG) .
 
 # Docker: Build agent image (full rebuild)
 docker-build-agent:
 	@echo "Building agent image (full rebuild)..."
-	docker build -f Dockerfile.agent -t $(AGENT_IMAGE):$(DOCKER_TAG) .
+	docker build -f build/Containerfile.agent -t $(AGENT_IMAGE):$(DOCKER_TAG) .
 
-# Docker: Fast build - uses pre-built binaries (LOCAL DEV ONLY)
-docker-build-fast: docker-build-watcher-fast docker-build-mcp-server-fast docker-build-agent-fast
+# Docker: Dev build - uses pre-built binaries (LOCAL DEV ONLY)
+docker-build-dev: docker-build-watcher-dev docker-build-mcp-server-dev docker-build-agent-dev
 
-# Docker: Fast build watcher (uses pre-built binary)
-docker-build-watcher-fast: build-watcher
-	@echo "Building watcher image (fast - using pre-built binary)..."
-	docker build -f Dockerfile.watcher.fast -t $(WATCHER_IMAGE):$(DOCKER_TAG) .
+# Docker: Dev build watcher (uses pre-built binary)
+docker-build-watcher-dev: build-watcher
+	@echo "Building watcher image (dev - using pre-built binary)..."
+	docker build -f build/Containerfile.watcher.dev -t $(WATCHER_IMAGE):$(DOCKER_TAG) .
 
-# Docker: Fast build MCP server (uses pre-built binary)
-docker-build-mcp-server-fast: build-mcp-server
-	@echo "Building MCP server image (fast - using pre-built binary)..."
-	docker build -f Dockerfile.mcp-server.fast -t $(MCP_SERVER_IMAGE):$(DOCKER_TAG) .
+# Docker: Dev build MCP server (uses pre-built binary)
+docker-build-mcp-server-dev: build-mcp-server
+	@echo "Building MCP server image (dev - using pre-built binary)..."
+	docker build -f build/Containerfile.mcp-server.dev -t $(MCP_SERVER_IMAGE):$(DOCKER_TAG) .
 
-# Docker: Fast build agent (uses pre-built binary)
-docker-build-agent-fast: build-agent
-	@echo "Building agent image (fast - using pre-built binary)..."
-	docker build -f Dockerfile.agent.fast -t $(AGENT_IMAGE):$(DOCKER_TAG) .
+# Docker: Dev build agent (uses pre-built binary)
+docker-build-agent-dev: build-agent
+	@echo "Building agent image (dev - using pre-built binary)..."
+	docker build -f build/Containerfile.agent.dev -t $(AGENT_IMAGE):$(DOCKER_TAG) .
 
 # Docker: Push all images
 docker-push-all: docker-push-watcher docker-push-mcp-server docker-push-agent
@@ -124,8 +124,8 @@ docker-push-agent:
 # Docker: Build and push all (full rebuild)
 docker-release: docker-build-all docker-push-all
 
-# Docker: Build and push all (fast - for local testing)
-docker-release-fast: docker-build-fast docker-push-all
+# Docker: Build and push all (dev - for local testing)
+docker-release-dev: docker-build-dev docker-push-all
 
 # Deploy to Kubernetes (watcher only)
 deploy:
@@ -220,11 +220,11 @@ help:
 	@echo "  docker-build-mcp-server    - Build MCP server image (full rebuild)"
 	@echo "  docker-build-agent         - Build agent image (full rebuild)"
 	@echo ""
-	@echo "Docker (Fast Build - for local dev):"
-	@echo "  docker-build-fast          - Build all images using pre-built binaries"
-	@echo "  docker-build-watcher-fast  - Build watcher image using pre-built binary"
-	@echo "  docker-build-mcp-server-fast - Build MCP server using pre-built binary"
-	@echo "  docker-build-agent-fast    - Build agent image using pre-built binary"
+	@echo "Docker (Dev Build - for local dev):"
+	@echo "  docker-build-dev           - Build all images using pre-built binaries"
+	@echo "  docker-build-watcher-dev   - Build watcher image using pre-built binary"
+	@echo "  docker-build-mcp-server-dev - Build MCP server using pre-built binary"
+	@echo "  docker-build-agent-dev     - Build agent image using pre-built binary"
 	@echo ""
 	@echo "Docker (Push):"
 	@echo "  docker-push-all            - Push all images to registry"
@@ -234,7 +234,7 @@ help:
 	@echo ""
 	@echo "Docker (Combined):"
 	@echo "  docker-release             - Build (full) and push all images"
-	@echo "  docker-release-fast        - Build (fast) and push all images"
+	@echo "  docker-release-dev         - Build (dev) and push all images"
 	@echo ""
 	@echo "Kubernetes Deployment:"
 	@echo "  deploy                     - Deploy watcher only"

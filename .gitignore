@@ -1,7 +1,5 @@
 # Binaries
-/agent
-/watcher
-/mcp-server
+/out/
 *.exe
 *.exe~
 *.dll

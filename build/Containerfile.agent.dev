@@ -1,4 +1,4 @@
-# Fast build - uses pre-built binary from local build
+# Dev Containerfile - uses pre-built binary from local build
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 # Install ca-certificates for HTTPS connections (required for Gemini API)
@@ -7,8 +7,8 @@ RUN microdnf install -y ca-certificates && \
 
 WORKDIR /app
 
-# Copy pre-built binary (must be built first with: go build -o agent ./cmd/agent)
-COPY agent .
+# Copy pre-built binary (must be built first with: go build -o out/agent ./cmd/agent)
+COPY out/agent .
 
 # Create non-root user
 RUN useradd -u 1000 -r -s /sbin/nologin kkbase
