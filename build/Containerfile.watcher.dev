@@ -15,15 +15,12 @@ RUN microdnf install -y ca-certificates && \
 
 WORKDIR /app
 
-# Copy pre-built binary from local context
-COPY out/watcher .
+# Create non-root user BEFORE copying binary
+RUN useradd -u 1000 -r -s /sbin/nologin kkbase && \
+    chown kkbase:kkbase /app
 
-# Create non-root user
-RUN useradd -u 1000 -r -s /sbin/nologin kkbase
-
-# Set ownership and permissions
-RUN chown -R kkbase:kkbase /app && \
-    chmod +x /app/watcher
+# Copy pre-built binary with correct ownership and permissions directly
+COPY --chown=kkbase:kkbase --chmod=755 out/watcher .
 
 # Switch to non-root user
 USER 1000

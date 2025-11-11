@@ -16,15 +16,13 @@ RUN microdnf install -y ca-certificates && \
 
 WORKDIR /app
 
-# Copy pre-built binary from local context (includes embedded frontend)
-COPY out/mcp-server .
+# Create non-root user BEFORE copying binary
+RUN useradd -u 1000 -r -s /sbin/nologin kkbase && \
+    chown kkbase:kkbase /app
 
-# Create non-root user
-RUN useradd -u 1000 -r -s /sbin/nologin kkbase
-
-# Set ownership and permissions
-RUN chown -R kkbase:kkbase /app && \
-    chmod +x /app/mcp-server
+# Copy pre-built binary with correct ownership and permissions directly
+# (includes embedded frontend)
+COPY --chown=kkbase:kkbase --chmod=755 out/mcp-server .
 
 # Switch to non-root user
 USER 1000

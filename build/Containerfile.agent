@@ -25,15 +25,12 @@ RUN microdnf install -y ca-certificates && \
 
 WORKDIR /app
 
-# Copy binary from builder
-COPY --from=builder /build/agent .
+# Create non-root user BEFORE copying binary
+RUN useradd -u 1000 -r -s /sbin/nologin kkbase && \
+    chown kkbase:kkbase /app
 
-# Create non-root user
-RUN useradd -u 1000 -r -s /sbin/nologin kkbase
-
-# Set ownership and permissions
-RUN chown -R kkbase:kkbase /app && \
-    chmod +x /app/agent
+# Copy binary with correct ownership and permissions directly
+COPY --from=builder --chown=kkbase:kkbase --chmod=755 /build/agent .
 
 # Switch to non-root user
 USER 1000
