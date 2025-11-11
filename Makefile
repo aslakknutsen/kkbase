@@ -1,4 +1,4 @@
-.PHONY: build build-watcher build-mcp-server build-agent build-frontend all run run-mcp-server test clean clean-frontend \
+.PHONY: build build-watcher build-mcp-server build-agent build-frontend-force all run run-mcp-server test clean clean-frontend \
 	docker-build-all docker-build-watcher docker-build-mcp-server docker-build-agent \
 	docker-build-dev docker-build-watcher-dev docker-build-mcp-server-dev docker-build-agent-dev \
 	docker-push-all docker-push-watcher docker-push-mcp-server docker-push-agent \
@@ -28,7 +28,7 @@ build-watcher:
 	go build -o $(BINARY_NAME) ./cmd/watcher
 
 # Build the MCP server (includes frontend)
-build-mcp-server: build-frontend
+build-mcp-server: $(FRONTEND_DIR)/dist
 	@echo "Copying frontend build to cmd/mcp-server..."
 	rm -rf cmd/mcp-server/frontend
 	mkdir -p cmd/mcp-server/frontend
@@ -39,10 +39,18 @@ build-mcp-server: build-frontend
 build-agent:
 	go build -o $(AGENT_BINARY_NAME) ./cmd/agent
 
-# Build the frontend
-build-frontend:
+# Build the frontend (file-based target - only rebuilds when sources change)
+$(FRONTEND_DIR)/dist: $(shell find $(FRONTEND_DIR)/src -type f -o -name package.json -o -name package-lock.json 2>/dev/null)
 	@echo "Building frontend..."
 	cd $(FRONTEND_DIR) && npm install && npm run build
+
+# Force rebuild frontend (phony target)
+build-frontend-force:
+	@rm -rf $(FRONTEND_DIR)/dist
+	@$(MAKE) $(FRONTEND_DIR)/dist
+
+# Alias for backward compatibility
+build-frontend: $(FRONTEND_DIR)/dist
 
 # Run the watcher application locally
 run:
