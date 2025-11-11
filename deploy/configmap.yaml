@@ -33,6 +33,7 @@ data:
   
   # Agent session retention (how long completed sessions remain visible in UI)
   COMPLETED_SESSION_RETENTION_MINUTES: "1440"  # 24 hours
+  STORE_QUERY_RESULTS: "true"
   
   # Agent configuration
   AGENT_ENABLED: "true"

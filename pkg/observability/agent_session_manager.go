@@ -121,6 +121,17 @@ func (asm *AgentSessionManager) ExecuteQuery(
 		Findings:    make([]string, len(findings)),
 	}
 
+	// Store results if enabled (dev mode)
+	if asm.config.StoreQueryResults {
+		if len(results) <= 100 {
+			queryExec.Results = results
+			queryExec.Truncated = false
+		} else {
+			queryExec.Results = results[:100]
+			queryExec.Truncated = true
+		}
+	}
+
 	// Store findings
 	for i, finding := range findings {
 		finding.DiscoveredAt = queryExec.ExecutedAt
@@ -568,6 +579,13 @@ func (asm *AgentSessionManager) GetTimeline(ctx context.Context, sessionID strin
 // Helper methods
 
 func (asm *AgentSessionManager) storeQueryExecution(ctx context.Context, sessionID string, queryExec *QueryExecution) error {
+	// Serialize results to JSON if present
+	var resultsJSON string
+	if len(queryExec.Results) > 0 {
+		resultsBytes, _ := json.Marshal(queryExec.Results)
+		resultsJSON = string(resultsBytes)
+	}
+
 	query := `
 		MATCH (s:AgentSession {id: $session_id})
 		CREATE (q:QueryExecution {
@@ -575,6 +593,8 @@ func (asm *AgentSessionManager) storeQueryExecution(ctx context.Context, session
 			query: $query_text,
 			reasoning: $reasoning,
 			result_count: $result_count,
+			results: $results,
+			truncated: $truncated,
 			duration_ms: $duration_ms,
 			executed_at: datetime($executed_at),
 			placeholder: false
@@ -589,6 +609,8 @@ func (asm *AgentSessionManager) storeQueryExecution(ctx context.Context, session
 		"query_text":   queryExec.Query,
 		"reasoning":    queryExec.Reasoning,
 		"result_count": queryExec.ResultCount,
+		"results":      resultsJSON,
+		"truncated":    queryExec.Truncated,
 		"duration_ms":  queryExec.Duration.Milliseconds(),
 		"executed_at":  queryExec.ExecutedAt.Format(time.RFC3339),
 	})
@@ -999,6 +1021,19 @@ func parseQueryExecutions(results []map[string]interface{}) []QueryExecution {
 					query.Findings = append(query.Findings, fID)
 				}
 			}
+		}
+
+		// Parse results JSON if present
+		if resultsJSON, ok := props["results"].(string); ok && resultsJSON != "" {
+			var results []map[string]interface{}
+			if err := json.Unmarshal([]byte(resultsJSON), &results); err == nil {
+				query.Results = results
+			}
+		}
+
+		// Parse truncated flag
+		if truncated, ok := props["truncated"].(bool); ok {
+			query.Truncated = truncated
 		}
 
 		queries = append(queries, query)

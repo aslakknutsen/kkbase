@@ -44,6 +44,9 @@ type Config struct {
 	// Agent session configuration
 	CompletedSessionRetentionMinutes int
 
+	// Query result storage (dev mode)
+	StoreQueryResults bool
+
 	// Agent configuration
 	AgentEnabled      bool
 	AgentPort         int
@@ -96,6 +99,8 @@ func LoadFromEnv() (*Config, error) {
 		MCPEnabled: getBoolEnv("MCP_ENABLED", false),
 
 		CompletedSessionRetentionMinutes: getIntEnv("COMPLETED_SESSION_RETENTION_MINUTES", 1440),
+
+		StoreQueryResults: getBoolEnv("STORE_QUERY_RESULTS", false),
 
 		// Agent configuration
 		AgentEnabled:      getBoolEnv("AGENT_ENABLED", true),

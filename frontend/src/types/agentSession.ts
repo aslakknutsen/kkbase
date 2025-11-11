@@ -27,6 +27,8 @@ export interface QueryExecution {
   reasoning: string;
   params?: Record<string, any>;
   result_count: number;
+  results?: Record<string, any>[]; // Stored query results (if enabled)
+  truncated?: boolean;              // True if results were truncated
   duration: number; // nanoseconds (from Go time.Duration JSON marshaling)
   executed_at: string;
   findings: string[]; // Finding IDs

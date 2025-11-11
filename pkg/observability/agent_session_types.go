@@ -31,13 +31,15 @@ type Hypothesis struct {
 // QueryExecution represents a single query executed by the agent with reasoning
 type QueryExecution struct {
 	ID          string                 `json:"id"`
-	Query       string                 `json:"query"`
-	Reasoning   string                 `json:"reasoning"`
-	Params      map[string]interface{} `json:"params,omitempty"`
-	ResultCount int                    `json:"result_count"`
-	Duration    time.Duration          `json:"duration"`
-	ExecutedAt  time.Time              `json:"executed_at"`
-	Findings    []string               `json:"findings"` // IDs of auto-extracted findings
+	Query       string                   `json:"query"`
+	Reasoning   string                   `json:"reasoning"`
+	Params      map[string]interface{}   `json:"params,omitempty"`
+	ResultCount int                      `json:"result_count"`
+	Results     []map[string]interface{} `json:"results,omitempty"`   // Stored results (if enabled)
+	Truncated   bool                     `json:"truncated,omitempty"` // True if results were truncated
+	Duration    time.Duration            `json:"duration"`
+	ExecutedAt  time.Time                `json:"executed_at"`
+	Findings    []string                 `json:"findings"` // IDs of auto-extracted findings
 }
 
 // Finding represents a discovered issue (failed service, unhealthy pod, etc.)

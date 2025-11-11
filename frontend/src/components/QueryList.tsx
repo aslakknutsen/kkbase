@@ -89,6 +89,35 @@ export function QueryList({ queries }: QueryListProps) {
                   </div>
                 </div>
               )}
+              
+              {query.results && query.results.length > 0 && (
+                <div className="mt-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-xs font-semibold text-gray-700">
+                      Results ({query.results.length})
+                    </h4>
+                    {query.truncated && (
+                      <span className="text-xs text-orange-600 font-medium">
+                        Showing first 100 of {query.result_count} results
+                      </span>
+                    )}
+                  </div>
+                  <div className="rounded border border-gray-200 overflow-hidden max-h-96 overflow-y-auto">
+                    <SyntaxHighlighter
+                      language="json"
+                      style={vscDarkPlus}
+                      customStyle={{
+                        margin: 0,
+                        fontSize: '0.75rem',
+                        lineHeight: '1.5',
+                      }}
+                      showLineNumbers={true}
+                    >
+                      {JSON.stringify(query.results, null, 2)}
+                    </SyntaxHighlighter>
+                  </div>
+                </div>
+              )}
             </div>
           </details>
         ))}
