@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/aslakknutsen/kkbase/pkg/agenttypes"
+	"github.com/prometheus/alertmanager/notify/webhook"
+	"github.com/prometheus/alertmanager/template"
 	"go.uber.org/zap"
 )
 
@@ -54,23 +55,6 @@ func (a *AlertmanagerWebhook) Stop() error {
 	return nil
 }
 
-// AlertmanagerPayload represents the Alertmanager webhook payload
-type AlertmanagerPayload struct {
-	Version  string  `json:"version"`
-	GroupKey string  `json:"groupKey"`
-	Status   string  `json:"status"`
-	Alerts   []Alert `json:"alerts"`
-}
-
-// Alert represents a single alert from Alertmanager
-type Alert struct {
-	Status      string            `json:"status"`
-	Labels      map[string]string `json:"labels"`
-	Annotations map[string]string `json:"annotations"`
-	StartsAt    time.Time         `json:"startsAt"`
-	EndsAt      time.Time         `json:"endsAt"`
-}
-
 // handleWebhook processes incoming webhooks from Alertmanager
 func (a *AlertmanagerWebhook) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -78,7 +62,7 @@ func (a *AlertmanagerWebhook) handleWebhook(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var payload AlertmanagerPayload
+	var payload webhook.Message
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		a.logger.Warn("failed to decode webhook payload", zap.Error(err))
 		http.Error(w, "invalid payload", http.StatusBadRequest)
@@ -90,7 +74,8 @@ func (a *AlertmanagerWebhook) handleWebhook(w http.ResponseWriter, r *http.Reque
 		zap.Int("alerts", len(payload.Alerts)))
 
 	// Process alerts
-	for _, alert := range payload.Alerts {
+	for i := range payload.Alerts {
+		alert := &payload.Alerts[i]
 		// Only process firing alerts
 		if alert.Status != "firing" {
 			continue
@@ -110,7 +95,7 @@ func (a *AlertmanagerWebhook) handleWebhook(w http.ResponseWriter, r *http.Reque
 }
 
 // convertToAgentEvent converts an Alertmanager alert to agent Event
-func (a *AlertmanagerWebhook) convertToAgentEvent(alert Alert) agenttypes.Event {
+func (a *AlertmanagerWebhook) convertToAgentEvent(alert *template.Alert) agenttypes.Event {
 	alertname := alert.Labels["alertname"]
 	severity := a.mapSeverity(alert.Labels["severity"])
 
