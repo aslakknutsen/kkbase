@@ -1,0 +1,181 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kkbase-demo-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus
+    role: alert-rules
+spec:
+  groups:
+  - name: demo_http_errors
+    interval: 10s
+    rules:
+    # 4xx client errors (e.g., 415 from config issues)
+    - alert: HTTPClientErrors
+      expr: |
+        rate(http_client_requests_total{status_code=~"4.."}[2m]) > 0
+      for: 20s
+      labels:
+        severity: warning
+        component: http_client
+      annotations:
+        summary: "{{ $labels.app }} client errors to {{ $labels.destination_service }}"
+        description: |
+          Service: {{ $labels.app }} ({{ $labels.version }})
+          Pod: {{ $labels.pod }}
+          Namespace: {{ $labels.namespace }}
+          
+          Destination: {{ $labels.destination_service }}
+          Status: {{ $labels.status_code }}
+          Method: {{ $labels.method }}
+          
+          Error Rate: {{ $value | humanize }}/sec
+        alert_namespace: "{{ $labels.namespace }}"
+        alert_pod: "{{ $labels.pod }}"
+        alert_service: "{{ $labels.app }}"
+        alert_destination: "{{ $labels.destination_service }}"
+        alert_status_code: "{{ $labels.status_code }}"
+        
+    # 5xx server errors  
+    - alert: HTTPServerErrors
+      expr: |
+        rate(http_server_requests_total{status_code=~"5.."}[2m]) > 0
+      for: 20s
+      labels:
+        severity: critical
+        component: http_server
+      annotations:
+        summary: "{{ $labels.app }} returning 5xx errors"
+        description: |
+          Service: {{ $labels.app }} ({{ $labels.version }})
+          Pod: {{ $labels.pod }}
+          Namespace: {{ $labels.namespace }}
+          
+          Status: {{ $labels.status_code }}
+          Method: {{ $labels.method }}
+          Path: {{ $labels.path }}
+          
+          Error Rate: {{ $value | humanize }}/sec
+        alert_namespace: "{{ $labels.namespace }}"
+        alert_pod: "{{ $labels.pod }}"
+        alert_service: "{{ $labels.app }}"
+        alert_path: "{{ $labels.path }}"
+        alert_status_code: "{{ $labels.status_code }}"
+        
+    # Upstream 5xx errors
+    - alert: UpstreamServerErrors
+      expr: |
+        rate(http_client_requests_total{status_code=~"5.."}[2m]) > 0
+      for: 20s
+      labels:
+        severity: critical
+        component: upstream
+      annotations:
+        summary: "{{ $labels.destination_service }} returning 5xx to {{ $labels.app }}"
+        description: |
+          Caller: {{ $labels.app }} ({{ $labels.version }})
+          Pod: {{ $labels.pod }}
+          Namespace: {{ $labels.namespace }}
+          
+          Destination: {{ $labels.destination_service }}
+          Status: {{ $labels.status_code }}
+          Method: {{ $labels.method }}
+          
+          Error Rate: {{ $value | humanize }}/sec
+        alert_namespace: "{{ $labels.namespace }}"
+        alert_pod: "{{ $labels.pod }}"
+        alert_service: "{{ $labels.app }}"
+        alert_destination: "{{ $labels.destination_service }}"
+        alert_status_code: "{{ $labels.status_code }}"
+        
+  - name: demo_resource_spikes
+    interval: 10s
+    rules:
+    # CPU spike
+    - alert: CPUSpike
+      expr: |
+        rate(process_cpu_seconds_total[2m]) > 0.5
+      for: 15s
+      labels:
+        severity: warning
+        component: resources
+      annotations:
+        summary: "{{ $labels.app }} CPU spike detected"
+        description: |
+          Service: {{ $labels.app }} ({{ $labels.version }})
+          Pod: {{ $labels.pod }}
+          Namespace: {{ $labels.namespace }}
+          
+          CPU Usage: {{ $value | humanizePercentage }}
+        alert_namespace: "{{ $labels.namespace }}"
+        alert_pod: "{{ $labels.pod }}"
+        alert_service: "{{ $labels.app }}"
+        
+    # Memory growth
+    - alert: MemoryGrowth
+      expr: |
+        deriv(process_resident_memory_bytes[2m]) > 5000000
+      for: 30s
+      labels:
+        severity: warning
+        component: resources
+      annotations:
+        summary: "{{ $labels.app }} memory growing rapidly"
+        description: |
+          Service: {{ $labels.app }} ({{ $labels.version }})
+          Pod: {{ $labels.pod }}
+          Namespace: {{ $labels.namespace }}
+          
+          Memory Growth Rate: {{ $value | humanize }}B/sec
+        alert_namespace: "{{ $labels.namespace }}"
+        alert_pod: "{{ $labels.pod }}"
+        alert_service: "{{ $labels.app }}"
+        
+    # Goroutine leak
+    - alert: GoroutineSpike
+      expr: |
+        go_goroutines > 50
+        or
+        rate(go_goroutines[2m]) > 1
+      for: 30s
+      labels:
+        severity: warning
+        component: resources
+      annotations:
+        summary: "{{ $labels.app }} goroutine count spiking"
+        description: |
+          Service: {{ $labels.app }} ({{ $labels.version }})
+          Pod: {{ $labels.pod }}
+          Namespace: {{ $labels.namespace }}
+          
+          Goroutine Count: {{ $value }}
+        alert_namespace: "{{ $labels.namespace }}"
+        alert_pod: "{{ $labels.pod }}"
+        alert_service: "{{ $labels.app }}"
+        
+  - name: demo_pod_crashes
+    interval: 10s
+    rules:
+    # High pod restart rate (requires kube-state-metrics)
+    - alert: HighRestartRate
+      expr: |
+        rate(kube_pod_container_status_restarts_total[2m]) > 0.01
+      for: 30s
+      labels:
+        severity: critical
+        component: pod_health
+      annotations:
+        summary: "{{ $labels.pod }} restarting frequently in {{ $labels.namespace }}"
+        description: |
+          Pod: {{ $labels.pod }}
+          Container: {{ $labels.container }}
+          Namespace: {{ $labels.namespace }}
+          
+          Restart Rate: {{ $value | humanize }}/sec
+          
+          This may indicate crashes from panic behaviors or OOM conditions.
+        alert_namespace: "{{ $labels.namespace }}"
+        alert_pod: "{{ $labels.pod }}"
+        alert_container: "{{ $labels.container }}"
+

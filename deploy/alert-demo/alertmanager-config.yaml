@@ -1,0 +1,59 @@
+---
+# AlertManager Configuration for kkbase Demo
+# This configures AlertManager to send alerts to the kkbase webhook using the AlertmanagerConfig CRD
+#
+# Apply with:
+#   kubectl apply -f alertmanager-config.yaml
+#
+# Note: This assumes you're using Prometheus Operator with AlertmanagerConfig CRD support.
+# The Alertmanager must be configured to pick up AlertmanagerConfig resources.
+
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: kkbase-webhook-config
+  namespace: monitoring
+  labels:
+    alertmanagerConfig: kkbase-demo
+spec:
+  # Route configuration
+  route:
+    groupBy: ['alertname', 'namespace', 'pod']
+    groupWait: 10s
+    groupInterval: 30s
+    repeatInterval: 12h
+    receiver: 'kkbase-webhook'
+    
+    routes:
+    - matchers:
+      - name: severity
+        value: critical
+      receiver: 'kkbase-webhook'
+      groupWait: 5s
+      continue: false
+      
+    - matchers:
+      - name: severity
+        value: warning
+      receiver: 'kkbase-webhook'
+      groupWait: 10s
+      continue: false
+  
+  # Receivers
+  receivers:
+  - name: 'kkbase-webhook'
+    webhookConfigs:
+    - url: 'http://kkbase-integrated.default.svc.cluster.local:8082/webhook/alertmanager'
+      sendResolved: false
+      maxAlerts: 10
+  
+  # Inhibit rules to prevent duplicate notifications
+  inhibitRules:
+  - sourceMatch:
+    - name: severity
+      value: critical
+    targetMatch:
+    - name: severity
+      value: warning
+    equal: ['alertname', 'namespace', 'pod']
+
