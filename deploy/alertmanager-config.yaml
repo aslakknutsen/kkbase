@@ -12,7 +12,6 @@ apiVersion: monitoring.coreos.com/v1alpha1
 kind: AlertmanagerConfig
 metadata:
   name: kkbase-webhook-config
-  namespace: monitoring
   labels:
     alertmanagerConfig: kkbase-demo
 spec:

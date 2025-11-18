@@ -1,6 +1,56 @@
 # Kubernetes Deployment Manifests
 
-This directory contains Kubernetes manifests for deploying kkbase in various configurations.
+This directory contains Kubernetes manifests and correlation test scenarios for kkbase.
+
+## Quick Links
+
+- [Correlation Test Scenarios](#correlation-test-scenarios) - Multi-service graph correlation demos
+- [Standard Deployment](#standard-deployment) - Production deployment
+- [Integrated Deployment](#mode-2-integrated-watcher--mcp-in-one-pod) - Development setup
+
+## Correlation Test Scenarios
+
+Self-contained scenarios demonstrating multi-resource graph correlation. Each scenario tests the agent's ability to traverse the knowledge graph to find root causes.
+
+### Available Scenarios
+
+| ID | Scenario | Complexity | Graph Edges | Status |
+|----|----------|------------|-------------|--------|
+| 01 | [Cascading Service Failure](scenarios/01-cascading-failure/) | ⭐ Easy | Service CALLS | Ready |
+
+### Running a Scenario
+
+Each scenario is self-contained with setup/cleanup scripts:
+
+```bash
+cd scenarios/01-cascading-failure
+./setup.sh
+
+# In another terminal, watch investigation
+kubectl logs -n default -l app=kkbase-integrated -f
+
+# When done
+./cleanup.sh
+```
+
+### Prerequisites
+
+- `testgen` in PATH (install from [kkbase-testapp](https://github.com/aslakknutsen/kkbase-testapp))
+- `TESTAPP_DIR` environment variable or testapp cloned to `~/kkbase-testapp`
+- kkbase deployed in cluster (integrated mode recommended)
+- Prometheus with AlertManager configured (see [prometheus-rules.yaml](prometheus-rules.yaml))
+
+### Scenario Structure
+
+Each scenario includes:
+- `README.md` - Full documentation, expected behavior, troubleshooting
+- `setup.sh` - Automated deployment and failure injection
+- `cleanup.sh` - Resource cleanup
+- `alert-rules.yaml` - Prometheus alert definitions
+
+---
+
+## Standard Deployment
 
 ## Quick Start
 

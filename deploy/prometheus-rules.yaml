@@ -1,3 +1,8 @@
+# This file contains general-purpose alerts for kkbase demos.
+# Scenario-specific alerts are in scenarios/*/alert-rules.yaml
+# 
+# To use scenarios, see: scenarios/README.md
+
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
