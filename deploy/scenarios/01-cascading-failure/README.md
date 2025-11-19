@@ -71,11 +71,11 @@ RETURN count(downstream)  // Should be 0
 
 ## Success Criteria
 
-- ✅ Alert fires on api-gateway within 30 seconds
-- ✅ Agent receives webhook
-- ✅ Agent identifies payment as root cause
-- ✅ Agent explains error cascaded upstream
-- ✅ Agent recommends investigating payment service
+- Alert fires on api-gateway within 30 seconds
+- Agent receives webhook
+- Agent identifies payment as root cause
+- Agent explains error cascaded upstream
+- Agent recommends investigating payment service
 
 ## Troubleshooting
 
