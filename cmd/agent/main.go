@@ -34,18 +34,18 @@ func run() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Skip if agent is disabled
-	if !cfg.AgentEnabled {
-		fmt.Println("Agent is disabled, exiting")
-		return nil
-	}
-
 	// Initialize logger
 	logger, err := initLogger(cfg.LogLevel)
 	if err != nil {
 		return fmt.Errorf("failed to init logger: %w", err)
 	}
 	defer logger.Sync()
+
+	// If agent is disabled, run minimal server with health endpoints only
+	if !cfg.AgentEnabled {
+		logger.Info("agent is disabled, running in standby mode with health endpoints only")
+		return runStandbyMode(cfg, logger)
+	}
 
 	logger.Info("starting kkbase agent",
 		zap.String("version", "1.0.0"),
@@ -222,6 +222,44 @@ func run() error {
 	workerPool.Stop()
 
 	logger.Info("shutdown complete")
+	return nil
+}
+
+// runStandbyMode runs a minimal HTTP server when agent is disabled
+func runStandbyMode(cfg *config.Config, logger *zap.Logger) error {
+	mux := http.NewServeMux()
+
+	// Register health endpoints only
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ready"))
+	})
+
+	// Start minimal HTTP server
+	server := &http.Server{
+		Addr:    fmt.Sprintf(":%d", cfg.AgentPort),
+		Handler: mux,
+	}
+
+	go func() {
+		logger.Info("standby server listening", zap.Int("port", cfg.AgentPort))
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("standby server error", zap.Error(err))
+		}
+	}()
+	defer server.Shutdown(context.Background())
+
+	// Wait for shutdown signal
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	<-sigChan
+
+	logger.Info("shutting down standby mode")
 	return nil
 }
 
