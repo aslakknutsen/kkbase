@@ -36,7 +36,7 @@ data:
   STORE_QUERY_RESULTS: "true"
   
   # Agent configuration
-  AGENT_ENABLED: "false"
+  AGENT_ENABLED: "true"
   AGENT_PORT: "8082"
   AGENT_WORKERS: "1"
   AGENT_MCP_SERVER_URL: "http://localhost:8081/mcp"  # Overridden in deployment for pod-local access
@@ -61,6 +61,6 @@ data:
   
   # Event source configuration - enable/disable individual event sources
   K8S_EVENTS_ENABLED: "false"                # Watch Kubernetes events from API
-  ALERTMANAGER_WEBHOOK_ENABLED: "true"      # Receive Prometheus Alertmanager webhooks
-  CUSTOM_WEBHOOK_ENABLED: "true"            # Receive custom webhook events
+  ALERTMANAGER_WEBHOOK_ENABLED: "false"      # Receive Prometheus Alertmanager webhooks
+  CUSTOM_WEBHOOK_ENABLED: "false"            # Receive custom webhook events
 
