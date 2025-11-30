@@ -23,7 +23,7 @@ check_kkbase() {
   if ! kubectl get deployment kkbase-integrated -n default &>/dev/null; then
     echo "WARNING: kkbase-integrated not found in default namespace"
     echo "Make sure kkbase is deployed before running scenarios"
-    return 1
+    echo ""
   fi
   return 0
 }

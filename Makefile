@@ -3,7 +3,8 @@
 	docker-build-dev docker-build-watcher-dev docker-build-mcp-server-dev docker-build-agent-dev \
 	docker-push-all docker-push-watcher docker-push-mcp-server docker-push-agent \
 	docker-release docker-release-dev \
-	deploy deploy-mcp-standalone deploy-integrated deploy-all undeploy fmt vet deps logs help
+	deploy deploy-mcp-standalone deploy-integrated deploy-all undeploy fmt vet deps logs \
+	scenario-01 scenario-01-run scenario-01-cleanup help
 
 # Variables
 BINARY_NAME=out/watcher
@@ -198,6 +199,20 @@ deps:
 logs:
 	kubectl logs -f deployment/kkbase-watcher
 
+# Scenarios
+scenario-01:
+	@TESTGEN_PATH=$$(command -v testgen 2>/dev/null); \
+	if [ -n "$$TESTGEN_PATH" ]; then \
+		export TESTAPP_DIR=$$(dirname "$$TESTGEN_PATH"); \
+	fi; \
+	cd deploy/scenarios/01-cascading-failure && ./setup.sh
+
+scenario-01-run:
+	@cd deploy/scenarios/01-cascading-failure && ./run.sh
+
+scenario-01-cleanup:
+	@cd deploy/scenarios/01-cascading-failure && ./cleanup.sh
+
 # Help
 help:
 	@echo "Available targets:"
@@ -251,4 +266,9 @@ help:
 	@echo "  deploy-all                 - Deploy watcher + standalone MCP"
 	@echo "  undeploy                   - Remove all deployments"
 	@echo "  logs                       - Show application logs"
+	@echo ""
+	@echo "Scenarios:"
+	@echo "  scenario-01                - Setup cascading failure scenario"
+	@echo "  scenario-01-run            - Run failure injection (after setup)"
+	@echo "  scenario-01-cleanup        - Cleanup scenario 01"
 

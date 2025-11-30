@@ -25,24 +25,33 @@ payment (sf-payments) ← ROOT CAUSE (injected 503 errors)
 
 ```bash
 # From this directory
-./setup.sh
+./setup.sh    # Deploy services and alert rules
+./run.sh      # Inject failures and generate traffic
+
+# Or using make from repo root
+make scenario-01      # Setup
+make scenario-01-run  # Run
 
 # In another terminal, watch investigation
 kubectl logs -n default -l app=kkbase-integrated --tail=100 -f
 
 # When done
-./cleanup.sh
+./cleanup.sh  # or: make scenario-01-cleanup
 ```
 
 ## What Happens
 
-1. Script deploys 4 services from ecommerce-full example
-2. Injects 503 errors (100% rate, 60s duration) in payment service
-3. Generates traffic through api-gateway
-4. Alert fires: "api-gateway seeing upstream errors to checkout"
-5. Agent receives alert and begins investigation
-6. Agent should traverse: api-gateway → checkout → order-management → payment
-7. Agent identifies payment as leaf service and root cause
+**Setup phase (`./setup.sh`):**
+1. Deploys 4 services from ecommerce-full example
+2. Applies alert rules to Prometheus
+
+**Run phase (`./run.sh`):**
+1. Injects 503 errors (100% rate, 60s duration) in payment service
+2. Generates traffic through api-gateway
+3. Alert fires: "api-gateway seeing upstream errors to checkout"
+4. Agent receives alert and begins investigation
+5. Agent should traverse: api-gateway → checkout → order-management → payment
+6. Agent identifies payment as leaf service and root cause
 
 ## Expected Agent Investigation
 
