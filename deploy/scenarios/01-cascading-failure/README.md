@@ -46,7 +46,7 @@ kubectl logs -n default -l app=kkbase-integrated --tail=100 -f
 2. Applies alert rules to Prometheus
 
 **Run phase (`./run.sh`):**
-1. Injects 503 errors (100% rate, 60s duration) in payment service
+1. Injects 503 errors (100% rate) in payment service
 2. Generates traffic through api-gateway
 3. Alert fires: "api-gateway seeing upstream errors to checkout"
 4. Agent receives alert and begins investigation
