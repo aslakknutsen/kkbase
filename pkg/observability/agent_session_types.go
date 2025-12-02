@@ -76,6 +76,34 @@ type Recommendation struct {
 	CreatedAt       time.Time              `json:"created_at"`
 }
 
+// Pattern represents a reusable diagnostic pattern learned from investigations
+type Pattern struct {
+	ID                    string                 `json:"id"`
+	Name                  string                 `json:"name"`
+	RootCauseResourceType string                 `json:"root_cause_resource_type"` // e.g., "Service", "Pod", "HTTPRoute"
+	RootCauseIssueType    string                 `json:"root_cause_issue_type"`    // e.g., "cascading_failure", "selector_mismatch"
+	InvestigationSteps    []string               `json:"investigation_steps"`      // Ordered sequence of steps
+	DiagnosisGuidance     string                 `json:"diagnosis_guidance"`       // What to look for
+	Recommendations       []string               `json:"recommendations"`          // Generic recommendations
+	BundleID              string                 `json:"bundle_id,omitempty"`      // Null for discovered patterns
+	Source                string                 `json:"source"`                   // "discovered" or "bundled"
+	UsageCount            int                    `json:"usage_count"`              // How many times used
+	CreatedAt             time.Time              `json:"created_at"`
+	Metadata              map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// PatternBundle represents a versioned collection of patterns
+type PatternBundle struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Version     string    `json:"version"`
+	SourceURL   string    `json:"source_url,omitempty"`
+	Description string    `json:"description"`
+	ImportedAt  time.Time `json:"imported_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Active      bool      `json:"active"`
+}
+
 // BlastZoneSnapshot represents a point-in-time view of the blast zone graph
 type BlastZoneSnapshot struct {
 	SessionID     string          `json:"session_id"`
@@ -149,6 +177,7 @@ type SessionDetail struct {
 	Queries           []QueryExecution `json:"queries"`
 	Findings          []Finding        `json:"findings"`
 	Recommendations   []Recommendation `json:"recommendations"`
+	Patterns          []Pattern        `json:"patterns"` // Discovered patterns
 	Investigations    []string         `json:"investigations"` // Investigation IDs
 	CurrentHypothesis *Hypothesis      `json:"current_hypothesis,omitempty"`
 }
@@ -176,4 +205,9 @@ func generateFindingID() string {
 // generateRecommendationID creates a unique recommendation identifier
 func generateRecommendationID() string {
 	return fmt.Sprintf("recommendation_%d", time.Now().UnixNano())
+}
+
+// generatePatternID creates a unique pattern identifier
+func generatePatternID() string {
+	return fmt.Sprintf("pattern_%d", time.Now().UnixNano())
 }

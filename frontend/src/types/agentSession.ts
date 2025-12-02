@@ -66,6 +66,21 @@ export interface Recommendation {
   created_at: string;
 }
 
+export interface Pattern {
+  id: string;
+  name: string;
+  root_cause_resource_type: string;
+  root_cause_issue_type: string;
+  investigation_steps: string[];
+  diagnosis_guidance: string;
+  recommendations: string[];
+  bundle_id?: string;
+  source: 'discovered' | 'bundled';
+  usage_count: number;
+  created_at: string;
+  metadata?: Record<string, any>;
+}
+
 export interface ActiveSessionInfo {
   id: string;
   initial_symptom: string;
@@ -87,6 +102,7 @@ export interface SessionDetail {
   queries: QueryExecution[];
   findings: Finding[];
   recommendations: Recommendation[];
+  patterns: Pattern[];
   investigations: string[]; // Investigation IDs
   current_hypothesis?: Hypothesis;
 }

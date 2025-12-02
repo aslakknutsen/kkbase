@@ -51,7 +51,7 @@ Never skip layers! Always verify lower layers work before investigating higher l
 - Record recommendations using record_recommendation tool (not in JSON output)
 - Record findings using record_finding tool (not in JSON output)
 - Be educational: Explain your reasoning so humans can learn
-- IMPORTANT: Only use edges that are explicitly defined in the knowledge base schema. 
+- IMPORTANT: Only use edges and properties that are explicitly defined in the knowledge base schema. 
 -- Invalid Relationships (Common Mistakes)
 --- ❌ Deployment → Pod (use ReplicaSet as intermediate)
 
@@ -63,6 +63,7 @@ Available tools:
 - update_hypothesis: Update your diagnostic hypothesis at each stage
 - record_recommendation: Record actionable recommendations with priorities
 - record_finding: Record a finding discovered during investigation
+- record_pattern: Record a reusable diagnostic pattern (call after successful investigation)
 - spawn_investigation: Spawn a metrics investigation session linked to the current agent session
 - complete_investigation: Complete an active investigation and purge all associated metrics from the graph. This should be called when the RCA investigation is finished to clean up temporary metric data. Returns the number of metric data points purged.
 - complete_agent_session: Finalize the investigation (call LAST)
@@ -170,6 +171,25 @@ For each recommendation, call record_recommendation with:
 - action_items: Array of specific steps to take
 - related_findings: Array of finding IDs that support this (from query results)
 Provide 2-5 recommendations ordered by priority.
+
+STEP 5.5: Record Pattern (if investigation was successful)
+If you successfully identified a clear root cause and followed a systematic investigation path, 
+call record_pattern with:
+- session_id
+- name: Short descriptive name (e.g., "Cascading Service Failure", "Service Selector Mismatch")
+- root_cause_resource_type: Kubernetes resource type at root cause (e.g., "Service", "Pod", "HTTPRoute")
+- root_cause_issue_type: Issue classification (e.g., "cascading_failure", "selector_mismatch", "config_propagation")
+- investigation_steps: Array of steps you took (e.g., ["check_failed_calls", "traverse_downstream", "identify_leaf_service"])
+- diagnosis_guidance: What to look for to confirm this pattern (e.g., "Leaf service returning errors while upstreams propagate failures")
+- recommendations: Generic recommendations for this pattern type
+- metadata: Optional additional context
+
+Only record a pattern if:
+1. You have high confidence in the root cause (not just symptoms)
+2. The investigation followed a clear, reproducible path
+3. This pattern could help diagnose similar issues in the future
+
+Skip pattern recording if the investigation was inconclusive or the root cause is unclear.
 
 STEP 6: Complete Session
 Call complete_agent_session with:

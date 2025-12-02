@@ -9,6 +9,7 @@ import { FindingsList } from './FindingsList';
 import { QueryList } from './QueryList';
 import { Timeline } from './Timeline';
 import { RecommendationsList } from './RecommendationsList';
+import { PatternDisplay } from './PatternDisplay';
 
 interface SessionViewProps {
   sessionId: string;
@@ -37,6 +38,7 @@ export function SessionView({ sessionId, observer }: SessionViewProps) {
           detail.hypotheses = detail.hypotheses || [];
           detail.queries = detail.queries || [];
           detail.findings = detail.findings || [];
+          detail.patterns = detail.patterns || [];
           detail.investigations = detail.investigations || [];
         }
         setSessionDetail(detail);
@@ -188,6 +190,9 @@ export function SessionView({ sessionId, observer }: SessionViewProps) {
 
       {/* Recommendations */}
       <RecommendationsList recommendations={sessionDetail.recommendations} />
+
+      {/* Discovered Patterns */}
+      <PatternDisplay patterns={sessionDetail.patterns} />
 
       {/* Blast Zone */}
       <div className="bg-white rounded-lg shadow p-6">

@@ -499,6 +499,21 @@ func (asm *AgentSessionManager) GetSession(ctx context.Context, sessionID string
 		recommendations = []Recommendation{}
 	}
 
+	// Get patterns discovered by this session
+	patternQuery := `
+		MATCH (s:AgentSession {id: $session_id})-[:DISCOVERED_PATTERN]->(p:Pattern)
+		RETURN p
+		ORDER BY p.created_at DESC
+	`
+	patternResults, err := asm.graphStore.Query(ctx, patternQuery, map[string]interface{}{
+		"session_id": sessionID,
+	})
+
+	patterns := []Pattern{}
+	if err == nil {
+		patterns = parsePatterns(patternResults)
+	}
+
 	var currentHypothesis *Hypothesis
 	for i := range hypotheses {
 		if hypotheses[i].Status == "active" {
@@ -513,6 +528,7 @@ func (asm *AgentSessionManager) GetSession(ctx context.Context, sessionID string
 		Queries:           queries,
 		Findings:          findings,
 		Recommendations:   recommendations,
+		Patterns:          patterns,
 		Investigations:    investigations,
 		CurrentHypothesis: currentHypothesis,
 	}, nil
@@ -805,6 +821,102 @@ func (asm *AgentSessionManager) RecordRecommendation(
 
 	asm.logger.Info("recommendation recorded", zap.String("recommendation_id", recommendation.ID))
 	return nil
+}
+
+// RecordPattern stores a diagnostic pattern discovered during investigation
+func (asm *AgentSessionManager) RecordPattern(
+	ctx context.Context,
+	sessionID string,
+	pattern *Pattern,
+) (*Pattern, error) {
+	// Generate ID if not set
+	if pattern.ID == "" {
+		pattern.ID = generatePatternID()
+	}
+
+	if pattern.CreatedAt.IsZero() {
+		pattern.CreatedAt = time.Now()
+	}
+
+	// Set source as discovered
+	pattern.Source = "discovered"
+	pattern.UsageCount = 0
+
+	asm.logger.Info("recording pattern",
+		zap.String("session_id", sessionID),
+		zap.String("pattern_id", pattern.ID),
+		zap.String("name", pattern.Name),
+		zap.String("match_key", pattern.RootCauseResourceType+"+"+pattern.RootCauseIssueType))
+
+	// Check for existing pattern with same match key (strict)
+	existingQuery := `
+		MATCH (p:Pattern {
+			root_cause_resource_type: $resource_type,
+			root_cause_issue_type: $issue_type
+		})
+		RETURN p.id as id, p.name as name, p.usage_count as usage_count
+		LIMIT 1
+	`
+
+	existingResults, err := asm.graphStore.Query(ctx, existingQuery, map[string]interface{}{
+		"resource_type": pattern.RootCauseResourceType,
+		"issue_type":    pattern.RootCauseIssueType,
+	})
+
+	if err == nil && len(existingResults) > 0 {
+		asm.logger.Info("pattern already exists with same match key",
+			zap.String("existing_id", existingResults[0]["id"].(string)),
+			zap.String("existing_name", existingResults[0]["name"].(string)))
+		// Still record but log that duplicate exists
+	}
+
+	// Marshal arrays to JSON
+	stepsJSON, _ := json.Marshal(pattern.InvestigationSteps)
+	recsJSON, _ := json.Marshal(pattern.Recommendations)
+	metadataJSON, _ := json.Marshal(pattern.Metadata)
+
+	// Create pattern node and link to session
+	query := `
+		MATCH (s:AgentSession {id: $session_id})
+		CREATE (p:Pattern {
+			id: $id,
+			name: $name,
+			root_cause_resource_type: $resource_type,
+			root_cause_issue_type: $issue_type,
+			investigation_steps: $steps,
+			diagnosis_guidance: $diagnosis,
+			recommendations: $recs,
+			source: $source,
+			usage_count: $usage_count,
+			created_at: datetime($created_at),
+			metadata: $metadata
+		})
+		CREATE (s)-[:DISCOVERED_PATTERN]->(p)
+		RETURN p
+	`
+
+	params := map[string]interface{}{
+		"session_id":    sessionID,
+		"id":            pattern.ID,
+		"name":          pattern.Name,
+		"resource_type": pattern.RootCauseResourceType,
+		"issue_type":    pattern.RootCauseIssueType,
+		"steps":         string(stepsJSON),
+		"diagnosis":     pattern.DiagnosisGuidance,
+		"recs":          string(recsJSON),
+		"source":        pattern.Source,
+		"usage_count":   pattern.UsageCount,
+		"created_at":    pattern.CreatedAt.Format(time.RFC3339),
+		"metadata":      string(metadataJSON),
+	}
+
+	_, err = asm.graphStore.Query(ctx, query, params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to store pattern: %w", err)
+	}
+
+	asm.logger.Info("pattern recorded", zap.String("pattern_id", pattern.ID))
+	return pattern, nil
 }
 
 // GetRecommendations retrieves all recommendations for a session
@@ -1150,6 +1262,71 @@ func parseFindings(results []map[string]interface{}) []Finding {
 	}
 
 	return findings
+}
+
+func parsePatterns(results []map[string]interface{}) []Pattern {
+	patterns := make([]Pattern, 0, len(results))
+
+	for _, result := range results {
+		var props map[string]interface{}
+
+		if p, ok := result["p"].(map[string]interface{}); ok {
+			props = p
+		} else {
+			props = result
+		}
+
+		pattern := Pattern{}
+
+		if id, ok := props["id"].(string); ok {
+			pattern.ID = id
+		}
+		if name, ok := props["name"].(string); ok {
+			pattern.Name = name
+		}
+		if resourceType, ok := props["root_cause_resource_type"].(string); ok {
+			pattern.RootCauseResourceType = resourceType
+		}
+		if issueType, ok := props["root_cause_issue_type"].(string); ok {
+			pattern.RootCauseIssueType = issueType
+		}
+		if source, ok := props["source"].(string); ok {
+			pattern.Source = source
+		}
+		if usageCount, ok := props["usage_count"].(int64); ok {
+			pattern.UsageCount = int(usageCount)
+		}
+		if bundleID, ok := props["bundle_id"].(string); ok {
+			pattern.BundleID = bundleID
+		}
+
+		// Parse JSON arrays
+		if stepsJSON, ok := props["investigation_steps"].(string); ok && stepsJSON != "" {
+			json.Unmarshal([]byte(stepsJSON), &pattern.InvestigationSteps)
+		}
+		if recsJSON, ok := props["recommendations"].(string); ok && recsJSON != "" {
+			json.Unmarshal([]byte(recsJSON), &pattern.Recommendations)
+		}
+		if metadataJSON, ok := props["metadata"].(string); ok && metadataJSON != "" {
+			json.Unmarshal([]byte(metadataJSON), &pattern.Metadata)
+		}
+
+		if guidance, ok := props["diagnosis_guidance"].(string); ok {
+			pattern.DiagnosisGuidance = guidance
+		}
+
+		if createdAt, ok := props["created_at"].(string); ok {
+			if t, err := time.Parse(time.RFC3339, createdAt); err == nil {
+				pattern.CreatedAt = t
+			}
+		} else if createdAt, ok := props["created_at"].(time.Time); ok {
+			pattern.CreatedAt = createdAt
+		}
+
+		patterns = append(patterns, pattern)
+	}
+
+	return patterns
 }
 
 func parseActiveSessionInfo(result map[string]interface{}) ActiveSessionInfo {

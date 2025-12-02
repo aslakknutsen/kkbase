@@ -308,6 +308,50 @@ func (s *Server) registerAgentSessionTools(sessionManager *observability.AgentSe
 		}, output, nil
 	})
 
+	// Tool 5.5: record_pattern
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name: "record_pattern",
+		Description: "Record a diagnostic pattern discovered during investigation. " +
+			"Use this to capture reusable knowledge about symptom → investigation → diagnosis → resolution. " +
+			"Patterns are matched strictly on resource_type + issue_type.",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, input RecordPatternInput) (*mcp.CallToolResult, any, error) {
+		s.logger.Info("recording pattern",
+			zap.String("session_id", input.SessionID),
+			zap.String("name", input.Name),
+			zap.String("resource_type", input.RootCauseResourceType))
+
+		pattern, err := sessionManager.RecordPattern(ctx, input.SessionID, &observability.Pattern{
+			Name:                  input.Name,
+			RootCauseResourceType: input.RootCauseResourceType,
+			RootCauseIssueType:    input.RootCauseIssueType,
+			InvestigationSteps:    input.InvestigationSteps,
+			DiagnosisGuidance:     input.DiagnosisGuidance,
+			Recommendations:       input.Recommendations,
+			Metadata:              input.Metadata,
+		})
+
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to record pattern: %w", err)
+		}
+
+		output := RecordPatternOutput{
+			PatternID: pattern.ID,
+			Status:    "recorded",
+			Message: fmt.Sprintf("Pattern recorded: %s (matches: %s + %s)",
+				pattern.Name, pattern.RootCauseResourceType, pattern.RootCauseIssueType),
+		}
+
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{
+					Text: fmt.Sprintf("✓ Pattern Recorded\n\nID: %s\nName: %s\nMatch Key: %s + %s\nSteps: %d",
+						pattern.ID, pattern.Name, pattern.RootCauseResourceType,
+						pattern.RootCauseIssueType, len(pattern.InvestigationSteps)),
+				},
+			},
+		}, output, nil
+	})
+
 	// Tool 6: spawn_investigation
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
 		Name: "spawn_investigation",

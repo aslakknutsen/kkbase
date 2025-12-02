@@ -177,6 +177,25 @@ type RecordRecommendationOutput struct {
 	Message          string `json:"message" jsonschema:"description:Human-readable status message"`
 }
 
+// RecordPatternInput defines the input for recording a diagnostic pattern
+type RecordPatternInput struct {
+	SessionID             string                 `json:"session_id" jsonschema:"required,description:Agent session ID"`
+	Name                  string                 `json:"name" jsonschema:"required,description:Short descriptive name for the pattern"`
+	RootCauseResourceType string                 `json:"root_cause_resource_type" jsonschema:"required,description:Kubernetes resource type (e.g. Service, Pod, HTTPRoute)"`
+	RootCauseIssueType    string                 `json:"root_cause_issue_type" jsonschema:"required,description:Issue classification (e.g. cascading_failure, selector_mismatch)"`
+	InvestigationSteps    []string               `json:"investigation_steps" jsonschema:"required,description:Ordered sequence of investigation steps"`
+	DiagnosisGuidance     string                 `json:"diagnosis_guidance" jsonschema:"required,description:What to look for in results to confirm diagnosis"`
+	Recommendations       []string               `json:"recommendations" jsonschema:"required,description:Generic recommendations for this pattern"`
+	Metadata              map[string]interface{} `json:"metadata,omitempty" jsonschema:"description:Additional pattern metadata"`
+}
+
+// RecordPatternOutput defines the output from recording a pattern
+type RecordPatternOutput struct {
+	PatternID string `json:"pattern_id" jsonschema:"description:Unique pattern ID"`
+	Status    string `json:"status" jsonschema:"description:Recording status"`
+	Message   string `json:"message" jsonschema:"description:Human-readable result message"`
+}
+
 // SpawnInvestigationInput defines the input for spawning a metrics investigation
 type SpawnInvestigationInput struct {
 	SessionID       string `json:"session_id" jsonschema:"description:Session ID to link investigation to"`

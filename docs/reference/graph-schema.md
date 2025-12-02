@@ -183,6 +183,17 @@ Example: An HTTPRoute attached to two Gateways will have:
 - Type values: `root_cause_fix`, `preventive_action`, `optimization`, `monitoring_improvement`, `cleanup`
 - Priority values: `critical`, `high`, `medium`, `low`
 
+**Pattern**
+- Reusable diagnostic pattern learned from investigations
+- Properties: `id`, `name`, `root_cause_resource_type`, `root_cause_issue_type`, `investigation_steps` (JSON array), `diagnosis_guidance`, `recommendations` (JSON array), `bundle_id`, `source`, `usage_count`, `created_at`, `metadata` (JSON object)
+- Source values: `discovered` (learned from completed sessions), `bundled` (imported from pattern bundle)
+- Match key: `root_cause_resource_type` + `root_cause_issue_type` (strict matching)
+
+**PatternBundle**
+- Versioned collection of patterns for distribution
+- Properties: `id`, `name`, `version`, `source_url`, `description`, `imported_at`, `updated_at`, `active`
+- Used to import/export diagnostic knowledge between kkbase installations
+
 **Trace**
 - Distributed trace aggregation (one per trace)
 - Properties: `trace_id`, `start_time`, `duration_ms`, `root_operation`, `root_service`, `span_count`, `error_count`, `has_errors`, `services_involved`
@@ -409,6 +420,24 @@ These nodes track AI agent diagnostic sessions and their findings.
 - From: `Recommendation`
 - To: `Finding`
 - Description: Recommendation is based on these findings
+- Properties: None
+
+**DISCOVERED_PATTERN**
+- From: `AgentSession`
+- To: `Pattern`
+- Description: Session discovered and recorded this pattern
+- Properties: None
+
+**USED_PATTERN**
+- From: `AgentSession`
+- To: `Pattern`
+- Description: Session was guided by this pattern (future use)
+- Properties: None
+
+**CONTAINS**
+- From: `PatternBundle`
+- To: `Pattern`
+- Description: Bundle contains this pattern
 - Properties: None
 
 **INVESTIGATES**
