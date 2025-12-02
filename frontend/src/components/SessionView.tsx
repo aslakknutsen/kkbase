@@ -75,6 +75,7 @@ export function SessionView({ sessionId, observer }: SessionViewProps) {
           detail.hypotheses = detail.hypotheses || [];
           detail.queries = detail.queries || [];
           detail.findings = detail.findings || [];
+          detail.patterns = detail.patterns || [];
           detail.investigations = detail.investigations || [];
         }
         setSessionDetail(detail);

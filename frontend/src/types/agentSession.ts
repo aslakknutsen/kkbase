@@ -71,6 +71,7 @@ export interface Pattern {
   name: string;
   root_cause_resource_type: string;
   root_cause_issue_type: string;
+  symptom_keywords?: string[];
   investigation_steps: string[];
   diagnosis_guidance: string;
   recommendations: string[];
@@ -78,7 +79,9 @@ export interface Pattern {
   source: 'discovered' | 'bundled';
   usage_count: number;
   created_at: string;
+  updated_at?: string;
   metadata?: Record<string, any>;
+  relationship_type?: 'presented' | 'used' | 'discovered'; // How pattern relates to this session
 }
 
 export interface ActiveSessionInfo {

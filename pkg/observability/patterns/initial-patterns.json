@@ -1,0 +1,176 @@
+{
+  "patterns": [
+    {
+      "name": "Service Connectivity Issues",
+      "root_cause_resource_type": "Service",
+      "root_cause_issue_type": "connectivity_failure",
+      "symptom_keywords": [
+        "503",
+        "connection refused",
+        "no endpoints",
+        "service unavailable",
+        "connection timeout",
+        "cannot connect"
+      ],
+      "investigation_steps": [
+        "Verify Service selector matches Pod labels",
+        "Check if Pods are running and have assigned IPs",
+        "Verify container ports match Service target ports",
+        "Check for NetworkPolicies that might block traffic",
+        "Look for FAILED_CALL_TO or CALLS relationships to confirm network layer",
+        "For service mesh: Check VirtualService routing configuration",
+        "For service mesh: Verify DestinationRule policies",
+        "Distinguish between network-layer issues (no response) and application-layer issues (error responses)"
+      ],
+      "diagnosis_guidance": "Service connectivity failures typically manifest as connection refused, timeouts, or 503 errors. Follow the OSI model: verify network layer (DNS, selectors, endpoints) before investigating application layer. If you receive ANY error response (even 500 or gRPC errors), the network layer is working - focus on application issues. If you receive NO response, investigate network configuration (selectors, policies, routing).",
+      "recommendations": [
+        "Fix Service selector to match Pod labels",
+        "Ensure Pods are in Running state with assigned IPs",
+        "Verify port configurations match between containers and Service",
+        "Review and adjust NetworkPolicy rules if blocking traffic",
+        "For service mesh: Fix VirtualService routing rules",
+        "Add monitoring for endpoint availability"
+      ]
+    },
+    {
+      "name": "Resource Exhaustion",
+      "root_cause_resource_type": "Pod",
+      "root_cause_issue_type": "resource_exhaustion",
+      "symptom_keywords": [
+        "OOMKilled",
+        "disk pressure",
+        "CPU throttling",
+        "eviction",
+        "out of memory",
+        "DiskPressure",
+        "MemoryPressure",
+        "resource limits"
+      ],
+      "investigation_steps": [
+        "Check Pod events for OOMKilled or Evicted status",
+        "Spawn metrics investigation for memory, CPU, and disk usage",
+        "Examine resource requests and limits in Pod spec",
+        "Check Node capacity and current resource usage",
+        "Identify if this is a pod-level or node-level issue",
+        "Look for trends: sudden spike vs gradual increase",
+        "Check recent deployments that might have changed resource consumption",
+        "Verify if resource limits are too restrictive"
+      ],
+      "diagnosis_guidance": "Resource exhaustion manifests as OOMKilled pods, evictions, or throttling. Use metrics investigation to identify which resource is exhausted (memory, CPU, disk). Distinguish between insufficient limits (pod can't get enough) and excessive usage (application consuming too much). Check if the issue affects a single pod or multiple pods/nodes.",
+      "recommendations": [
+        "Increase resource requests and limits based on actual usage patterns",
+        "Identify and fix memory leaks or CPU-intensive operations in application",
+        "Scale horizontally by adding more pod replicas",
+        "Add node capacity if cluster-wide resource exhaustion",
+        "Implement pod autoscaling (HPA) based on metrics",
+        "Add resource monitoring and alerts for early detection"
+      ]
+    },
+    {
+      "name": "Configuration Issues",
+      "root_cause_resource_type": "Pod",
+      "root_cause_issue_type": "configuration_error",
+      "symptom_keywords": [
+        "CrashLoopBackOff",
+        "ImagePullBackOff",
+        "config error",
+        "mount failed",
+        "invalid configuration",
+        "missing secret",
+        "missing configmap",
+        "ErrImagePull"
+      ],
+      "investigation_steps": [
+        "Check Pod events for specific error messages",
+        "Verify ConfigMap and Secret references exist",
+        "Check image pull credentials and registry accessibility",
+        "Verify volume mount paths and permissions",
+        "Look for recent ConfigMap or Secret changes",
+        "Check environment variable references",
+        "Verify command and args in Pod spec",
+        "Review application startup logs for configuration errors"
+      ],
+      "diagnosis_guidance": "Configuration issues prevent pods from starting successfully. CrashLoopBackOff indicates the container starts but fails immediately. ImagePullBackOff indicates image cannot be pulled. Check Pod events first for specific error messages. Verify all referenced resources (ConfigMaps, Secrets, PVCs) exist. Look for recent changes in deployment or configuration.",
+      "recommendations": [
+        "Fix missing or incorrect ConfigMap/Secret references",
+        "Correct image pull credentials or image name",
+        "Fix volume mount paths or add missing volumes",
+        "Validate configuration syntax and required fields",
+        "Use init containers to validate configuration before main container starts",
+        "Implement configuration validation in CI/CD pipeline",
+        "Add monitoring for pod restart patterns"
+      ]
+    },
+    {
+      "name": "Routing and Gateway Issues",
+      "root_cause_resource_type": "HTTPRoute",
+      "root_cause_issue_type": "routing_misconfiguration",
+      "symptom_keywords": [
+        "404",
+        "no route",
+        "route mismatch",
+        "path not found",
+        "upstream not found",
+        "no healthy upstream"
+      ],
+      "investigation_steps": [
+        "Verify HTTPRoute or Route exists for the requested path",
+        "Check HTTPRoute/Route selector matches Gateway listener",
+        "Verify backend Service references are correct",
+        "Check Service exists and has healthy endpoints",
+        "For Istio: Verify VirtualService and Gateway configuration",
+        "For Istio: Check DestinationRule for backend availability",
+        "Look for conflicting routes or incorrect path matching",
+        "Verify TLS configuration if using HTTPS"
+      ],
+      "diagnosis_guidance": "Routing issues manifest as 404 errors or gateway timeouts when traffic cannot find a path to the backend. Verify the route configuration chain: Gateway → HTTPRoute → Service → Pods. Check for 'negative space' - what routes are MISSING that should exist. Ensure path matching rules are correct (exact, prefix, regex). Verify the Service has healthy endpoints.",
+      "recommendations": [
+        "Create or fix HTTPRoute for the missing path",
+        "Correct HTTPRoute backend Service references",
+        "Fix Gateway listener configuration to match HTTPRoute",
+        "Adjust path matching rules to cover required paths",
+        "Ensure backend Service has healthy endpoints",
+        "Add monitoring for route coverage and 404 rates",
+        "Document route architecture and ownership"
+      ]
+    },
+    {
+      "name": "Cascading Failures",
+      "root_cause_resource_type": "Service",
+      "root_cause_issue_type": "cascading_failure",
+      "symptom_keywords": [
+        "multiple services failing",
+        "downstream errors",
+        "propagating failures",
+        "dependency failure",
+        "chain reaction",
+        "widespread outage",
+        "504",
+        "gateway timeout",
+        "timeout calling",
+        "upstream timeout"
+      ],
+      "investigation_steps": [
+        "Identify all failing services using FAILED_CALL_TO relationships",
+        "Traverse dependency chain to find the leaf service (original failure)",
+        "Filter failures by recency - compare failure timestamps with event timestamp. Only consider failures within 5-10 minutes of the triggering event. Older failures are likely stale/resolved unless continuously failing.",
+        "Verify if upstream services are propagating the failure or adding new errors",
+        "Distinguish between root cause (leaf) and symptoms (upstream failures)",
+        "Check if the root cause service has its own underlying issue",
+        "Assess blast radius using affected service count",
+        "Determine if circuit breakers or retries are amplifying the problem"
+      ],
+      "diagnosis_guidance": "Cascading failures occur when a single service failure propagates through the dependency chain, causing multiple services to fail. The key is identifying the leaf service (the original failure point) vs upstream services that are merely propagating errors. Look for the service with no failed dependencies but is itself failing. Check timestamps to determine which service failed first. Upstream services typically show 'downstream service unavailable' errors.",
+      "recommendations": [
+        "Fix the root cause issue in the leaf service",
+        "Implement circuit breakers to prevent cascade amplification",
+        "Add timeout and retry policies with exponential backoff",
+        "Implement graceful degradation for non-critical dependencies",
+        "Add health checks and readiness probes",
+        "Monitor dependency health and implement alerts",
+        "Document service dependencies and criticality levels"
+      ]
+    }
+  ]
+}
+

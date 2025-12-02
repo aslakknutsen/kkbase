@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/aslakknutsen/kkbase/pkg/config"
@@ -499,20 +500,61 @@ func (asm *AgentSessionManager) GetSession(ctx context.Context, sessionID string
 		recommendations = []Recommendation{}
 	}
 
-	// Get patterns discovered by this session
-	patternQuery := `
-		MATCH (s:AgentSession {id: $session_id})-[:DISCOVERED_PATTERN]->(p:Pattern)
-		RETURN p
-		ORDER BY p.created_at DESC
+	// Get patterns related to this session (presented, used, or discovered)
+	// Query each relationship type separately for simplicity
+	patterns := []Pattern{}
+	
+	// Get presented patterns
+	presentedQuery := `
+		MATCH (s:AgentSession {id: $session_id})-[:PRESENTED_PATTERN]->(p:Pattern)
+		RETURN p, 'presented' as relationship_type
 	`
-	patternResults, err := asm.graphStore.Query(ctx, patternQuery, map[string]interface{}{
+	presentedResults, err := asm.graphStore.Query(ctx, presentedQuery, map[string]interface{}{
 		"session_id": sessionID,
 	})
-
-	patterns := []Pattern{}
-	if err == nil {
-		patterns = parsePatterns(patternResults)
+	if err != nil {
+		asm.logger.Debug("no presented patterns or query failed",
+			zap.String("session_id", sessionID),
+			zap.Error(err))
+	} else if len(presentedResults) > 0 {
+		patterns = append(patterns, parsePatternsWithRelationship(presentedResults)...)
 	}
+	
+	// Get used patterns
+	usedQuery := `
+		MATCH (s:AgentSession {id: $session_id})-[:USED_PATTERN]->(p:Pattern)
+		RETURN p, 'used' as relationship_type
+	`
+	usedResults, err := asm.graphStore.Query(ctx, usedQuery, map[string]interface{}{
+		"session_id": sessionID,
+	})
+	if err != nil {
+		asm.logger.Debug("no used patterns or query failed",
+			zap.String("session_id", sessionID),
+			zap.Error(err))
+	} else if len(usedResults) > 0 {
+		patterns = append(patterns, parsePatternsWithRelationship(usedResults)...)
+	}
+	
+	// Get discovered patterns
+	discoveredQuery := `
+		MATCH (s:AgentSession {id: $session_id})-[:DISCOVERED_PATTERN]->(p:Pattern)
+		RETURN p, 'discovered' as relationship_type
+	`
+	discoveredResults, err := asm.graphStore.Query(ctx, discoveredQuery, map[string]interface{}{
+		"session_id": sessionID,
+	})
+	if err != nil {
+		asm.logger.Debug("no discovered patterns or query failed",
+			zap.String("session_id", sessionID),
+			zap.Error(err))
+	} else if len(discoveredResults) > 0 {
+		patterns = append(patterns, parsePatternsWithRelationship(discoveredResults)...)
+	}
+	
+	asm.logger.Debug("loaded patterns for session",
+		zap.String("session_id", sessionID),
+		zap.Int("pattern_count", len(patterns)))
 
 	var currentHypothesis *Hypothesis
 	for i := range hypotheses {
@@ -848,6 +890,22 @@ func (asm *AgentSessionManager) RecordPattern(
 		zap.String("name", pattern.Name),
 		zap.String("match_key", pattern.RootCauseResourceType+"+"+pattern.RootCauseIssueType))
 
+	// Check if session has used existing patterns
+	usedPatternsQuery := `
+		MATCH (s:AgentSession {id: $session_id})-[:USED_PATTERN]->(p:Pattern)
+		RETURN p.id as id, p.name as name
+	`
+	usedResults, err := asm.graphStore.Query(ctx, usedPatternsQuery, map[string]interface{}{
+		"session_id": sessionID,
+	})
+
+	if err == nil && len(usedResults) > 0 {
+		asm.logger.Warn("session already used existing pattern(s) - consider if new pattern is necessary",
+			zap.String("session_id", sessionID),
+			zap.Int("used_pattern_count", len(usedResults)))
+		// Don't block, just warn
+	}
+
 	// Check for existing pattern with same match key (strict)
 	existingQuery := `
 		MATCH (p:Pattern {
@@ -873,6 +931,7 @@ func (asm *AgentSessionManager) RecordPattern(
 	// Marshal arrays to JSON
 	stepsJSON, _ := json.Marshal(pattern.InvestigationSteps)
 	recsJSON, _ := json.Marshal(pattern.Recommendations)
+	keywordsJSON, _ := json.Marshal(pattern.SymptomKeywords)
 	metadataJSON, _ := json.Marshal(pattern.Metadata)
 
 	// Create pattern node and link to session
@@ -883,6 +942,7 @@ func (asm *AgentSessionManager) RecordPattern(
 			name: $name,
 			root_cause_resource_type: $resource_type,
 			root_cause_issue_type: $issue_type,
+			symptom_keywords: $keywords,
 			investigation_steps: $steps,
 			diagnosis_guidance: $diagnosis,
 			recommendations: $recs,
@@ -901,6 +961,7 @@ func (asm *AgentSessionManager) RecordPattern(
 		"name":          pattern.Name,
 		"resource_type": pattern.RootCauseResourceType,
 		"issue_type":    pattern.RootCauseIssueType,
+		"keywords":      string(keywordsJSON),
 		"steps":         string(stepsJSON),
 		"diagnosis":     pattern.DiagnosisGuidance,
 		"recs":          string(recsJSON),
@@ -917,6 +978,140 @@ func (asm *AgentSessionManager) RecordPattern(
 
 	asm.logger.Info("pattern recorded", zap.String("pattern_id", pattern.ID))
 	return pattern, nil
+}
+
+// FindPatternsBySymptom searches for patterns matching symptom keywords
+func (asm *AgentSessionManager) FindPatternsBySymptom(ctx context.Context, symptom string) ([]Pattern, error) {
+	// Query all patterns with symptom_keywords
+	query := `
+		MATCH (p:Pattern)
+		WHERE p.symptom_keywords IS NOT NULL AND p.symptom_keywords <> '[]'
+		RETURN p
+		ORDER BY p.usage_count DESC, p.created_at DESC
+	`
+
+	results, err := asm.graphStore.Query(ctx, query, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query patterns: %w", err)
+	}
+
+	patterns := parsePatterns(results)
+
+	// Filter patterns by keyword matching in Go
+	// Check if any keyword appears in the symptom text (case-insensitive)
+	matchedPatterns := []Pattern{}
+	symptomLower := strings.ToLower(symptom)
+
+	for _, pattern := range patterns {
+		for _, keyword := range pattern.SymptomKeywords {
+			if strings.Contains(symptomLower, strings.ToLower(keyword)) {
+				matchedPatterns = append(matchedPatterns, pattern)
+				break // Only match once per pattern
+			}
+		}
+	}
+
+	asm.logger.Info("found patterns by symptom",
+		zap.String("symptom", symptom),
+		zap.Int("matched_count", len(matchedPatterns)))
+
+	return matchedPatterns, nil
+}
+
+// FindPatternsByType searches for patterns by exact resource type and issue type
+func (asm *AgentSessionManager) FindPatternsByType(ctx context.Context, resourceType, issueType string) ([]Pattern, error) {
+	query := `
+		MATCH (p:Pattern {
+			root_cause_resource_type: $resource_type,
+			root_cause_issue_type: $issue_type
+		})
+		RETURN p
+		ORDER BY p.usage_count DESC, p.created_at DESC
+	`
+
+	results, err := asm.graphStore.Query(ctx, query, map[string]interface{}{
+		"resource_type": resourceType,
+		"issue_type":    issueType,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to query patterns by type: %w", err)
+	}
+
+	patterns := parsePatterns(results)
+
+	asm.logger.Info("found patterns by type",
+		zap.String("resource_type", resourceType),
+		zap.String("issue_type", issueType),
+		zap.Int("count", len(patterns)))
+
+	return patterns, nil
+}
+
+// MarkPatternPresented creates a PRESENTED_PATTERN relationship
+func (asm *AgentSessionManager) MarkPatternPresented(ctx context.Context, sessionID, patternID string) error {
+	query := `
+		MATCH (s:AgentSession {id: $session_id})
+		MATCH (p:Pattern {id: $pattern_id})
+		MERGE (s)-[r:PRESENTED_PATTERN {presented_at: datetime()}]->(p)
+		RETURN r
+	`
+
+	_, err := asm.graphStore.Query(ctx, query, map[string]interface{}{
+		"session_id": sessionID,
+		"pattern_id": patternID,
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to mark pattern as presented: %w", err)
+	}
+
+	asm.logger.Info("pattern marked as presented",
+		zap.String("session_id", sessionID),
+		zap.String("pattern_id", patternID))
+
+	return nil
+}
+
+// MarkPatternUsed creates a USED_PATTERN relationship and increments usage count
+func (asm *AgentSessionManager) MarkPatternUsed(ctx context.Context, sessionID, patternID, notes string) error {
+	query := `
+		MATCH (s:AgentSession {id: $session_id})
+		MATCH (p:Pattern {id: $pattern_id})
+		MERGE (s)-[r:USED_PATTERN]->(p)
+		ON CREATE SET 
+			r.used_at = datetime(),
+			r.notes = $notes
+		ON MATCH SET
+			r.used_at = datetime(),
+			r.notes = $notes
+		WITH p
+		SET p.usage_count = p.usage_count + 1
+		RETURN p.usage_count as new_count
+	`
+
+	results, err := asm.graphStore.Query(ctx, query, map[string]interface{}{
+		"session_id": sessionID,
+		"pattern_id": patternID,
+		"notes":      notes,
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to mark pattern as used: %w", err)
+	}
+
+	var newCount int64
+	if len(results) > 0 {
+		if count, ok := results[0]["new_count"].(int64); ok {
+			newCount = count
+		}
+	}
+
+	asm.logger.Info("pattern marked as used",
+		zap.String("session_id", sessionID),
+		zap.String("pattern_id", patternID),
+		zap.Int64("new_usage_count", newCount))
+
+	return nil
 }
 
 // GetRecommendations retrieves all recommendations for a session
@@ -1301,6 +1496,9 @@ func parsePatterns(results []map[string]interface{}) []Pattern {
 		}
 
 		// Parse JSON arrays
+		if keywordsJSON, ok := props["symptom_keywords"].(string); ok && keywordsJSON != "" {
+			json.Unmarshal([]byte(keywordsJSON), &pattern.SymptomKeywords)
+		}
 		if stepsJSON, ok := props["investigation_steps"].(string); ok && stepsJSON != "" {
 			json.Unmarshal([]byte(stepsJSON), &pattern.InvestigationSteps)
 		}
@@ -1327,6 +1525,108 @@ func parsePatterns(results []map[string]interface{}) []Pattern {
 	}
 
 	return patterns
+}
+
+func parsePatternsWithRelationship(results []map[string]interface{}) []Pattern {
+	// Use a map to deduplicate patterns (a pattern might have multiple relationships)
+	patternMap := make(map[string]Pattern)
+
+	for _, result := range results {
+		var props map[string]interface{}
+
+		if p, ok := result["p"].(map[string]interface{}); ok {
+			props = p
+		} else {
+			continue
+		}
+
+		pattern := Pattern{}
+
+		if id, ok := props["id"].(string); ok {
+			pattern.ID = id
+		}
+		if name, ok := props["name"].(string); ok {
+			pattern.Name = name
+		}
+		if resourceType, ok := props["root_cause_resource_type"].(string); ok {
+			pattern.RootCauseResourceType = resourceType
+		}
+		if issueType, ok := props["root_cause_issue_type"].(string); ok {
+			pattern.RootCauseIssueType = issueType
+		}
+		if source, ok := props["source"].(string); ok {
+			pattern.Source = source
+		}
+		if usageCount, ok := props["usage_count"].(int64); ok {
+			pattern.UsageCount = int(usageCount)
+		}
+		if bundleID, ok := props["bundle_id"].(string); ok {
+			pattern.BundleID = bundleID
+		}
+
+		// Parse JSON arrays
+		if keywordsJSON, ok := props["symptom_keywords"].(string); ok && keywordsJSON != "" {
+			json.Unmarshal([]byte(keywordsJSON), &pattern.SymptomKeywords)
+		}
+		if stepsJSON, ok := props["investigation_steps"].(string); ok && stepsJSON != "" {
+			json.Unmarshal([]byte(stepsJSON), &pattern.InvestigationSteps)
+		}
+		if recsJSON, ok := props["recommendations"].(string); ok && recsJSON != "" {
+			json.Unmarshal([]byte(recsJSON), &pattern.Recommendations)
+		}
+		if metadataJSON, ok := props["metadata"].(string); ok && metadataJSON != "" {
+			json.Unmarshal([]byte(metadataJSON), &pattern.Metadata)
+		}
+
+		if guidance, ok := props["diagnosis_guidance"].(string); ok {
+			pattern.DiagnosisGuidance = guidance
+		}
+
+		if createdAt, ok := props["created_at"].(string); ok {
+			if t, err := time.Parse(time.RFC3339, createdAt); err == nil {
+				pattern.CreatedAt = t
+			}
+		} else if createdAt, ok := props["created_at"].(time.Time); ok {
+			pattern.CreatedAt = createdAt
+		}
+
+		// Set relationship type directly from query result
+		if relationshipType, ok := result["relationship_type"].(string); ok {
+			pattern.RelationshipType = relationshipType
+		}
+
+		// Store pattern in map (will keep the highest priority relationship type if duplicates)
+		// Priority: discovered > used > presented
+		if existingPattern, exists := patternMap[pattern.ID]; exists {
+			// Keep the higher priority relationship
+			if shouldReplaceRelationship(existingPattern.RelationshipType, pattern.RelationshipType) {
+				patternMap[pattern.ID] = pattern
+			}
+		} else {
+			patternMap[pattern.ID] = pattern
+		}
+	}
+
+	// Convert map to slice
+	patterns := make([]Pattern, 0, len(patternMap))
+	for _, pattern := range patternMap {
+		patterns = append(patterns, pattern)
+	}
+
+	return patterns
+}
+
+// shouldReplaceRelationship determines if a new relationship type should replace the existing one
+// Priority: discovered > used > presented
+func shouldReplaceRelationship(existingType, newType string) bool {
+	priority := map[string]int{
+		"discovered": 3,
+		"used":       2,
+		"presented":  1,
+		"":           0,
+	}
+
+	return priority[newType] > priority[existingType]
 }
 
 func parseActiveSessionInfo(result map[string]interface{}) ActiveSessionInfo {

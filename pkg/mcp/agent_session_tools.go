@@ -33,28 +33,78 @@ func (s *Server) registerAgentSessionTools(sessionManager *observability.AgentSe
 			return nil, nil, fmt.Errorf("failed to start agent session: %w", err)
 		}
 
+		// Find patterns matching the symptom
+		patterns, err := sessionManager.FindPatternsBySymptom(ctx, input.Symptom)
+		if err != nil {
+			s.logger.Warn("failed to find patterns by symptom", zap.Error(err))
+			patterns = []observability.Pattern{} // Continue with empty patterns
+		}
+
+		// Mark patterns as presented and convert to output format
+		suggestedPatterns := make([]PatternInfo, 0, len(patterns))
+		for _, pattern := range patterns {
+			// Mark pattern as presented
+			if err := sessionManager.MarkPatternPresented(ctx, session.ID, pattern.ID); err != nil {
+				s.logger.Warn("failed to mark pattern as presented",
+					zap.String("pattern_id", pattern.ID),
+					zap.Error(err))
+			}
+
+			suggestedPatterns = append(suggestedPatterns, PatternInfo{
+				ID:                    pattern.ID,
+				Name:                  pattern.Name,
+				RootCauseResourceType: pattern.RootCauseResourceType,
+				RootCauseIssueType:    pattern.RootCauseIssueType,
+				InvestigationSteps:    pattern.InvestigationSteps,
+				DiagnosisGuidance:     pattern.DiagnosisGuidance,
+				UsageCount:            pattern.UsageCount,
+			})
+		}
+
 		// Emit notification
 		if broadcaster != nil {
 			broadcaster.EmitSessionCreated(session.ID, input.Symptom)
 		}
 
 		output := StartAgentSessionOutput{
-			SessionID: session.ID,
-			Status:    "active",
+			SessionID:         session.ID,
+			Status:            "active",
+			SuggestedPatterns: suggestedPatterns,
 			Message: fmt.Sprintf("Agent session started successfully. Use session_id '%s' in query_with_session calls. "+
 				"Update hypothesis with update_hypothesis as your investigation progresses.", session.ID),
 		}
 
+		// Build response text with pattern information
+		responseText := fmt.Sprintf("🔬 Agent Session Started\n\nSession ID: %s\nInitial Symptom: %s\nStatus: %s\n\n",
+			session.ID, input.Symptom, output.Status)
+
+		if len(suggestedPatterns) > 0 {
+			responseText += fmt.Sprintf("📚 %d Suggested Pattern(s) Found:\n\n", len(suggestedPatterns))
+			for i, p := range suggestedPatterns {
+				responseText += fmt.Sprintf("%d. %s (used %d times)\n", i+1, p.Name, p.UsageCount)
+				responseText += fmt.Sprintf("   Expected: %s + %s\n", p.RootCauseResourceType, p.RootCauseIssueType)
+				responseText += fmt.Sprintf("   Guidance: %s\n", p.DiagnosisGuidance)
+				if len(p.InvestigationSteps) > 0 {
+					responseText += "   Steps:\n"
+					for j, step := range p.InvestigationSteps {
+						responseText += fmt.Sprintf("     %d. %s\n", j+1, step)
+					}
+				}
+				responseText += "\n"
+			}
+			responseText += "Use mark_pattern_used tool if a pattern helps guide your investigation.\n\n"
+		}
+
+		responseText += "Next steps:\n" +
+			"1. Use query_with_session to execute Cypher queries\n" +
+			"2. Use update_hypothesis to record your diagnostic hypothesis\n" +
+			"3. Findings will be automatically extracted from query results\n" +
+			"4. Blast zone will be calculated dynamically as findings emerge"
+
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{
-					Text: fmt.Sprintf("🔬 Agent Session Started\n\nSession ID: %s\nInitial Symptom: %s\nStatus: %s\n\n"+
-						"Next steps:\n"+
-						"1. Use query_with_session to execute Cypher queries\n"+
-						"2. Use update_hypothesis to record your diagnostic hypothesis\n"+
-						"3. Findings will be automatically extracted from query results\n"+
-						"4. Blast zone will be calculated dynamically as findings emerge",
-						session.ID, input.Symptom, output.Status),
+					Text: responseText,
 				},
 			},
 		}, output, nil
@@ -455,6 +505,128 @@ func (s *Server) registerAgentSessionTools(sessionManager *observability.AgentSe
 		}, output, nil
 	})
 
+	// Tool 7: get_patterns
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name: "get_patterns",
+		Description: "Query patterns by resource type, issue type, or symptom keywords. " +
+			"Patterns provide investigation guidance based on previous successful investigations. " +
+			"This creates PRESENTED_PATTERN relationships for tracking.",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, input GetPatternsInput) (*mcp.CallToolResult, any, error) {
+		s.logger.Info("querying patterns",
+			zap.String("session_id", input.SessionID),
+			zap.String("resource_type", input.ResourceType),
+			zap.String("issue_type", input.IssueType))
+
+		var patterns []observability.Pattern
+		var err error
+
+		// Query by type if both provided
+		if input.ResourceType != "" && input.IssueType != "" {
+			patterns, err = sessionManager.FindPatternsByType(ctx, input.ResourceType, input.IssueType)
+		} else if len(input.SymptomKeywords) > 0 {
+			// Query by symptom keywords
+			allPatterns := []observability.Pattern{}
+			for _, keyword := range input.SymptomKeywords {
+				matched, e := sessionManager.FindPatternsBySymptom(ctx, keyword)
+				if e == nil {
+					allPatterns = append(allPatterns, matched...)
+				}
+			}
+			patterns = allPatterns
+		} else {
+			return nil, nil, fmt.Errorf("must provide either resource_type+issue_type or symptom_keywords")
+		}
+
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to query patterns: %w", err)
+		}
+
+		// Mark patterns as presented
+		patternInfos := make([]PatternInfo, 0, len(patterns))
+		for _, pattern := range patterns {
+			if err := sessionManager.MarkPatternPresented(ctx, input.SessionID, pattern.ID); err != nil {
+				s.logger.Warn("failed to mark pattern as presented",
+					zap.String("pattern_id", pattern.ID),
+					zap.Error(err))
+			}
+
+			patternInfos = append(patternInfos, PatternInfo{
+				ID:                    pattern.ID,
+				Name:                  pattern.Name,
+				RootCauseResourceType: pattern.RootCauseResourceType,
+				RootCauseIssueType:    pattern.RootCauseIssueType,
+				InvestigationSteps:    pattern.InvestigationSteps,
+				DiagnosisGuidance:     pattern.DiagnosisGuidance,
+				UsageCount:            pattern.UsageCount,
+			})
+		}
+
+		output := GetPatternsOutput{
+			Patterns: patternInfos,
+			Count:    len(patternInfos),
+			Message:  fmt.Sprintf("Found %d pattern(s)", len(patternInfos)),
+		}
+
+		// Format response text
+		responseText := fmt.Sprintf("📚 Found %d Pattern(s)\n\n", len(patternInfos))
+		if len(patternInfos) == 0 {
+			responseText += "No patterns match your query. Consider recording a new pattern if you successfully resolve this issue.\n"
+		} else {
+			for i, p := range patternInfos {
+				responseText += fmt.Sprintf("%d. %s (used %d times)\n", i+1, p.Name, p.UsageCount)
+				responseText += fmt.Sprintf("   Root Cause: %s + %s\n", p.RootCauseResourceType, p.RootCauseIssueType)
+				responseText += fmt.Sprintf("   Guidance: %s\n", p.DiagnosisGuidance)
+				if len(p.InvestigationSteps) > 0 {
+					responseText += "   Investigation Steps:\n"
+					for j, step := range p.InvestigationSteps {
+						responseText += fmt.Sprintf("     %d. %s\n", j+1, step)
+					}
+				}
+				responseText += "\n"
+			}
+			responseText += "If a pattern helps, use mark_pattern_used to track its effectiveness.\n"
+		}
+
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{
+					Text: responseText,
+				},
+			},
+		}, output, nil
+	})
+
+	// Tool 8: mark_pattern_used
+	mcp.AddTool(s.mcpServer, &mcp.Tool{
+		Name: "mark_pattern_used",
+		Description: "Mark a pattern as helpful during investigation. " +
+			"This creates a USED_PATTERN relationship and increments the pattern's usage count. " +
+			"Use this when a pattern successfully guides your investigation.",
+	}, func(ctx context.Context, request *mcp.CallToolRequest, input MarkPatternUsedInput) (*mcp.CallToolResult, any, error) {
+		s.logger.Info("marking pattern as used",
+			zap.String("session_id", input.SessionID),
+			zap.String("pattern_id", input.PatternID))
+
+		err := sessionManager.MarkPatternUsed(ctx, input.SessionID, input.PatternID, input.Notes)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to mark pattern as used: %w", err)
+		}
+
+		output := MarkPatternUsedOutput{
+			PatternID: input.PatternID,
+			Message:   "Pattern marked as used successfully",
+		}
+
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{
+					Text: fmt.Sprintf("✓ Pattern Marked as Used\n\nPattern ID: %s\n\nThis pattern has been recorded as helpful for this investigation.\nThe usage count has been incremented to help future investigations.",
+						input.PatternID),
+				},
+			},
+		}, output, nil
+	})
+
 	s.logger.Info("registered agent session tools",
 		zap.Strings("tools", []string{
 			"start_agent_session",
@@ -464,6 +636,8 @@ func (s *Server) registerAgentSessionTools(sessionManager *observability.AgentSe
 			"record_recommendation",
 			"spawn_investigation",
 			"complete_agent_session",
+			"get_patterns",
+			"mark_pattern_used",
 		}))
 
 	return nil

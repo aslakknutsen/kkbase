@@ -82,6 +82,7 @@ type Pattern struct {
 	Name                  string                 `json:"name"`
 	RootCauseResourceType string                 `json:"root_cause_resource_type"` // e.g., "Service", "Pod", "HTTPRoute"
 	RootCauseIssueType    string                 `json:"root_cause_issue_type"`    // e.g., "cascading_failure", "selector_mismatch"
+	SymptomKeywords       []string               `json:"symptom_keywords,omitempty"` // Keywords for fuzzy matching on symptoms
 	InvestigationSteps    []string               `json:"investigation_steps"`      // Ordered sequence of steps
 	DiagnosisGuidance     string                 `json:"diagnosis_guidance"`       // What to look for
 	Recommendations       []string               `json:"recommendations"`          // Generic recommendations
@@ -89,6 +90,8 @@ type Pattern struct {
 	Source                string                 `json:"source"`                   // "discovered" or "bundled"
 	UsageCount            int                    `json:"usage_count"`              // How many times used
 	CreatedAt             time.Time              `json:"created_at"`
+	UpdatedAt             *time.Time             `json:"updated_at,omitempty"`     // Last update time for bundled patterns
+	RelationshipType      string                 `json:"relationship_type,omitempty"` // "presented", "used", or "discovered" (session-specific)
 	Metadata              map[string]interface{} `json:"metadata,omitempty"`
 }
 

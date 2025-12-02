@@ -92,9 +92,21 @@ type StartAgentSessionInput struct {
 
 // StartAgentSessionOutput defines the output from starting an agent session
 type StartAgentSessionOutput struct {
-	SessionID string `json:"session_id" jsonschema:"description:Unique session ID for this investigation"`
-	Status    string `json:"status" jsonschema:"description:Session status (typically 'active')"`
-	Message   string `json:"message" jsonschema:"description:Human-readable status message"`
+	SessionID         string        `json:"session_id" jsonschema:"description:Unique session ID for this investigation"`
+	Status            string        `json:"status" jsonschema:"description:Session status (typically 'active')"`
+	Message           string        `json:"message" jsonschema:"description:Human-readable status message"`
+	SuggestedPatterns []PatternInfo `json:"suggested_patterns,omitempty" jsonschema:"description:Patterns that match the symptom"`
+}
+
+// PatternInfo provides pattern information for MCP tool responses
+type PatternInfo struct {
+	ID                    string   `json:"id" jsonschema:"description:Pattern ID"`
+	Name                  string   `json:"name" jsonschema:"description:Pattern name"`
+	RootCauseResourceType string   `json:"root_cause_resource_type" jsonschema:"description:Expected root cause resource type"`
+	RootCauseIssueType    string   `json:"root_cause_issue_type" jsonschema:"description:Expected root cause issue type"`
+	InvestigationSteps    []string `json:"investigation_steps" jsonschema:"description:Suggested investigation steps"`
+	DiagnosisGuidance     string   `json:"diagnosis_guidance" jsonschema:"description:What to look for during investigation"`
+	UsageCount            int      `json:"usage_count" jsonschema:"description:How many times this pattern has been used"`
 }
 
 // QueryWithSessionInput defines the input for executing a query within a session
@@ -228,4 +240,33 @@ type CompleteAgentSessionOutput struct {
 	QueryCount   int    `json:"query_count" jsonschema:"description:Total queries executed"`
 	FindingCount int    `json:"finding_count" jsonschema:"description:Total findings discovered"`
 	Message      string `json:"message" jsonschema:"description:Human-readable completion message"`
+}
+
+// GetPatternsInput defines the input for querying patterns
+type GetPatternsInput struct {
+	SessionID       string   `json:"session_id" jsonschema:"description:Session ID for tracking pattern presentation"`
+	ResourceType    string   `json:"resource_type,omitempty" jsonschema:"description:Filter by root cause resource type (e.g. Service, Pod)"`
+	IssueType       string   `json:"issue_type,omitempty" jsonschema:"description:Filter by root cause issue type (e.g. cascading_failure, selector_mismatch)"`
+	SymptomKeywords []string `json:"symptom_keywords,omitempty" jsonschema:"description:Keywords to match against symptom keywords"`
+}
+
+// GetPatternsOutput defines the output from querying patterns
+type GetPatternsOutput struct {
+	Patterns []PatternInfo `json:"patterns" jsonschema:"description:Matching patterns"`
+	Count    int           `json:"count" jsonschema:"description:Number of patterns found"`
+	Message  string        `json:"message" jsonschema:"description:Human-readable status message"`
+}
+
+// MarkPatternUsedInput defines the input for marking a pattern as used
+type MarkPatternUsedInput struct {
+	SessionID string `json:"session_id" jsonschema:"description:Session ID where pattern was used"`
+	PatternID string `json:"pattern_id" jsonschema:"description:ID of the pattern that was helpful"`
+	Notes     string `json:"notes,omitempty" jsonschema:"description:Optional notes about how the pattern helped"`
+}
+
+// MarkPatternUsedOutput defines the output from marking a pattern as used
+type MarkPatternUsedOutput struct {
+	PatternID      string `json:"pattern_id" jsonschema:"description:Pattern ID that was marked as used"`
+	NewUsageCount  int    `json:"new_usage_count" jsonschema:"description:Updated usage count for this pattern"`
+	Message        string `json:"message" jsonschema:"description:Human-readable status message"`
 }

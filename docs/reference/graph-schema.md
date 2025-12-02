@@ -185,9 +185,10 @@ Example: An HTTPRoute attached to two Gateways will have:
 
 **Pattern**
 - Reusable diagnostic pattern learned from investigations
-- Properties: `id`, `name`, `root_cause_resource_type`, `root_cause_issue_type`, `investigation_steps` (JSON array), `diagnosis_guidance`, `recommendations` (JSON array), `bundle_id`, `source`, `usage_count`, `created_at`, `metadata` (JSON object)
+- Properties: `id`, `name`, `root_cause_resource_type`, `root_cause_issue_type`, `symptom_keywords` (JSON array), `investigation_steps` (JSON array), `diagnosis_guidance`, `recommendations` (JSON array), `bundle_id`, `source`, `usage_count`, `created_at`, `metadata` (JSON object)
 - Source values: `discovered` (learned from completed sessions), `bundled` (imported from pattern bundle)
 - Match key: `root_cause_resource_type` + `root_cause_issue_type` (strict matching)
+- Symptom matching: Fuzzy keyword matching on `symptom_keywords` array for initial pattern suggestion
 
 **PatternBundle**
 - Versioned collection of patterns for distribution
@@ -428,11 +429,20 @@ These nodes track AI agent diagnostic sessions and their findings.
 - Description: Session discovered and recorded this pattern
 - Properties: None
 
+**PRESENTED_PATTERN**
+- From: `AgentSession`
+- To: `Pattern`
+- Description: Pattern was suggested/presented to the agent during investigation
+- Properties: `presented_at` (timestamp when pattern was presented)
+- Created when: Pattern matches symptom at session start or when agent queries for patterns
+
 **USED_PATTERN**
 - From: `AgentSession`
 - To: `Pattern`
-- Description: Session was guided by this pattern (future use)
-- Properties: None
+- Description: Agent confirmed this pattern successfully guided the investigation
+- Properties: `used_at` (timestamp), `notes` (optional notes about how pattern helped)
+- Created when: Agent explicitly calls mark_pattern_used tool
+- Effect: Increments pattern's `usage_count` by 1
 
 **CONTAINS**
 - From: `PatternBundle`

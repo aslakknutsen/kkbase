@@ -95,6 +95,13 @@ func run() error {
 	// Create agent session manager for investigation tracking
 	sessionManager := observability.NewAgentSessionManager(graphStore, metricsProcessor, cfg, logger)
 
+	// Seed/update initial patterns from embedded file
+	logger.Info("syncing initial patterns from embedded file")
+	if err := observability.SeedInitialPatterns(ctx, graphStore, logger); err != nil {
+		logger.Warn("failed to sync initial patterns", zap.Error(err))
+		// Continue anyway - patterns are optional
+	}
+
 	// Create notification broadcaster
 	broadcaster := mcp.NewNotificationBroadcaster(logger)
 
