@@ -374,6 +374,7 @@ func (s *Server) registerAgentSessionTools(sessionManager *observability.AgentSe
 			Name:                  input.Name,
 			RootCauseResourceType: input.RootCauseResourceType,
 			RootCauseIssueType:    input.RootCauseIssueType,
+			SymptomKeywords:       input.SymptomKeywords,
 			InvestigationSteps:    input.InvestigationSteps,
 			DiagnosisGuidance:     input.DiagnosisGuidance,
 			Recommendations:       input.Recommendations,

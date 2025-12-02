@@ -195,6 +195,7 @@ type RecordPatternInput struct {
 	Name                  string                 `json:"name" jsonschema:"required,description:Short descriptive name for the pattern"`
 	RootCauseResourceType string                 `json:"root_cause_resource_type" jsonschema:"required,description:Kubernetes resource type (e.g. Service, Pod, HTTPRoute)"`
 	RootCauseIssueType    string                 `json:"root_cause_issue_type" jsonschema:"required,description:Issue classification (e.g. cascading_failure, selector_mismatch)"`
+	SymptomKeywords       []string               `json:"symptom_keywords,omitempty" jsonschema:"description:Keywords to match against symptoms for pattern discovery"`
 	InvestigationSteps    []string               `json:"investigation_steps" jsonschema:"required,description:Ordered sequence of investigation steps"`
 	DiagnosisGuidance     string                 `json:"diagnosis_guidance" jsonschema:"required,description:What to look for in results to confirm diagnosis"`
 	Recommendations       []string               `json:"recommendations" jsonschema:"required,description:Generic recommendations for this pattern"`
