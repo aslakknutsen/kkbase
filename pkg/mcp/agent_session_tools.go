@@ -50,14 +50,31 @@ func (s *Server) registerAgentSessionTools(sessionManager *observability.AgentSe
 					zap.Error(err))
 			}
 
+			// Convert discriminating queries
+			var discriminatingQueries []DiscriminatingQueryInfo
+			for _, dq := range pattern.DiscriminatingQueries {
+				discriminatingQueries = append(discriminatingQueries, DiscriminatingQueryInfo{
+					Name:            dq.Name,
+					Query:           dq.Query,
+					Condition:       dq.Condition,
+					SuggestsPattern: dq.SuggestsPattern,
+				})
+			}
+
 			suggestedPatterns = append(suggestedPatterns, PatternInfo{
-				ID:                    pattern.ID,
-				Name:                  pattern.Name,
-				RootCauseResourceType: pattern.RootCauseResourceType,
-				RootCauseIssueType:    pattern.RootCauseIssueType,
-				InvestigationSteps:    pattern.InvestigationSteps,
-				DiagnosisGuidance:     pattern.DiagnosisGuidance,
-				UsageCount:            pattern.UsageCount,
+				ID:                        pattern.ID,
+				Tier:                      pattern.Tier,
+				Name:                      pattern.Name,
+				Description:               pattern.Description,
+				DiscriminatingQueries:     discriminatingQueries,
+				DecisionLogic:             pattern.DecisionLogic,
+				InitialInvestigationSteps: pattern.InitialInvestigationSteps,
+				RootCauseResourceType:     pattern.RootCauseResourceType,
+				RootCauseIssueType:        pattern.RootCauseIssueType,
+				InvestigationSteps:        pattern.InvestigationSteps,
+				DiagnosisGuidance:         pattern.DiagnosisGuidance,
+				Recommendations:           pattern.Recommendations,
+				UsageCount:                pattern.UsageCount,
 			})
 		}
 
@@ -79,15 +96,55 @@ func (s *Server) registerAgentSessionTools(sessionManager *observability.AgentSe
 			session.ID, input.Symptom, output.Status)
 
 		if len(suggestedPatterns) > 0 {
-			responseText += fmt.Sprintf("📚 %d Suggested Pattern(s) Found:\n\n", len(suggestedPatterns))
+			// Count patterns by tier
+			tier1Count := 0
+			tier2Count := 0
+			for _, p := range suggestedPatterns {
+				if p.Tier == 1 {
+					tier1Count++
+				} else {
+					tier2Count++
+				}
+			}
+			responseText += fmt.Sprintf("%d Suggested Pattern(s) Found (%d triage, %d root cause):\n\n", len(suggestedPatterns), tier1Count, tier2Count)
+
 			for i, p := range suggestedPatterns {
-				responseText += fmt.Sprintf("%d. %s (used %d times)\n", i+1, p.Name, p.UsageCount)
-				responseText += fmt.Sprintf("   Expected: %s + %s\n", p.RootCauseResourceType, p.RootCauseIssueType)
-				responseText += fmt.Sprintf("   Guidance: %s\n", p.DiagnosisGuidance)
-				if len(p.InvestigationSteps) > 0 {
-					responseText += "   Steps:\n"
-					for j, step := range p.InvestigationSteps {
-						responseText += fmt.Sprintf("     %d. %s\n", j+1, step)
+				tierLabel := "Tier 2 - Root Cause"
+				if p.Tier == 1 {
+					tierLabel = "Tier 1 - Triage"
+				}
+				responseText += fmt.Sprintf("%d. [%s] %s (used %d times)\n", i+1, tierLabel, p.Name, p.UsageCount)
+
+				if p.Tier == 1 {
+					// Tier 1: Show discriminating queries
+					if p.Description != "" {
+						responseText += fmt.Sprintf("   %s\n", p.Description)
+					}
+					if len(p.InitialInvestigationSteps) > 0 {
+						responseText += "   Initial Steps:\n"
+						for j, step := range p.InitialInvestigationSteps {
+							responseText += fmt.Sprintf("     %d. %s\n", j+1, step)
+						}
+					}
+					if len(p.DiscriminatingQueries) > 0 {
+						responseText += "   Run these queries to narrow down:\n"
+						for _, dq := range p.DiscriminatingQueries {
+							responseText += fmt.Sprintf("     - %s: if %s -> use '%s' pattern\n", dq.Name, dq.Condition, dq.SuggestsPattern)
+						}
+					}
+				} else {
+					// Tier 2: Show expected root cause and steps
+					if p.RootCauseResourceType != "" || p.RootCauseIssueType != "" {
+						responseText += fmt.Sprintf("   Expected: %s + %s\n", p.RootCauseResourceType, p.RootCauseIssueType)
+					}
+					if p.DiagnosisGuidance != "" {
+						responseText += fmt.Sprintf("   Guidance: %s\n", p.DiagnosisGuidance)
+					}
+					if len(p.InvestigationSteps) > 0 {
+						responseText += "   Steps:\n"
+						for j, step := range p.InvestigationSteps {
+							responseText += fmt.Sprintf("     %d. %s\n", j+1, step)
+						}
 					}
 				}
 				responseText += "\n"
@@ -511,17 +568,20 @@ func (s *Server) registerAgentSessionTools(sessionManager *observability.AgentSe
 		Name: "get_patterns",
 		Description: "Query patterns by resource type, issue type, or symptom keywords. " +
 			"Patterns provide investigation guidance based on previous successful investigations. " +
+			"Tier 1 patterns help triage symptoms and suggest Tier 2 patterns. " +
+			"Tier 2 patterns provide specific root cause investigation guidance. " +
 			"This creates PRESENTED_PATTERN relationships for tracking.",
 	}, func(ctx context.Context, request *mcp.CallToolRequest, input GetPatternsInput) (*mcp.CallToolResult, any, error) {
 		s.logger.Info("querying patterns",
 			zap.String("session_id", input.SessionID),
+			zap.Int("tier", input.Tier),
 			zap.String("resource_type", input.ResourceType),
 			zap.String("issue_type", input.IssueType))
 
 		var patterns []observability.Pattern
 		var err error
 
-		// Query by type if both provided
+		// Query by type if both provided (only for Tier 2)
 		if input.ResourceType != "" && input.IssueType != "" {
 			patterns, err = sessionManager.FindPatternsByType(ctx, input.ResourceType, input.IssueType)
 		} else if len(input.SymptomKeywords) > 0 {
@@ -542,7 +602,18 @@ func (s *Server) registerAgentSessionTools(sessionManager *observability.AgentSe
 			return nil, nil, fmt.Errorf("failed to query patterns: %w", err)
 		}
 
-		// Mark patterns as presented
+		// Filter by tier if specified
+		if input.Tier > 0 {
+			filteredPatterns := make([]observability.Pattern, 0)
+			for _, p := range patterns {
+				if p.Tier == input.Tier {
+					filteredPatterns = append(filteredPatterns, p)
+				}
+			}
+			patterns = filteredPatterns
+		}
+
+		// Mark patterns as presented and convert to PatternInfo
 		patternInfos := make([]PatternInfo, 0, len(patterns))
 		for _, pattern := range patterns {
 			if err := sessionManager.MarkPatternPresented(ctx, input.SessionID, pattern.ID); err != nil {
@@ -551,14 +622,31 @@ func (s *Server) registerAgentSessionTools(sessionManager *observability.AgentSe
 					zap.Error(err))
 			}
 
+			// Convert discriminating queries
+			var discriminatingQueries []DiscriminatingQueryInfo
+			for _, dq := range pattern.DiscriminatingQueries {
+				discriminatingQueries = append(discriminatingQueries, DiscriminatingQueryInfo{
+					Name:            dq.Name,
+					Query:           dq.Query,
+					Condition:       dq.Condition,
+					SuggestsPattern: dq.SuggestsPattern,
+				})
+			}
+
 			patternInfos = append(patternInfos, PatternInfo{
-				ID:                    pattern.ID,
-				Name:                  pattern.Name,
-				RootCauseResourceType: pattern.RootCauseResourceType,
-				RootCauseIssueType:    pattern.RootCauseIssueType,
-				InvestigationSteps:    pattern.InvestigationSteps,
-				DiagnosisGuidance:     pattern.DiagnosisGuidance,
-				UsageCount:            pattern.UsageCount,
+				ID:                        pattern.ID,
+				Tier:                      pattern.Tier,
+				Name:                      pattern.Name,
+				Description:               pattern.Description,
+				DiscriminatingQueries:     discriminatingQueries,
+				DecisionLogic:             pattern.DecisionLogic,
+				InitialInvestigationSteps: pattern.InitialInvestigationSteps,
+				RootCauseResourceType:     pattern.RootCauseResourceType,
+				RootCauseIssueType:        pattern.RootCauseIssueType,
+				InvestigationSteps:        pattern.InvestigationSteps,
+				DiagnosisGuidance:         pattern.DiagnosisGuidance,
+				Recommendations:           pattern.Recommendations,
+				UsageCount:                pattern.UsageCount,
 			})
 		}
 
@@ -568,19 +656,49 @@ func (s *Server) registerAgentSessionTools(sessionManager *observability.AgentSe
 			Message:  fmt.Sprintf("Found %d pattern(s)", len(patternInfos)),
 		}
 
-		// Format response text
-		responseText := fmt.Sprintf("📚 Found %d Pattern(s)\n\n", len(patternInfos))
+		// Format response text with tier-aware formatting
+		responseText := fmt.Sprintf("Found %d Pattern(s)\n\n", len(patternInfos))
 		if len(patternInfos) == 0 {
 			responseText += "No patterns match your query. Consider recording a new pattern if you successfully resolve this issue.\n"
 		} else {
 			for i, p := range patternInfos {
-				responseText += fmt.Sprintf("%d. %s (used %d times)\n", i+1, p.Name, p.UsageCount)
-				responseText += fmt.Sprintf("   Root Cause: %s + %s\n", p.RootCauseResourceType, p.RootCauseIssueType)
-				responseText += fmt.Sprintf("   Guidance: %s\n", p.DiagnosisGuidance)
-				if len(p.InvestigationSteps) > 0 {
-					responseText += "   Investigation Steps:\n"
-					for j, step := range p.InvestigationSteps {
-						responseText += fmt.Sprintf("     %d. %s\n", j+1, step)
+				tierLabel := "Tier 2 - Root Cause"
+				if p.Tier == 1 {
+					tierLabel = "Tier 1 - Triage"
+				}
+				responseText += fmt.Sprintf("%d. [%s] %s (used %d times)\n", i+1, tierLabel, p.Name, p.UsageCount)
+
+				if p.Description != "" {
+					responseText += fmt.Sprintf("   %s\n", p.Description)
+				}
+
+				if p.Tier == 1 {
+					// Tier 1: Show discriminating queries and decision logic
+					if len(p.InitialInvestigationSteps) > 0 {
+						responseText += "   Initial Steps:\n"
+						for j, step := range p.InitialInvestigationSteps {
+							responseText += fmt.Sprintf("     %d. %s\n", j+1, step)
+						}
+					}
+					if len(p.DiscriminatingQueries) > 0 {
+						responseText += "   Discriminating Queries:\n"
+						for _, dq := range p.DiscriminatingQueries {
+							responseText += fmt.Sprintf("     - %s: if %s -> %s\n", dq.Name, dq.Condition, dq.SuggestsPattern)
+						}
+					}
+				} else {
+					// Tier 2: Show root cause and investigation steps
+					if p.RootCauseResourceType != "" || p.RootCauseIssueType != "" {
+						responseText += fmt.Sprintf("   Root Cause: %s + %s\n", p.RootCauseResourceType, p.RootCauseIssueType)
+					}
+					if p.DiagnosisGuidance != "" {
+						responseText += fmt.Sprintf("   Guidance: %s\n", p.DiagnosisGuidance)
+					}
+					if len(p.InvestigationSteps) > 0 {
+						responseText += "   Investigation Steps:\n"
+						for j, step := range p.InvestigationSteps {
+							responseText += fmt.Sprintf("     %d. %s\n", j+1, step)
+						}
 					}
 				}
 				responseText += "\n"

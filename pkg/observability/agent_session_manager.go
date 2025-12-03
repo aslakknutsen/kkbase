@@ -503,7 +503,7 @@ func (asm *AgentSessionManager) GetSession(ctx context.Context, sessionID string
 	// Get patterns related to this session (presented, used, or discovered)
 	// Query each relationship type separately for simplicity
 	patterns := []Pattern{}
-	
+
 	// Get presented patterns
 	presentedQuery := `
 		MATCH (s:AgentSession {id: $session_id})-[:PRESENTED_PATTERN]->(p:Pattern)
@@ -519,7 +519,7 @@ func (asm *AgentSessionManager) GetSession(ctx context.Context, sessionID string
 	} else if len(presentedResults) > 0 {
 		patterns = append(patterns, parsePatternsWithRelationship(presentedResults)...)
 	}
-	
+
 	// Get used patterns
 	usedQuery := `
 		MATCH (s:AgentSession {id: $session_id})-[:USED_PATTERN]->(p:Pattern)
@@ -535,7 +535,7 @@ func (asm *AgentSessionManager) GetSession(ctx context.Context, sessionID string
 	} else if len(usedResults) > 0 {
 		patterns = append(patterns, parsePatternsWithRelationship(usedResults)...)
 	}
-	
+
 	// Get discovered patterns
 	discoveredQuery := `
 		MATCH (s:AgentSession {id: $session_id})-[:DISCOVERED_PATTERN]->(p:Pattern)
@@ -551,7 +551,7 @@ func (asm *AgentSessionManager) GetSession(ctx context.Context, sessionID string
 	} else if len(discoveredResults) > 0 {
 		patterns = append(patterns, parsePatternsWithRelationship(discoveredResults)...)
 	}
-	
+
 	asm.logger.Debug("loaded patterns for session",
 		zap.String("session_id", sessionID),
 		zap.Int("pattern_count", len(patterns)))
@@ -928,6 +928,12 @@ func (asm *AgentSessionManager) RecordPattern(
 		// Still record but log that duplicate exists
 	}
 
+	// Discovered patterns are always Tier 2 (root cause patterns)
+	// Tier 1 (triage) patterns are only created via bundled patterns
+	if pattern.Tier == 0 {
+		pattern.Tier = 2
+	}
+
 	// Marshal arrays to JSON
 	stepsJSON, _ := json.Marshal(pattern.InvestigationSteps)
 	recsJSON, _ := json.Marshal(pattern.Recommendations)
@@ -939,7 +945,9 @@ func (asm *AgentSessionManager) RecordPattern(
 		MATCH (s:AgentSession {id: $session_id})
 		CREATE (p:Pattern {
 			id: $id,
+			tier: $tier,
 			name: $name,
+			description: $description,
 			root_cause_resource_type: $resource_type,
 			root_cause_issue_type: $issue_type,
 			symptom_keywords: $keywords,
@@ -958,7 +966,9 @@ func (asm *AgentSessionManager) RecordPattern(
 	params := map[string]interface{}{
 		"session_id":    sessionID,
 		"id":            pattern.ID,
+		"tier":          pattern.Tier,
 		"name":          pattern.Name,
+		"description":   pattern.Description,
 		"resource_type": pattern.RootCauseResourceType,
 		"issue_type":    pattern.RootCauseIssueType,
 		"keywords":      string(keywordsJSON),
@@ -981,13 +991,14 @@ func (asm *AgentSessionManager) RecordPattern(
 }
 
 // FindPatternsBySymptom searches for patterns matching symptom keywords
+// Returns Tier 1 (triage) patterns first, then Tier 2 (root cause) patterns
 func (asm *AgentSessionManager) FindPatternsBySymptom(ctx context.Context, symptom string) ([]Pattern, error) {
-	// Query all patterns with symptom_keywords
+	// Query all patterns with symptom_keywords, ordering by tier first (Tier 1 before Tier 2)
 	query := `
 		MATCH (p:Pattern)
 		WHERE p.symptom_keywords IS NOT NULL AND p.symptom_keywords <> '[]'
 		RETURN p
-		ORDER BY p.usage_count DESC, p.created_at DESC
+		ORDER BY p.tier ASC, p.usage_count DESC, p.created_at DESC
 	`
 
 	results, err := asm.graphStore.Query(ctx, query, nil)
@@ -1011,9 +1022,22 @@ func (asm *AgentSessionManager) FindPatternsBySymptom(ctx context.Context, sympt
 		}
 	}
 
+	// Count by tier for logging
+	tier1Count := 0
+	tier2Count := 0
+	for _, p := range matchedPatterns {
+		if p.Tier == 1 {
+			tier1Count++
+		} else {
+			tier2Count++
+		}
+	}
+
 	asm.logger.Info("found patterns by symptom",
 		zap.String("symptom", symptom),
-		zap.Int("matched_count", len(matchedPatterns)))
+		zap.Int("matched_count", len(matchedPatterns)),
+		zap.Int("tier1_count", tier1Count),
+		zap.Int("tier2_count", tier2Count))
 
 	return matchedPatterns, nil
 }
@@ -1459,6 +1483,81 @@ func parseFindings(results []map[string]interface{}) []Finding {
 	return findings
 }
 
+// parsePatternFromProps extracts a Pattern from a map of properties
+func parsePatternFromProps(props map[string]interface{}) Pattern {
+	pattern := Pattern{}
+
+	// Common fields
+	if id, ok := props["id"].(string); ok {
+		pattern.ID = id
+	}
+	if tier, ok := props["tier"].(int64); ok {
+		pattern.Tier = int(tier)
+	}
+	if name, ok := props["name"].(string); ok {
+		pattern.Name = name
+	}
+	if description, ok := props["description"].(string); ok {
+		pattern.Description = description
+	}
+	if resourceType, ok := props["root_cause_resource_type"].(string); ok {
+		pattern.RootCauseResourceType = resourceType
+	}
+	if issueType, ok := props["root_cause_issue_type"].(string); ok {
+		pattern.RootCauseIssueType = issueType
+	}
+	if source, ok := props["source"].(string); ok {
+		pattern.Source = source
+	}
+	if usageCount, ok := props["usage_count"].(int64); ok {
+		pattern.UsageCount = int(usageCount)
+	}
+	if bundleID, ok := props["bundle_id"].(string); ok {
+		pattern.BundleID = bundleID
+	}
+	if guidance, ok := props["diagnosis_guidance"].(string); ok {
+		pattern.DiagnosisGuidance = guidance
+	}
+
+	// Parse JSON arrays - common
+	if keywordsJSON, ok := props["symptom_keywords"].(string); ok && keywordsJSON != "" {
+		json.Unmarshal([]byte(keywordsJSON), &pattern.SymptomKeywords)
+	}
+	if metadataJSON, ok := props["metadata"].(string); ok && metadataJSON != "" {
+		json.Unmarshal([]byte(metadataJSON), &pattern.Metadata)
+	}
+
+	// Parse JSON arrays - Tier 1 specific
+	if discriminatingQueriesJSON, ok := props["discriminating_queries"].(string); ok && discriminatingQueriesJSON != "" {
+		json.Unmarshal([]byte(discriminatingQueriesJSON), &pattern.DiscriminatingQueries)
+	}
+	if decisionLogicJSON, ok := props["decision_logic"].(string); ok && decisionLogicJSON != "" {
+		json.Unmarshal([]byte(decisionLogicJSON), &pattern.DecisionLogic)
+	}
+	if initialStepsJSON, ok := props["initial_investigation_steps"].(string); ok && initialStepsJSON != "" {
+		json.Unmarshal([]byte(initialStepsJSON), &pattern.InitialInvestigationSteps)
+	}
+
+	// Parse JSON arrays - Tier 2 specific
+	if stepsJSON, ok := props["investigation_steps"].(string); ok && stepsJSON != "" {
+		json.Unmarshal([]byte(stepsJSON), &pattern.InvestigationSteps)
+	}
+	if recsJSON, ok := props["recommendations"].(string); ok && recsJSON != "" {
+		json.Unmarshal([]byte(recsJSON), &pattern.Recommendations)
+	}
+
+	// Parse timestamps
+	if createdAt, ok := props["created_at"].(string); ok {
+		if t, err := time.Parse(time.RFC3339, createdAt); err == nil {
+			pattern.CreatedAt = t
+		}
+	} else if createdAt, ok := props["created_at"].(time.Time); ok {
+		pattern.CreatedAt = createdAt
+	}
+
+	return pattern
+}
+
 func parsePatterns(results []map[string]interface{}) []Pattern {
 	patterns := make([]Pattern, 0, len(results))
 
@@ -1471,56 +1570,7 @@ func parsePatterns(results []map[string]interface{}) []Pattern {
 			props = result
 		}
 
-		pattern := Pattern{}
-
-		if id, ok := props["id"].(string); ok {
-			pattern.ID = id
-		}
-		if name, ok := props["name"].(string); ok {
-			pattern.Name = name
-		}
-		if resourceType, ok := props["root_cause_resource_type"].(string); ok {
-			pattern.RootCauseResourceType = resourceType
-		}
-		if issueType, ok := props["root_cause_issue_type"].(string); ok {
-			pattern.RootCauseIssueType = issueType
-		}
-		if source, ok := props["source"].(string); ok {
-			pattern.Source = source
-		}
-		if usageCount, ok := props["usage_count"].(int64); ok {
-			pattern.UsageCount = int(usageCount)
-		}
-		if bundleID, ok := props["bundle_id"].(string); ok {
-			pattern.BundleID = bundleID
-		}
-
-		// Parse JSON arrays
-		if keywordsJSON, ok := props["symptom_keywords"].(string); ok && keywordsJSON != "" {
-			json.Unmarshal([]byte(keywordsJSON), &pattern.SymptomKeywords)
-		}
-		if stepsJSON, ok := props["investigation_steps"].(string); ok && stepsJSON != "" {
-			json.Unmarshal([]byte(stepsJSON), &pattern.InvestigationSteps)
-		}
-		if recsJSON, ok := props["recommendations"].(string); ok && recsJSON != "" {
-			json.Unmarshal([]byte(recsJSON), &pattern.Recommendations)
-		}
-		if metadataJSON, ok := props["metadata"].(string); ok && metadataJSON != "" {
-			json.Unmarshal([]byte(metadataJSON), &pattern.Metadata)
-		}
-
-		if guidance, ok := props["diagnosis_guidance"].(string); ok {
-			pattern.DiagnosisGuidance = guidance
-		}
-
-		if createdAt, ok := props["created_at"].(string); ok {
-			if t, err := time.Parse(time.RFC3339, createdAt); err == nil {
-				pattern.CreatedAt = t
-			}
-		} else if createdAt, ok := props["created_at"].(time.Time); ok {
-			pattern.CreatedAt = createdAt
-		}
-
+		pattern := parsePatternFromProps(props)
 		patterns = append(patterns, pattern)
 	}
 
@@ -1540,55 +1590,7 @@ func parsePatternsWithRelationship(results []map[string]interface{}) []Pattern {
 			continue
 		}
 
-		pattern := Pattern{}
-
-		if id, ok := props["id"].(string); ok {
-			pattern.ID = id
-		}
-		if name, ok := props["name"].(string); ok {
-			pattern.Name = name
-		}
-		if resourceType, ok := props["root_cause_resource_type"].(string); ok {
-			pattern.RootCauseResourceType = resourceType
-		}
-		if issueType, ok := props["root_cause_issue_type"].(string); ok {
-			pattern.RootCauseIssueType = issueType
-		}
-		if source, ok := props["source"].(string); ok {
-			pattern.Source = source
-		}
-		if usageCount, ok := props["usage_count"].(int64); ok {
-			pattern.UsageCount = int(usageCount)
-		}
-		if bundleID, ok := props["bundle_id"].(string); ok {
-			pattern.BundleID = bundleID
-		}
-
-		// Parse JSON arrays
-		if keywordsJSON, ok := props["symptom_keywords"].(string); ok && keywordsJSON != "" {
-			json.Unmarshal([]byte(keywordsJSON), &pattern.SymptomKeywords)
-		}
-		if stepsJSON, ok := props["investigation_steps"].(string); ok && stepsJSON != "" {
-			json.Unmarshal([]byte(stepsJSON), &pattern.InvestigationSteps)
-		}
-		if recsJSON, ok := props["recommendations"].(string); ok && recsJSON != "" {
-			json.Unmarshal([]byte(recsJSON), &pattern.Recommendations)
-		}
-		if metadataJSON, ok := props["metadata"].(string); ok && metadataJSON != "" {
-			json.Unmarshal([]byte(metadataJSON), &pattern.Metadata)
-		}
-
-		if guidance, ok := props["diagnosis_guidance"].(string); ok {
-			pattern.DiagnosisGuidance = guidance
-		}
-
-		if createdAt, ok := props["created_at"].(string); ok {
-			if t, err := time.Parse(time.RFC3339, createdAt); err == nil {
-				pattern.CreatedAt = t
-			}
-		} else if createdAt, ok := props["created_at"].(time.Time); ok {
-			pattern.CreatedAt = createdAt
-		}
+		pattern := parsePatternFromProps(props)
 
 		// Set relationship type directly from query result
 		if relationshipType, ok := result["relationship_type"].(string); ok {

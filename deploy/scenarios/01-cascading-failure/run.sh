@@ -25,7 +25,7 @@ echo ""
 
 # Generate traffic with injected failures
 echo "🌐 Generating traffic with 503 errors (50 requests over ~50 seconds)..."
-echo "  (behavior: error=503:1.0)"
+echo "  (behavior: payment:error=503:1.0)"
 for i in {1..50}; do
   kubectl exec -n sf-gateway deployment/api-gateway -- \
     curl -s "http://localhost:8080/api/v1/checkout?behavior=payment:error=503:1.0" > /dev/null 2>&1 &

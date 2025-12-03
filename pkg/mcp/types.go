@@ -100,13 +100,32 @@ type StartAgentSessionOutput struct {
 
 // PatternInfo provides pattern information for MCP tool responses
 type PatternInfo struct {
-	ID                    string   `json:"id" jsonschema:"description:Pattern ID"`
-	Name                  string   `json:"name" jsonschema:"description:Pattern name"`
-	RootCauseResourceType string   `json:"root_cause_resource_type" jsonschema:"description:Expected root cause resource type"`
-	RootCauseIssueType    string   `json:"root_cause_issue_type" jsonschema:"description:Expected root cause issue type"`
-	InvestigationSteps    []string `json:"investigation_steps" jsonschema:"description:Suggested investigation steps"`
-	DiagnosisGuidance     string   `json:"diagnosis_guidance" jsonschema:"description:What to look for during investigation"`
-	UsageCount            int      `json:"usage_count" jsonschema:"description:How many times this pattern has been used"`
+	ID          string `json:"id" jsonschema:"description:Pattern ID"`
+	Tier        int    `json:"tier" jsonschema:"description:Pattern tier (1=triage, 2=root cause)"`
+	Name        string `json:"name" jsonschema:"description:Pattern name"`
+	Description string `json:"description,omitempty" jsonschema:"description:Human-readable description"`
+
+	// Tier 1 specific fields
+	DiscriminatingQueries     []DiscriminatingQueryInfo `json:"discriminating_queries,omitempty" jsonschema:"description:Queries to narrow down root cause (Tier 1 only)"`
+	DecisionLogic             map[string]string         `json:"decision_logic,omitempty" jsonschema:"description:Condition to suggested pattern mapping (Tier 1 only)"`
+	InitialInvestigationSteps []string                  `json:"initial_investigation_steps,omitempty" jsonschema:"description:Initial triage steps (Tier 1 only)"`
+
+	// Tier 2 specific fields
+	RootCauseResourceType string   `json:"root_cause_resource_type,omitempty" jsonschema:"description:Expected root cause resource type (Tier 2 only)"`
+	RootCauseIssueType    string   `json:"root_cause_issue_type,omitempty" jsonschema:"description:Expected root cause issue type (Tier 2 only)"`
+	InvestigationSteps    []string `json:"investigation_steps,omitempty" jsonschema:"description:Suggested investigation steps (Tier 2 only)"`
+	DiagnosisGuidance     string   `json:"diagnosis_guidance,omitempty" jsonschema:"description:What to look for during investigation"`
+	Recommendations       []string `json:"recommendations,omitempty" jsonschema:"description:Recommended actions (Tier 2 only)"`
+
+	UsageCount int `json:"usage_count" jsonschema:"description:How many times this pattern has been used"`
+}
+
+// DiscriminatingQueryInfo represents a query used in Tier 1 patterns
+type DiscriminatingQueryInfo struct {
+	Name            string `json:"name" jsonschema:"description:Query name"`
+	Query           string `json:"query" jsonschema:"description:Cypher query to execute"`
+	Condition       string `json:"condition" jsonschema:"description:Condition to check on results"`
+	SuggestsPattern string `json:"suggests_pattern" jsonschema:"description:Tier 2 pattern suggested if condition is met"`
 }
 
 // QueryWithSessionInput defines the input for executing a query within a session
@@ -246,8 +265,9 @@ type CompleteAgentSessionOutput struct {
 // GetPatternsInput defines the input for querying patterns
 type GetPatternsInput struct {
 	SessionID       string   `json:"session_id" jsonschema:"description:Session ID for tracking pattern presentation"`
-	ResourceType    string   `json:"resource_type,omitempty" jsonschema:"description:Filter by root cause resource type (e.g. Service, Pod)"`
-	IssueType       string   `json:"issue_type,omitempty" jsonschema:"description:Filter by root cause issue type (e.g. cascading_failure, selector_mismatch)"`
+	Tier            int      `json:"tier,omitempty" jsonschema:"description:Filter by pattern tier (1=triage, 2=root cause). If not specified, returns both tiers."`
+	ResourceType    string   `json:"resource_type,omitempty" jsonschema:"description:Filter by root cause resource type (e.g. Service, Pod). Only applies to Tier 2 patterns."`
+	IssueType       string   `json:"issue_type,omitempty" jsonschema:"description:Filter by root cause issue type (e.g. cascading_failure, selector_mismatch). Only applies to Tier 2 patterns."`
 	SymptomKeywords []string `json:"symptom_keywords,omitempty" jsonschema:"description:Keywords to match against symptom keywords"`
 }
 

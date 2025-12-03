@@ -78,21 +78,40 @@ type Recommendation struct {
 
 // Pattern represents a reusable diagnostic pattern learned from investigations
 type Pattern struct {
-	ID                    string                 `json:"id"`
-	Name                  string                 `json:"name"`
-	RootCauseResourceType string                 `json:"root_cause_resource_type"` // e.g., "Service", "Pod", "HTTPRoute"
-	RootCauseIssueType    string                 `json:"root_cause_issue_type"`    // e.g., "cascading_failure", "selector_mismatch"
-	SymptomKeywords       []string               `json:"symptom_keywords,omitempty"` // Keywords for fuzzy matching on symptoms
-	InvestigationSteps    []string               `json:"investigation_steps"`      // Ordered sequence of steps
-	DiagnosisGuidance     string                 `json:"diagnosis_guidance"`       // What to look for
-	Recommendations       []string               `json:"recommendations"`          // Generic recommendations
-	BundleID              string                 `json:"bundle_id,omitempty"`      // Null for discovered patterns
-	Source                string                 `json:"source"`                   // "discovered" or "bundled"
-	UsageCount            int                    `json:"usage_count"`              // How many times used
-	CreatedAt             time.Time              `json:"created_at"`
-	UpdatedAt             *time.Time             `json:"updated_at,omitempty"`     // Last update time for bundled patterns
-	RelationshipType      string                 `json:"relationship_type,omitempty"` // "presented", "used", or "discovered" (session-specific)
-	Metadata              map[string]interface{} `json:"metadata,omitempty"`
+	ID          string `json:"id"`
+	Tier        int    `json:"tier"` // 1 = triage, 2 = root cause
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"` // Human-readable description
+
+	// Tier 1 specific fields (triage patterns)
+	DiscriminatingQueries     []DiscriminatingQuery `json:"discriminating_queries,omitempty"`      // Queries to narrow down root cause
+	DecisionLogic             map[string]string     `json:"decision_logic,omitempty"`              // Condition -> suggested pattern mapping
+	InitialInvestigationSteps []string              `json:"initial_investigation_steps,omitempty"` // Steps for initial triage
+
+	// Tier 2 specific fields (root cause patterns)
+	RootCauseResourceType string   `json:"root_cause_resource_type,omitempty"` // e.g., "Service", "Pod", "HTTPRoute"
+	RootCauseIssueType    string   `json:"root_cause_issue_type,omitempty"`    // e.g., "cascading_failure", "selector_mismatch"
+	InvestigationSteps    []string `json:"investigation_steps,omitempty"`      // Ordered sequence of steps
+	DiagnosisGuidance     string   `json:"diagnosis_guidance,omitempty"`       // What to look for
+	Recommendations       []string `json:"recommendations,omitempty"`          // Generic recommendations
+
+	// Common metadata
+	SymptomKeywords  []string               `json:"symptom_keywords,omitempty"` // Keywords for fuzzy matching on symptoms
+	BundleID         string                 `json:"bundle_id,omitempty"`        // Null for discovered patterns
+	Source           string                 `json:"source"`                     // "discovered" or "bundled"
+	UsageCount       int                    `json:"usage_count"`                // How many times used
+	CreatedAt        time.Time              `json:"created_at"`
+	UpdatedAt        *time.Time             `json:"updated_at,omitempty"`        // Last update time for bundled patterns
+	RelationshipType string                 `json:"relationship_type,omitempty"` // "presented", "used", or "discovered" (session-specific)
+	Metadata         map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// DiscriminatingQuery represents a query used in Tier 1 patterns to narrow down the root cause
+type DiscriminatingQuery struct {
+	Name            string `json:"name"`
+	Query           string `json:"query"`
+	Condition       string `json:"condition"`
+	SuggestsPattern string `json:"suggests_pattern"`
 }
 
 // PatternBundle represents a versioned collection of patterns
@@ -180,7 +199,7 @@ type SessionDetail struct {
 	Queries           []QueryExecution `json:"queries"`
 	Findings          []Finding        `json:"findings"`
 	Recommendations   []Recommendation `json:"recommendations"`
-	Patterns          []Pattern        `json:"patterns"` // Discovered patterns
+	Patterns          []Pattern        `json:"patterns"`       // Discovered patterns
 	Investigations    []string         `json:"investigations"` // Investigation IDs
 	CurrentHypothesis *Hypothesis      `json:"current_hypothesis,omitempty"`
 }

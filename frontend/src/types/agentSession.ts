@@ -66,15 +66,33 @@ export interface Recommendation {
   created_at: string;
 }
 
+export interface DiscriminatingQuery {
+  name: string;
+  query: string;
+  condition: string;
+  suggests_pattern: string;
+}
+
 export interface Pattern {
   id: string;
+  tier: 1 | 2; // 1 = triage, 2 = root cause
   name: string;
-  root_cause_resource_type: string;
-  root_cause_issue_type: string;
+  description?: string;
+
+  // Tier 1 specific fields (triage patterns)
+  discriminating_queries?: DiscriminatingQuery[];
+  decision_logic?: Record<string, string>;
+  initial_investigation_steps?: string[];
+
+  // Tier 2 specific fields (root cause patterns)
+  root_cause_resource_type?: string;
+  root_cause_issue_type?: string;
+  investigation_steps?: string[];
+  diagnosis_guidance?: string;
+  recommendations?: string[];
+
+  // Common fields
   symptom_keywords?: string[];
-  investigation_steps: string[];
-  diagnosis_guidance: string;
-  recommendations: string[];
   bundle_id?: string;
   source: 'discovered' | 'bundled';
   usage_count: number;
