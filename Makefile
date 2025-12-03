@@ -4,7 +4,8 @@
 	docker-push-all docker-push-watcher docker-push-mcp-server docker-push-agent \
 	docker-release docker-release-dev \
 	deploy deploy-mcp-standalone deploy-integrated deploy-all undeploy fmt vet deps logs \
-	scenario-01 scenario-01-run scenario-01-cleanup help
+	scenario-01 scenario-01-run scenario-01-cleanup \
+	scenario-05 scenario-05-run scenario-05-cleanup help
 
 # Variables
 BINARY_NAME=out/watcher
@@ -213,6 +214,19 @@ scenario-01-run:
 scenario-01-cleanup:
 	@cd deploy/scenarios/01-cascading-failure && ./cleanup.sh
 
+scenario-05:
+	@TESTGEN_PATH=$$(command -v testgen 2>/dev/null); \
+	if [ -n "$$TESTGEN_PATH" ]; then \
+		export TESTAPP_DIR=$$(dirname "$$TESTGEN_PATH"); \
+	fi; \
+	cd deploy/scenarios/05-istio-virtualservice && ./setup.sh
+
+scenario-05-run:
+	@cd deploy/scenarios/05-istio-virtualservice && ./run.sh
+
+scenario-05-cleanup:
+	@cd deploy/scenarios/05-istio-virtualservice && ./cleanup.sh
+
 # Help
 help:
 	@echo "Available targets:"
@@ -271,4 +285,7 @@ help:
 	@echo "  scenario-01                - Setup cascading failure scenario"
 	@echo "  scenario-01-run            - Run failure injection (after setup)"
 	@echo "  scenario-01-cleanup        - Cleanup scenario 01"
+	@echo "  scenario-05                - Setup Istio VirtualService misconfiguration scenario (requires Istio)"
+	@echo "  scenario-05-run            - Inject subset mismatch (after setup)"
+	@echo "  scenario-05-cleanup        - Cleanup scenario 05"
 

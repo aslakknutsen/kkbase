@@ -111,7 +111,12 @@
         "route mismatch",
         "path not found",
         "upstream not found",
-        "no healthy upstream"
+        "no healthy upstream",
+        "subset",
+        "envoy",
+        "UH",
+        "NR",
+        "503"
       ],
       "investigation_steps": [
         "Verify HTTPRoute or Route exists for the requested path",
@@ -120,16 +125,22 @@
         "Check Service exists and has healthy endpoints",
         "For Istio: Verify VirtualService and Gateway configuration",
         "For Istio: Check DestinationRule for backend availability",
+        "For Istio subsets: Extract subset name from VirtualService route destination",
+        "For Istio subsets: Query DestinationRule to find label selector for the subset",
+        "For Istio subsets: Count pods matching the subset's label requirements (if count is 0, subset has no backing pods)",
         "Look for conflicting routes or incorrect path matching",
         "Verify TLS configuration if using HTTPS"
       ],
-      "diagnosis_guidance": "Routing issues manifest as 404 errors or gateway timeouts when traffic cannot find a path to the backend. Verify the route configuration chain: Gateway → HTTPRoute → Service → Pods. Check for 'negative space' - what routes are MISSING that should exist. Ensure path matching rules are correct (exact, prefix, regex). Verify the Service has healthy endpoints.",
+      "diagnosis_guidance": "Routing issues manifest as 404 errors or gateway timeouts when traffic cannot find a path to the backend. Verify the route configuration chain: Gateway → HTTPRoute → Service → Pods. Check for 'negative space' - what routes are MISSING that should exist. Ensure path matching rules are correct (exact, prefix, regex). Verify the Service has healthy endpoints. For Istio 503 'no healthy upstream' errors: this often indicates a VirtualService routing to a subset that has no matching pods. Correlate the 3 layers: VirtualService (which subset?) → DestinationRule (what labels does that subset require?) → Pods (do any pods have those labels?). Envoy response flags UH (No healthy upstream) and NR (No route configured) help distinguish between subset mismatch vs missing route.",
       "recommendations": [
         "Create or fix HTTPRoute for the missing path",
         "Correct HTTPRoute backend Service references",
         "Fix Gateway listener configuration to match HTTPRoute",
         "Adjust path matching rules to cover required paths",
         "Ensure backend Service has healthy endpoints",
+        "For Istio subset mismatch: Deploy pods with the required subset labels",
+        "For Istio subset mismatch: Update VirtualService to route to an existing subset",
+        "For Istio subset mismatch: Remove subset routing to use all available pods",
         "Add monitoring for route coverage and 404 rates",
         "Document route architecture and ownership"
       ]

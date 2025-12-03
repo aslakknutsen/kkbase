@@ -1,0 +1,50 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: scenario-05-istio-virtualservice
+  namespace: monitoring
+  labels:
+    release: prometheus
+    role: alert-rules
+    scenario: "05"
+spec:
+  groups:
+  - name: scenario_05_istio_virtualservice
+    interval: 10s
+    rules:
+    - alert: EnvoyUpstreamServiceUnavailable
+      expr: |
+        rate(istio_requests_total{
+          response_code="503",
+          destination_service=~"payment.*"
+        }[2m]) > 0
+      for: 20s
+      labels:
+        severity: critical
+        scenario: istio-subset-mismatch
+        scenario_id: "05"
+      annotations:
+        summary: "Envoy 503 for {{ $labels.destination_service }}"
+        description: "Envoy is returning 503 'no healthy upstream' for the payment service. This may indicate a VirtualService routing to a non-existent subset."
+        alert_namespace: "{{ $labels.destination_workload_namespace }}"
+        alert_service: "{{ $labels.destination_service }}"
+        alert_source: "{{ $labels.source_workload }}"
+        alert_response_flags: "{{ $labels.response_flags }}"
+    
+    # Fallback alert using Envoy native metrics (if Istio metrics not available)
+    - alert: EnvoyNoHealthyUpstream
+      expr: |
+        rate(envoy_cluster_upstream_rq{
+          response_code="503",
+          envoy_cluster_name=~".*payment.*"
+        }[2m]) > 0
+      for: 20s
+      labels:
+        severity: critical
+        scenario: istio-subset-mismatch
+        scenario_id: "05"
+      annotations:
+        summary: "Envoy 503 for cluster {{ $labels.envoy_cluster_name }}"
+        description: "Envoy cluster has no healthy upstream hosts. Check DestinationRule subsets and pod labels."
+        alert_cluster: "{{ $labels.envoy_cluster_name }}"
+
