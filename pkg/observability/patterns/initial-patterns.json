@@ -1,20 +1,13 @@
 {
-  "schema_version": "2.0",
-  "description": "Two-tier pattern system: Tier 1 for symptom-based triage (discrimination), Tier 2 for root-cause confirmation and remediation",
+  "schema_version": "1.0",
+  "description": "Diagnostic pattern library for Kubernetes Agent. Includes Graph (Topology), Jaeger (Trace), and Prometheus (Metric) integration.",
   "patterns": [
     {
       "tier": 1,
       "name": "503/5xx Service Errors",
       "symptom_keywords": [
-        "503",
-        "500",
-        "502",
-        "504",
-        "5xx",
-        "service unavailable",
-        "bad gateway",
-        "gateway timeout",
-        "internal server error"
+        "503", "500", "502", "504", "5xx",
+        "service unavailable", "bad gateway", "gateway timeout", "internal server error"
       ],
       "description": "Triage pattern for 5xx HTTP errors. Discriminates between connectivity issues, routing problems, and cascading failures.",
       "discriminating_queries": [
@@ -31,6 +24,12 @@
           "suggests_pattern": "Cascading Failure"
         },
         {
+          "name": "check_ingress_backend",
+          "query": "MATCH (i:Ingress)-[:ROUTES_TO]->(s:Service {name: $service_name}) RETURN i.name",
+          "condition": "has_ingress_parent AND error_is_from_LB",
+          "suggests_pattern": "Ingress Misconfiguration"
+        },
+        {
           "name": "check_istio_routing",
           "query": "MATCH (vs:VirtualService)-[:ROUTES_TRAFFIC_FOR]->(s:Service {name: $service_name}) OPTIONAL MATCH (dr:DestinationRule)-[:DEFINES_POLICY_FOR]->(s) RETURN vs.name, vs.http_routes, dr.subsets",
           "condition": "has_results AND subsets defined",
@@ -40,162 +39,85 @@
       "decision_logic": {
         "no_endpoints": "Service Selector Mismatch",
         "downstream_failing": "Cascading Failure",
+        "ingress_error": "Ingress Misconfiguration",
         "istio_configured": "VirtualService Subset Mismatch",
         "default": "Service Selector Mismatch"
       },
       "initial_investigation_steps": [
         "Check if the failing service has endpoints (SELECTS_PODS edges)",
         "Check for FAILED_CALL_TO relationships to downstream services",
-        "For Istio environments: Check VirtualService and DestinationRule configuration",
-        "Determine if this is a network-layer (no response) or application-layer (error response) issue"
+        "Determine if the error is coming from the Ingress/LoadBalancer or the Pod itself",
+        "For Istio environments: Check VirtualService and DestinationRule configuration"
       ]
     },
     {
       "tier": 1,
-      "name": "404 Not Found Errors",
+      "name": "High Latency",
       "symptom_keywords": [
-        "404",
-        "not found",
-        "no route",
-        "path not found",
-        "route mismatch",
-        "NR"
+        "slow", "latency", "P99", "P95", "timeout", "response time",
+        "performance", "degraded", "context deadline exceeded"
       ],
-      "description": "Triage pattern for 404 errors. Discriminates between missing routes, incorrect path matching, and missing services.",
+      "description": "Triage pattern for latency. Uses Tracing and Metrics to distinguish between Network, Downstream, or Local CPU issues.",
       "discriminating_queries": [
         {
-          "name": "check_httproute_exists",
-          "query": "MATCH (hr:HTTPRoute)-[:ROUTES_TO]->(s:Service {name: $service_name}) RETURN hr.name, hr.hostnames, hr.matches",
-          "condition": "no_results",
-          "suggests_pattern": "HTTPRoute Misconfiguration"
+          "name": "check_trace_network_lag",
+          "query": "MATCH (s:Span)-[:CHILD_OF]->(parent:Span) WHERE s.service_name = $service_name AND (s.start_time - parent.start_time) > 100 RETURN s.trace_id, (s.start_time - parent.start_time) as network_lag",
+          "condition": "high_network_lag",
+          "suggests_pattern": "NetworkPolicy Block"
         },
         {
-          "name": "check_service_exists",
-          "query": "MATCH (s:Service {name: $service_name})-[:IN_NAMESPACE]->(ns:Namespace {name: $namespace}) RETURN s.name, s.ports",
-          "condition": "no_results",
-          "suggests_pattern": "Service Selector Mismatch"
+          "name": "check_downstream_latency",
+          "query": "MATCH (s:Service {name: $service_name})-[c:CALLS]->(downstream:Service) RETURN downstream.name, c.avg_latency_ms, c.p99_latency_ms ORDER BY c.p99_latency_ms DESC",
+          "condition": "downstream_slow",
+          "suggests_pattern": "Cascading Failure"
         },
         {
-          "name": "check_virtualservice",
-          "query": "MATCH (vs:VirtualService)-[:ROUTES_TRAFFIC_FOR]->(s:Service {name: $service_name}) RETURN vs.name, vs.http_routes",
-          "condition": "no_results OR route_mismatch",
-          "suggests_pattern": "VirtualService Subset Mismatch"
+          "name": "check_cpu_throttling",
+          "query": "MATCH (s:Service {name: $service_name})-[:SELECTS_PODS]->(p:Pod) WHERE p.cpu_throttled_seconds > 5 RETURN p.name, p.cpu_throttled_seconds",
+          "condition": "throttling_detected",
+          "suggests_pattern": "Pod Resource Exhaustion"
+        },
+        {
+          "name": "check_hpa_saturation",
+          "query": "MATCH (h:HPA)-[:SCALES]->(d:Deployment)-[:MANAGES]->(rs:ReplicaSet)-[:MANAGES]->(p:Pod) WHERE p.name CONTAINS $service_name RETURN h.current_replicas, h.max_replicas",
+          "condition": "current_replicas == max_replicas",
+          "suggests_pattern": "HPA Flapping / Saturation"
         }
       ],
       "decision_logic": {
-        "no_route": "HTTPRoute Misconfiguration",
-        "no_service": "Service Selector Mismatch",
-        "istio_route_missing": "VirtualService Subset Mismatch",
-        "default": "HTTPRoute Misconfiguration"
+        "downstream_latency": "Cascading Failure",
+        "local_resource_pressure": "Pod Resource Exhaustion",
+        "max_replicas_reached": "HPA Flapping / Saturation",
+        "trace_gap_found": "NetworkPolicy Block",
+        "default": "Cascading Failure"
       },
       "initial_investigation_steps": [
-        "Check if HTTPRoute or VirtualService exists for the requested path",
-        "Verify the target Service exists and has the expected name",
-        "Check path matching rules (exact, prefix, regex)",
-        "Verify Gateway listener configuration matches the route"
-      ]
-    },
-    {
-      "tier": 1,
-      "name": "429 Rate Limited",
-      "symptom_keywords": [
-        "429",
-        "rate limit",
-        "too many requests",
-        "throttled",
-        "quota exceeded"
-      ],
-      "description": "Triage pattern for rate limiting. Discriminates between single-caller overload and shared dependency bottleneck.",
-      "discriminating_queries": [
-        {
-          "name": "check_callers_to_target",
-          "query": "MATCH (caller:Service)-[c:FAILED_CALL_TO]->(target:Service {name: $service_name}) WHERE c.status_code = '429' RETURN caller.name, c.last_observed, c.error_count ORDER BY c.last_observed DESC",
-          "condition": "multiple_callers",
-          "suggests_pattern": "Diamond Dependency Bottleneck"
-        },
-        {
-          "name": "aggregate_by_target",
-          "query": "MATCH (caller:Service)-[c:FAILED_CALL_TO]->(target:Service) WHERE c.status_code = '429' WITH target, collect(caller.name) as callers, count(caller) as caller_count WHERE caller_count > 1 RETURN target.name, callers, caller_count ORDER BY caller_count DESC",
-          "condition": "has_results",
-          "suggests_pattern": "Diamond Dependency Bottleneck"
-        }
-      ],
-      "decision_logic": {
-        "multiple_callers_same_target": "Diamond Dependency Bottleneck",
-        "single_caller": "Pod Resource Exhaustion",
-        "default": "Diamond Dependency Bottleneck"
-      },
-      "initial_investigation_steps": [
-        "Identify which service is returning 429s",
-        "Count how many different callers are seeing 429s from the same target",
-        "If multiple callers to same target: shared bottleneck (fan-in pattern)",
-        "Check target service capacity and current load"
-      ]
-    },
-    {
-      "tier": 1,
-      "name": "401/403 Authentication Errors",
-      "symptom_keywords": [
-        "401",
-        "403",
-        "unauthorized",
-        "forbidden",
-        "authentication failed",
-        "access denied",
-        "permission denied",
-        "invalid credentials",
-        "token expired"
-      ],
-      "description": "Triage pattern for authentication/authorization failures. Discriminates between credential issues and permission problems.",
-      "discriminating_queries": [
-        {
-          "name": "check_shared_secrets",
-          "query": "MATCH (p:Pod)-[:USES_SECRET]->(s:Secret) WHERE p.name CONTAINS $service_name RETURN s.name, s.namespace, s.updated_at, collect(p.name) as affected_pods",
-          "condition": "secret_recently_updated",
-          "suggests_pattern": "Secret Rotation Cascade"
-        },
-        {
-          "name": "check_multiple_services_affected",
-          "query": "MATCH (s:Secret)<-[:USES_SECRET]-(p:Pod) WHERE s.name = $secret_name RETURN p.name, p.namespace, p.restart_count ORDER BY p.restart_count DESC",
-          "condition": "multiple_pods_affected",
-          "suggests_pattern": "Secret Rotation Cascade"
-        }
-      ],
-      "decision_logic": {
-        "secret_recently_changed": "Secret Rotation Cascade",
-        "multiple_services_auth_failure": "Secret Rotation Cascade",
-        "single_service": "Configuration Error",
-        "default": "Secret Rotation Cascade"
-      },
-      "initial_investigation_steps": [
-        "Identify which services are seeing auth failures",
-        "Check if multiple services are failing auth simultaneously",
-        "Query USES_SECRET edges to find shared credentials",
-        "Check Secret updated_at timestamps for recent changes",
-        "Correlate auth failure start time with Secret update time"
+        "Query Jaeger: Compare Client Span Duration vs Server Span Duration (Network Gap)",
+        "Query Prometheus: Check CPU Throttling metrics for the pods",
+        "Check CALLS relationships for slow downstream dependencies",
+        "Check HPA status for saturation"
       ]
     },
     {
       "tier": 1,
       "name": "Pod Crashes and Restarts",
       "symptom_keywords": [
-        "CrashLoopBackOff",
-        "OOMKilled",
-        "restart",
-        "crash",
-        "Error",
-        "ImagePullBackOff",
-        "ErrImagePull",
-        "ContainerCreating",
-        "terminated"
+        "CrashLoopBackOff", "OOMKilled", "restart", "crash", "Error",
+        "ImagePullBackOff", "ErrImagePull", "ContainerCreating", "terminated"
       ],
-      "description": "Triage pattern for pod failures. Discriminates between resource exhaustion, configuration errors, and image issues.",
+      "description": "Triage pattern for pod failures. Discriminates between resource exhaustion, configuration errors, and storage/image issues.",
       "discriminating_queries": [
         {
           "name": "check_oom",
           "query": "MATCH (p:Pod {name: $pod_name}) RETURN p.status, p.restart_reason, p.memory_limit, p.memory_usage",
           "condition": "restart_reason == 'OOMKilled'",
           "suggests_pattern": "Pod Resource Exhaustion"
+        },
+        {
+          "name": "check_storage_stuck",
+          "query": "MATCH (p:Pod {name: $pod_name})-[:MOUNTS]->(pvc:PersistentVolumeClaim) WHERE p.status == 'ContainerCreating' RETURN pvc.status",
+          "condition": "pod_stuck_creating_with_pvc",
+          "suggests_pattern": "Volume Attachment Stuck"
         },
         {
           "name": "check_image_pull",
@@ -208,41 +130,117 @@
           "query": "MATCH (p:Pod)-[:USES_CONFIG]->(cm:ConfigMap) WHERE p.name = $pod_name RETURN cm.name, cm.updated_at",
           "condition": "configmap_recently_updated",
           "suggests_pattern": "ConfigMap Propagation"
-        },
-        {
-          "name": "check_deployment_rollout",
-          "query": "MATCH (d:Deployment)-[:MANAGES]->(rs:ReplicaSet)-[:MANAGES]->(p:Pod) WHERE p.name = $pod_name RETURN d.name, rs.name, rs.desired_replicas, rs.current_replicas, p.status ORDER BY rs.created_at DESC",
-          "condition": "multiple_replicasets",
-          "suggests_pattern": "Deployment Rollout Stuck"
         }
       ],
       "decision_logic": {
         "oom_killed": "Pod Resource Exhaustion",
+        "stuck_mounting": "Volume Attachment Stuck",
         "image_pull_error": "Deployment Rollout Stuck",
         "config_changed": "ConfigMap Propagation",
-        "rollout_in_progress": "Deployment Rollout Stuck",
         "default": "Configuration Error"
       },
       "initial_investigation_steps": [
-        "Check Pod events for specific error messages (OOMKilled, ImagePullBackOff, etc.)",
-        "If OOMKilled: investigate memory usage and limits",
-        "If ImagePullBackOff: check image name and pull credentials",
-        "If CrashLoopBackOff: check for recent ConfigMap/Secret changes",
-        "Check if this is part of a Deployment rollout (multiple ReplicaSets)"
+        "Check Pod events for OOMKilled or MountFailed",
+        "If ContainerCreating > 5min, check for Volume Attachment issues",
+        "If CrashLoopBackOff, check logs and recent ConfigMap changes"
+      ]
+    },
+    {
+      "tier": 1,
+      "name": "404 Not Found Errors",
+      "symptom_keywords": [
+        "404", "not found", "no route", "path not found", "route mismatch"
+      ],
+      "description": "Triage pattern for 404 errors. Discriminates between missing routes, incorrect path matching, and missing services.",
+      "discriminating_queries": [
+        {
+          "name": "check_ingress_rules",
+          "query": "MATCH (i:Ingress)-[:ROUTES_TO]->(s:Service {name: $service_name}) RETURN i.host, i.paths",
+          "condition": "ingress_exists",
+          "suggests_pattern": "Ingress Misconfiguration"
+        },
+        {
+          "name": "check_httproute_exists",
+          "query": "MATCH (hr:HTTPRoute)-[:ROUTES_TO]->(s:Service {name: $service_name}) RETURN hr.name, hr.hostnames, hr.matches",
+          "condition": "no_results",
+          "suggests_pattern": "HTTPRoute Misconfiguration"
+        },
+        {
+          "name": "check_service_exists",
+          "query": "MATCH (s:Service {name: $service_name})-[:IN_NAMESPACE]->(ns:Namespace {name: $namespace}) RETURN s.name, s.ports",
+          "condition": "no_results",
+          "suggests_pattern": "Service Selector Mismatch"
+        }
+      ],
+      "decision_logic": {
+        "ingress_mismatch": "Ingress Misconfiguration",
+        "no_route": "HTTPRoute Misconfiguration",
+        "no_service": "Service Selector Mismatch",
+        "default": "HTTPRoute Misconfiguration"
+      },
+      "initial_investigation_steps": [
+        "Check if this is an internal (Service-to-Service) or external (Ingress-to-Service) request",
+        "Verify if HTTPRoute or Ingress exists for the requested path",
+        "Verify the target Service exists"
+      ]
+    },
+    {
+      "tier": 1,
+      "name": "429 Rate Limited",
+      "symptom_keywords": [
+        "429", "rate limit", "too many requests", "throttled", "quota exceeded"
+      ],
+      "description": "Triage pattern for rate limiting. Discriminates between single-caller overload and shared dependency bottleneck.",
+      "discriminating_queries": [
+        {
+          "name": "check_callers_to_target",
+          "query": "MATCH (caller:Service)-[c:FAILED_CALL_TO]->(target:Service {name: $service_name}) WHERE c.status_code = '429' RETURN caller.name, c.last_observed, c.error_count ORDER BY c.last_observed DESC",
+          "condition": "multiple_callers",
+          "suggests_pattern": "Diamond Dependency Bottleneck"
+        }
+      ],
+      "decision_logic": {
+        "multiple_callers_same_target": "Diamond Dependency Bottleneck",
+        "single_caller": "Pod Resource Exhaustion",
+        "default": "Diamond Dependency Bottleneck"
+      },
+      "initial_investigation_steps": [
+        "Identify which service is returning 429s",
+        "Count how many different callers are seeing 429s from the same target",
+        "If multiple callers to same target: shared bottleneck (fan-in pattern)"
+      ]
+    },
+    {
+      "tier": 1,
+      "name": "401/403 Authentication Errors",
+      "symptom_keywords": [
+        "401", "403", "unauthorized", "forbidden", "access denied", "token expired"
+      ],
+      "description": "Triage pattern for auth failures. Discriminates between credential issues and permission problems.",
+      "discriminating_queries": [
+        {
+          "name": "check_shared_secrets",
+          "query": "MATCH (p:Pod)-[:USES_SECRET]->(s:Secret) WHERE p.name CONTAINS $service_name RETURN s.name, s.namespace, s.updated_at, collect(p.name) as affected_pods",
+          "condition": "secret_recently_updated",
+          "suggests_pattern": "Secret Rotation Cascade"
+        }
+      ],
+      "decision_logic": {
+        "secret_recently_changed": "Secret Rotation Cascade",
+        "default": "Secret Rotation Cascade"
+      },
+      "initial_investigation_steps": [
+        "Check if multiple services are failing auth simultaneously",
+        "Check Secret updated_at timestamps for recent changes"
       ]
     },
     {
       "tier": 1,
       "name": "Multi-Service Simultaneous Failures",
       "symptom_keywords": [
-        "multiple services",
-        "widespread",
-        "many pods",
-        "cluster-wide",
-        "several namespaces",
-        "simultaneous failures"
+        "multiple services", "widespread", "cluster-wide", "simultaneous failures"
       ],
-      "description": "Triage pattern when multiple unrelated services fail at once. Discriminates between shared infrastructure, shared config, and shared dependency.",
+      "description": "Discriminates between shared infrastructure (Nodes) or shared config.",
       "discriminating_queries": [
         {
           "name": "check_shared_node",
@@ -251,78 +249,20 @@
           "suggests_pattern": "Node Resource Contention"
         },
         {
-          "name": "check_shared_configmap",
-          "query": "MATCH (p:Pod)-[:USES_CONFIG]->(cm:ConfigMap) WHERE p.name IN $pod_names WITH cm, collect(p.name) as pods, count(p) as pod_count WHERE pod_count > 1 RETURN cm.name, cm.updated_at, pods, pod_count ORDER BY pod_count DESC",
-          "condition": "pods_share_config",
-          "suggests_pattern": "ConfigMap Propagation"
-        },
-        {
-          "name": "check_shared_dependency",
-          "query": "MATCH (caller:Service)-[c:FAILED_CALL_TO]->(target:Service) WITH target, collect(caller.name) as callers, count(caller) as caller_count WHERE caller_count > 2 RETURN target.name, callers, caller_count ORDER BY caller_count DESC",
-          "condition": "shared_failing_dependency",
-          "suggests_pattern": "Diamond Dependency Bottleneck"
-        },
-        {
           "name": "check_node_events",
-          "query": "MATCH (e:K8sEvent)-[:INVOLVES]->(n:Node) WHERE e.reason IN ['NodeNotReady', 'Draining', 'DiskPressure', 'MemoryPressure', 'EvictionThresholdMet'] RETURN n.name, e.reason, e.message, e.last_timestamp ORDER BY e.last_timestamp DESC LIMIT 10",
+          "query": "MATCH (e:K8sEvent)-[:INVOLVES]->(n:Node) WHERE e.reason IN ['NodeNotReady', 'Draining', 'DiskPressure', 'MemoryPressure'] RETURN n.name, e.reason",
           "condition": "node_issues_found",
           "suggests_pattern": "Node Drain Impact"
         }
       ],
       "decision_logic": {
         "same_node": "Node Resource Contention",
-        "same_config": "ConfigMap Propagation",
-        "same_dependency": "Diamond Dependency Bottleneck",
         "node_draining": "Node Drain Impact",
         "default": "Node Resource Contention"
       },
       "initial_investigation_steps": [
-        "Identify all affected pods/services",
-        "Check if pods share a common Node (SCHEDULED_ON)",
-        "Check if pods share a common ConfigMap (USES_CONFIG)",
-        "Check if services call a common failing dependency (FAILED_CALL_TO)",
-        "Check K8sEvents for Node-level issues (drain, pressure, eviction)"
-      ]
-    },
-    {
-      "tier": 1,
-      "name": "High Latency",
-      "symptom_keywords": [
-        "slow",
-        "latency",
-        "P99",
-        "P95",
-        "timeout",
-        "response time",
-        "performance",
-        "degraded"
-      ],
-      "description": "Triage pattern for latency issues. Discriminates between local service issues and dependency chain problems.",
-      "discriminating_queries": [
-        {
-          "name": "check_downstream_latency",
-          "query": "MATCH (s:Service {name: $service_name})-[c:CALLS]->(downstream:Service) RETURN downstream.name, c.avg_latency_ms, c.p99_latency_ms ORDER BY c.p99_latency_ms DESC",
-          "condition": "downstream_slow",
-          "suggests_pattern": "Cascading Failure"
-        },
-        {
-          "name": "check_pod_resources",
-          "query": "MATCH (s:Service {name: $service_name})-[:SELECTS_PODS]->(p:Pod) RETURN p.name, p.cpu_usage, p.cpu_limit, p.memory_usage, p.memory_limit",
-          "condition": "resource_pressure",
-          "suggests_pattern": "Pod Resource Exhaustion"
-        }
-      ],
-      "decision_logic": {
-        "downstream_latency": "Cascading Failure",
-        "local_resource_pressure": "Pod Resource Exhaustion",
-        "default": "Cascading Failure"
-      },
-      "initial_investigation_steps": [
-        "Identify which service is slow",
-        "Check CALLS relationships to downstream services for latency data",
-        "Check pod resource utilization (CPU/memory pressure)",
-        "If downstream is slow, traverse the dependency chain to find the bottleneck",
-        "For trace data: aggregate span durations by service to find slowest"
+        "Check if failing pods share a common Node",
+        "Check K8sEvents for Node-level issues"
       ]
     },
     {
@@ -331,25 +271,43 @@
       "root_cause_resource_type": "Service",
       "root_cause_issue_type": "selector_mismatch",
       "symptom_keywords": [
-        "no endpoints",
-        "connection refused",
-        "service unavailable"
+        "no endpoints", "connection refused", "service unavailable"
       ],
-      "description": "Service exists, pods exist and are Running, but Service selector doesn't match Pod labels resulting in zero endpoints.",
+      "description": "Service exists and Pods exist, but Selector labels or Ports do not match.",
       "investigation_steps": [
         "Query Service selector: MATCH (s:Service {name: $service_name}) RETURN s.selector",
-        "Query pods in same namespace: MATCH (p:Pod)-[:IN_NAMESPACE]->(ns:Namespace {name: $namespace}) WHERE p.name CONTAINS $service_name RETURN p.name, p.labels",
-        "Compare Service.selector with Pod.labels to find mismatch",
-        "Check if there was a recent Deployment update that changed labels",
-        "Verify SELECTS_PODS edge count is 0"
+        "Query pods in namespace: MATCH (p:Pod)-[:IN_NAMESPACE]->(ns:Namespace) WHERE p.name CONTAINS $service_name RETURN p.labels",
+        "Compare Service.selector with Pod.labels",
+        "Verify Port Mapping: MATCH (s:Service {name: $service_name}), (p:Pod) RETURN s.target_ports, p.container_ports",
+        "Check if SELECTS_PODS edge count is 0"
       ],
-      "diagnosis_guidance": "The Service selector must exactly match Pod labels for endpoints to be created. Common causes: label typos, version label mismatches after rollout, copy-paste errors. The Service works but has no backends to send traffic to.",
+      "diagnosis_guidance": "If labels match, check the Ports. A common error is Service TargetPort pointing to 80 while Container listens on 8080. If both match, check if pods are in 'NotReady' state.",
       "recommendations": [
         "Fix Service selector to match Pod labels",
-        "Or update Deployment template to include missing labels",
-        "Verify endpoints appear after fix: kubectl get endpoints $service_name",
-        "Add label validation to CI/CD pipeline",
-        "Consider using label selectors without version for stable service discovery"
+        "Align Service 'targetPort' with Pod 'containerPort'",
+        "Verify endpoints appear: kubectl get endpoints $service_name"
+      ]
+    },
+    {
+      "tier": 2,
+      "name": "Ingress Misconfiguration",
+      "root_cause_resource_type": "Ingress",
+      "root_cause_issue_type": "ingress_backend_error",
+      "symptom_keywords": [
+        "502 Bad Gateway", "404 Not Found (Nginx)", "certificate error", "default backend - 404"
+      ],
+      "description": "Traffic reaches the Ingress Controller but fails to route to the Service/Pod.",
+      "investigation_steps": [
+        "Check Ingress Backend definition: MATCH (i:Ingress {name: $ingress_name})-[:ROUTES_TO]->(s:Service) RETURN i.rules, s.name",
+        "Verify TLS Secret existence and validity",
+        "Check Ingress Controller logs for the specific request ID",
+        "Validate Ingress annotations (rewrite-target, ssl-redirect)"
+      ],
+      "diagnosis_guidance": "If you see a 'Default Backend' 404, Ingress works but your Host/Path rule didn't match. If 502, Ingress found the Service IP but connection was refused (Pod dead or port wrong).",
+      "recommendations": [
+        "(Platform) Check Ingress Controller logs for reload errors",
+        "(Dev) Verify Ingress 'host' matches the URL being requested",
+        "(Dev) Check if the Service port matches the Ingress backend port"
       ]
     },
     {
@@ -358,28 +316,19 @@
       "root_cause_resource_type": "Service",
       "root_cause_issue_type": "cascading_failure",
       "symptom_keywords": [
-        "cascading failure",
-        "downstream errors",
-        "dependency failure",
-        "propagating failures",
-        "chain reaction"
+        "cascading failure", "dependency failure", "chain reaction"
       ],
-      "description": "A leaf service failure propagates upstream through the dependency chain, causing multiple services to fail. The alerted service is a symptom, not the root cause.",
+      "description": "A leaf service failure propagates upstream. The alerted service is a symptom.",
       "investigation_steps": [
-        "Start at alerted service, query downstream: MATCH (s:Service {name: $service_name})-[c:CALLS|FAILED_CALL_TO]->(downstream:Service) WHERE c.status_code =~ '5..' RETURN downstream.name, c.status_code",
-        "Follow the chain recursively (depth-first) until finding a service with no failing downstream calls",
-        "The leaf service (no downstream failures) is the root cause",
-        "Verify leaf service status and check its specific issue",
-        "Assess blast radius by counting affected upstream services"
+        "Start at alerted service, query downstream: MATCH (s:Service {name: $service_name})-[c:CALLS]->(downstream:Service) WHERE c.error_rate > 0.1 RETURN downstream.name",
+        "Follow the chain recursively until finding a service with NO failing downstream calls",
+        "The leaf service is the root cause"
       ],
-      "diagnosis_guidance": "Errors cascade UPSTREAM. Follow calls DOWNSTREAM to find root cause. The service that is failing but has NO failing dependencies is the origin. Check timestamps: which service failed first? Leaf services typically show application errors, not 'downstream unavailable' messages.",
+      "diagnosis_guidance": "Errors cascade UPSTREAM. Follow calls DOWNSTREAM. The failing service with healthy dependencies is the culprit.",
       "recommendations": [
-        "Fix the root cause issue in the leaf service first",
-        "Implement circuit breakers to prevent cascade amplification",
-        "Add timeout and retry policies with exponential backoff",
-        "Implement graceful degradation for non-critical dependencies",
-        "Add health checks and readiness probes",
-        "Document service dependencies and criticality levels"
+        "Fix the root cause in the leaf service",
+        "Implement circuit breakers",
+        "Implement graceful degradation"
       ]
     },
     {
@@ -388,215 +337,60 @@
       "root_cause_resource_type": "Pod",
       "root_cause_issue_type": "resource_exhaustion",
       "symptom_keywords": [
-        "OOMKilled",
-        "CPU throttling",
-        "eviction",
-        "out of memory"
+        "OOMKilled", "CPU throttling", "eviction"
       ],
-      "description": "Pod is being killed or throttled due to exceeding resource limits or node-level resource pressure.",
+      "description": "Pod killed (OOM) or throttled (CPU) due to limits.",
       "investigation_steps": [
-        "Check Pod events: MATCH (p:Pod {name: $pod_name}) RETURN p.status, p.restart_reason, p.restart_count",
-        "Spawn metrics investigation for memory and CPU trends",
-        "Compare actual usage against requests and limits",
-        "Check if limits are too restrictive or if there's a memory leak",
-        "For OOMKilled: check memory_usage vs memory_limit at time of kill"
+        "Check Pod events for OOMKilled",
+        "Query Prometheus: Rate of CPU Throttling > 1s per minute",
+        "Compare actual usage vs requests/limits"
       ],
-      "diagnosis_guidance": "OOMKilled means the container exceeded its memory limit. CPU throttling means it's hitting CPU limits. Distinguish between: 1) limits too low (increase them), 2) application bug causing excessive usage (fix the app), 3) unexpected load spike (scale out).",
+      "diagnosis_guidance": "OOMKilled = Memory Limit. Throttling = CPU Limit. If throttling matches latency spikes, CPU is the bottleneck.",
       "recommendations": [
-        "Increase resource limits based on actual usage patterns",
-        "Identify and fix memory leaks or CPU-intensive operations",
-        "Scale horizontally with more replicas",
-        "Implement HPA for automatic scaling",
-        "Add resource monitoring and alerts for early detection"
+        "Increase resource limits",
+        "Investigate application memory leaks",
+        "Scale horizontally (HPA)"
       ]
     },
     {
       "tier": 2,
-      "name": "Configuration Error",
-      "root_cause_resource_type": "Pod",
-      "root_cause_issue_type": "configuration_error",
+      "name": "HPA Flapping / Saturation",
+      "root_cause_resource_type": "HorizontalPodAutoscaler",
+      "root_cause_issue_type": "scaling_lag",
       "symptom_keywords": [
-        "config error",
-        "mount failed",
-        "invalid configuration",
-        "missing secret",
-        "missing configmap"
+        "intermittent slowness", "load spike", "max replicas reached"
       ],
-      "description": "Pod fails to start due to configuration issues: missing ConfigMap/Secret references, invalid volume mounts, or bad application config.",
+      "description": "Service oscillates between scaling up/down or hits max replicas.",
       "investigation_steps": [
-        "Check Pod events for specific error messages",
-        "Verify ConfigMap and Secret references exist: MATCH (p:Pod)-[:USES_CONFIG|USES_SECRET]->(ref) WHERE p.name = $pod_name RETURN ref.name, ref.namespace, labels(ref)",
-        "Check volume mount paths and permissions",
-        "Review application startup logs for configuration errors",
-        "Verify environment variable references are correct"
+        "Check HPA status: MATCH (h:HPA)-[:SCALES]->(d:Deployment {name: $deployment_name}) RETURN h.current_replicas, h.max_replicas",
+        "Check for 'ScalingLimited' events",
+        "Correlate latency spikes with HPA scale-up events (cold start)"
       ],
-      "diagnosis_guidance": "CrashLoopBackOff with quick restarts usually indicates config issues. The container starts but fails validation or can't find required resources. Check Pod events first - Kubernetes often tells you exactly what's wrong.",
+      "diagnosis_guidance": "If CurrentReplicas == MaxReplicas, service is under-provisioned (Cap Exceeded). If Replicas oscillate rapidly, it is 'Flapping'.",
       "recommendations": [
-        "Fix missing or incorrect ConfigMap/Secret references",
-        "Correct volume mount paths or add missing volumes",
-        "Validate configuration syntax and required fields",
-        "Use init containers to validate configuration before main container starts",
-        "Add configuration validation to CI/CD pipeline"
+        "(Platform) Increase HPA 'maxReplicas' limit",
+        "(Dev) Tune HPA 'scaleDown' stabilization window",
+        "(Dev) Optimize application startup time"
       ]
     },
     {
       "tier": 2,
-      "name": "HTTPRoute Misconfiguration",
-      "root_cause_resource_type": "HTTPRoute",
-      "root_cause_issue_type": "routing_misconfiguration",
+      "name": "Volume Attachment Stuck",
+      "root_cause_resource_type": "PersistentVolume",
+      "root_cause_issue_type": "volume_node_affinity",
       "symptom_keywords": [
-        "404",
-        "no route",
-        "path not found"
+        "ContainerCreating", "Multi-Attach error", "Volume already used"
       ],
-      "description": "HTTPRoute is missing, has incorrect path matching, or doesn't properly reference the backend Service.",
+      "description": "Pod cannot start because volume is attached to a dead node.",
       "investigation_steps": [
-        "Check if HTTPRoute exists: MATCH (hr:HTTPRoute)-[:ROUTES_TO]->(s:Service {name: $service_name}) RETURN hr.name, hr.hostnames, hr.matches",
-        "Verify path matching rules cover the requested paths",
-        "Check Gateway listener configuration matches HTTPRoute",
-        "Verify backend Service reference is correct",
-        "Check for conflicting routes with overlapping paths"
+        "Check VolumeAttachments: MATCH (va:VolumeAttachment) WHERE va.status != 'Attached' RETURN va.name, va.node",
+        "Find the Node the volume is attached to vs where Pod is scheduled",
+        "Check for 'Multi-Attach' errors in events"
       ],
-      "diagnosis_guidance": "404 with no matching route means the Gateway can't find a path to the backend. Check the 'negative space' - what routes are MISSING that should exist? Path matching is order-sensitive and type-sensitive (exact vs prefix vs regex).",
+      "diagnosis_guidance": "Common when a Node crashes. The Cloud Provider thinks volume is still attached to the dead node.",
       "recommendations": [
-        "Create HTTPRoute for the missing path",
-        "Fix path matching rules to cover required paths",
-        "Correct backend Service references",
-        "Fix Gateway listener configuration",
-        "Document route architecture and ownership"
-      ]
-    },
-    {
-      "tier": 2,
-      "name": "VirtualService Subset Mismatch",
-      "root_cause_resource_type": "VirtualService",
-      "root_cause_issue_type": "subset_mismatch",
-      "symptom_keywords": [
-        "no healthy upstream",
-        "UH",
-        "subset",
-        "envoy 503"
-      ],
-      "description": "Istio VirtualService routes traffic to a subset that has no matching pods. The DestinationRule defines the subset labels, but no pods have those labels.",
-      "investigation_steps": [
-        "Get VirtualService routing: MATCH (vs:VirtualService)-[:ROUTES_TRAFFIC_FOR]->(s:Service {name: $service_name}) RETURN vs.name, vs.http_routes",
-        "Extract subset name from route destination",
-        "Get DestinationRule subset definition: MATCH (dr:DestinationRule)-[:DEFINES_POLICY_FOR]->(s:Service {name: $service_name}) RETURN dr.subsets",
-        "Count pods matching subset labels: MATCH (s:Service {name: $service_name})-[:SELECTS_PODS]->(p:Pod) WHERE p.labels CONTAINS $subset_label RETURN count(p)",
-        "If count is 0, the subset has no backing pods"
-      ],
-      "diagnosis_guidance": "Envoy 'UH' (No healthy upstream) flag with Istio often means subset mismatch. Correlate 3 layers: VirtualService (which subset?) → DestinationRule (what labels?) → Pods (do any match?). This commonly happens after deployments when version labels change.",
-      "recommendations": [
-        "Deploy pods with the required subset labels",
-        "Update VirtualService to route to an existing subset",
-        "Remove subset routing to use all available pods",
-        "Ensure Deployment labels match DestinationRule subset definitions",
-        "Add subset validation to deployment pipeline"
-      ]
-    },
-    {
-      "tier": 2,
-      "name": "Node Resource Contention",
-      "root_cause_resource_type": "Node",
-      "root_cause_issue_type": "noisy_neighbor",
-      "symptom_keywords": [
-        "throttling",
-        "multiple pods slow",
-        "node pressure"
-      ],
-      "description": "Multiple pods on the same node are degraded because one pod (noisy neighbor) is consuming excessive resources, causing contention.",
-      "investigation_steps": [
-        "Find common node: MATCH (p:Pod)-[:SCHEDULED_ON]->(n:Node) WHERE p.name IN $affected_pod_names RETURN n.name, collect(p.name) as pods",
-        "Get all pods on that node: MATCH (p:Pod)-[:SCHEDULED_ON]->(n:Node {name: $node_name}) RETURN p.name, p.namespace, p.cpu_usage, p.cpu_limit, p.memory_usage ORDER BY p.cpu_usage DESC",
-        "Calculate total resource pressure: MATCH (p:Pod)-[:SCHEDULED_ON]->(n:Node {name: $node_name}) RETURN n.cpu_capacity, sum(p.cpu_request) as total_requested",
-        "Identify the outlier pod consuming most resources"
-      ],
-      "diagnosis_guidance": "When multiple unrelated services degrade simultaneously, check if they share infrastructure. The pod with highest resource usage relative to others is likely the noisy neighbor. Node-level metrics show overall pressure; pod-level metrics identify the culprit.",
-      "recommendations": [
-        "Move the noisy neighbor pod to a different node (add anti-affinity rules)",
-        "Add resource limits to the noisy neighbor",
-        "Use pod priority and preemption for critical workloads",
-        "Implement pod disruption budgets",
-        "Consider dedicated nodes for resource-intensive workloads"
-      ]
-    },
-    {
-      "tier": 2,
-      "name": "ConfigMap Propagation",
-      "root_cause_resource_type": "ConfigMap",
-      "root_cause_issue_type": "config_propagation",
-      "symptom_keywords": [
-        "config change",
-        "multiple crashes after update",
-        "bad configuration"
-      ],
-      "description": "A ConfigMap update with bad values propagates to multiple pods, causing them to crash or malfunction after the config is mounted.",
-      "investigation_steps": [
-        "Find shared ConfigMap: MATCH (p:Pod)-[:USES_CONFIG]->(cm:ConfigMap) WHERE p.name IN $affected_pod_names WITH cm, collect(p.name) as pods RETURN cm.name, cm.namespace, cm.updated_at, pods",
-        "Check ConfigMap update timestamp vs pod crash times",
-        "Query all pods using that ConfigMap: MATCH (cm:ConfigMap {name: $configmap_name})<-[:USES_CONFIG]-(p:Pod) RETURN p.name, p.namespace, p.restart_count, p.last_restart_time",
-        "Check K8sEvents for ConfigMap changes"
-      ],
-      "diagnosis_guidance": "If multiple pods crash shortly after a ConfigMap update (within minutes), the new config values are likely invalid. ConfigMap propagation takes ~60 seconds for volume mounts. Correlation: if crash_time - configmap_updated_at < 5 minutes, likely related.",
-      "recommendations": [
-        "Revert ConfigMap to previous known-good values",
-        "Add configuration validation before applying changes",
-        "Use staged rollouts for config changes (canary one service first)",
-        "Implement config change auditing",
-        "Add application-level config validation on startup"
-      ]
-    },
-    {
-      "tier": 2,
-      "name": "Diamond Dependency Bottleneck",
-      "root_cause_resource_type": "Service",
-      "root_cause_issue_type": "fan_in_bottleneck",
-      "symptom_keywords": [
-        "429",
-        "rate limited",
-        "multiple callers failing"
-      ],
-      "description": "Multiple unrelated services all depend on the same downstream service, which becomes a bottleneck. Fan-in pattern where the shared dependency is overloaded.",
-      "investigation_steps": [
-        "Aggregate failures by TARGET: MATCH (caller:Service)-[c:FAILED_CALL_TO]->(target:Service) WHERE c.status_code IN ['429', '503'] WITH target, collect(caller.name) as callers, count(caller) as caller_count WHERE caller_count > 1 RETURN target.name, callers, caller_count ORDER BY caller_count DESC",
-        "Identify the bottleneck service (most callers with failures)",
-        "Check bottleneck service capacity: MATCH (s:Service {name: $bottleneck})-[:SELECTS_PODS]->(p:Pod) RETURN count(p) as replica_count, p.cpu_limit, p.memory_limit",
-        "Compare incoming request rate vs service capacity"
-      ],
-      "diagnosis_guidance": "Key insight: aggregate by TARGET service, not SOURCE. If 3+ different services are all failing calls to the same target, that target is the bottleneck. The individual callers aren't broken - they're all hitting the same overloaded dependency.",
-      "recommendations": [
-        "Scale the bottleneck service horizontally",
-        "Add caching layer in front of the bottleneck",
-        "Implement rate limiting per caller to ensure fair access",
-        "Add circuit breakers in callers to fail fast",
-        "Consider async patterns to reduce synchronous load"
-      ]
-    },
-    {
-      "tier": 2,
-      "name": "Shared PVC Exhaustion",
-      "root_cause_resource_type": "PersistentVolumeClaim",
-      "root_cause_issue_type": "storage_exhaustion",
-      "symptom_keywords": [
-        "disk full",
-        "write error",
-        "no space left",
-        "507"
-      ],
-      "description": "Multiple pods mount the same PVC (ReadWriteMany). One pod fills the disk, causing write errors in all pods sharing that storage.",
-      "investigation_steps": [
-        "Find shared PVC: MATCH (p:Pod)-[:MOUNTS]->(pvc:PersistentVolumeClaim) WHERE p.name IN $affected_pod_names WITH pvc, collect(p.name) as pods RETURN pvc.name, pvc.capacity, pods",
-        "Check PVC usage: MATCH (pvc:PersistentVolumeClaim {name: $pvc_name})-[:BOUND_TO]->(pv:PersistentVolume) RETURN pvc.capacity, pvc.used, pv.path",
-        "Find pod consuming most disk: MATCH (p:Pod)-[:MOUNTS]->(pvc:PersistentVolumeClaim {name: $pvc_name}) RETURN p.name, p.disk_usage ORDER BY p.disk_usage DESC",
-        "Identify which pod wrote the most data"
-      ],
-      "diagnosis_guidance": "HTTP 507 (Insufficient Storage) or gRPC ResourceExhausted with disk errors across multiple pods suggests shared storage exhaustion. The pod with highest disk_usage on the shared PVC is likely the culprit.",
-      "recommendations": [
-        "Increase PVC capacity",
-        "Clean up old data from the volume",
-        "Add per-pod storage quotas",
-        "Implement log rotation and data retention policies",
-        "Consider separate PVCs for heavy writers"
+        "(Platform) Force delete the dead pod: kubectl delete pod $pod --grace-period=0 --force",
+        "(Platform) Manually detach volume via Cloud Console"
       ]
     },
     {
@@ -605,24 +399,140 @@
       "root_cause_resource_type": "Deployment",
       "root_cause_issue_type": "rollout_stuck",
       "symptom_keywords": [
-        "rollout stuck",
-        "not progressing",
-        "ImagePullBackOff"
+        "rollout stuck", "ImagePullBackOff", "readiness probe failed"
       ],
-      "description": "Deployment rollout is stuck because new ReplicaSet pods can't start (usually ImagePullBackOff or CrashLoopBackOff), while old ReplicaSet keeps serving traffic.",
+      "description": "New ReplicaSet pods cannot start or become Ready.",
       "investigation_steps": [
-        "Get Deployment and ReplicaSets: MATCH (d:Deployment {name: $deployment_name})-[:MANAGES]->(rs:ReplicaSet) RETURN d.name, rs.name, rs.created_at, rs.desired_replicas, rs.current_replicas ORDER BY rs.created_at DESC",
-        "Compare old vs new ReplicaSet pod status: MATCH (d:Deployment {name: $deployment_name})-[:MANAGES]->(rs:ReplicaSet)-[:MANAGES]->(p:Pod) RETURN rs.name, rs.created_at, collect({pod: p.name, status: p.status, ready: p.ready}) as pods ORDER BY rs.created_at DESC",
-        "Check new ReplicaSet pods for specific errors",
-        "If ImagePullBackOff: verify image name and registry credentials"
+        "Compare old vs new ReplicaSet pod status",
+        "Check for ImagePullBackOff (Registry/Tag issue)",
+        "Check for Readiness Probe failures (App logic issue)",
+        "Verify Resource Quota usage in namespace"
       ],
-      "diagnosis_guidance": "Multiple ReplicaSets = rollout in progress. If the newer ReplicaSet has 0 ready pods while older one is healthy, the new version can't start. Check new RS pod status: ImagePullBackOff (bad image), CrashLoopBackOff (app issue), or Pending (scheduling issue).",
+      "diagnosis_guidance": "If Pod is 'Running' but not 'Ready', the app is failing the Readiness Probe. If 'ImagePullBackOff', the image is unreachable.",
       "recommendations": [
-        "Rollback: kubectl rollout undo deployment/$name",
-        "Fix image tag if ImagePullBackOff",
-        "Fix application if CrashLoopBackOff",
-        "Check image pull secrets if authentication issue",
-        "Add image validation to CI/CD pipeline"
+        "Rollback: kubectl rollout undo",
+        "Fix Readiness Probe path/port",
+        "Check application logs for startup crashes"
+      ]
+    },
+    {
+      "tier": 2,
+      "name": "Configuration Error",
+      "root_cause_resource_type": "Pod",
+      "root_cause_issue_type": "configuration_error",
+      "symptom_keywords": ["config error", "mount failed", "CreateContainerConfigError"],
+      "description": "Pod fails to start due to missing ConfigMap/Secret or invalid mounts.",
+      "investigation_steps": [
+        "Verify ConfigMap/Secret existence: MATCH (p:Pod)-[:USES_CONFIG]->(ref) RETURN ref.name",
+        "Check volume mount paths",
+        "Review app startup logs"
+      ],
+      "diagnosis_guidance": "CrashLoopBackOff on startup usually indicates config/env var issues.",
+      "recommendations": [
+        "Fix missing ConfigMap/Secret",
+        "Validate JSON/YAML syntax in config"
+      ]
+    },
+    {
+      "tier": 2,
+      "name": "HTTPRoute Misconfiguration",
+      "root_cause_resource_type": "HTTPRoute",
+      "root_cause_issue_type": "routing_misconfiguration",
+      "symptom_keywords": ["404", "no route"],
+      "description": "Gateway API HTTPRoute missing or mismatch.",
+      "investigation_steps": [
+        "Check if HTTPRoute exists",
+        "Verify path matching rules (Prefix vs Exact)",
+        "Verify backend Service reference"
+      ],
+      "diagnosis_guidance": "404 means Gateway can't find a path to backend.",
+      "recommendations": [
+        "Create/Fix HTTPRoute path matching",
+        "Correct backend Service reference"
+      ]
+    },
+    {
+      "tier": 2,
+      "name": "VirtualService Subset Mismatch",
+      "root_cause_resource_type": "VirtualService",
+      "root_cause_issue_type": "subset_mismatch",
+      "symptom_keywords": ["no healthy upstream", "UH", "subset"],
+      "description": "Istio routing to a subset with no pods.",
+      "investigation_steps": [
+        "Get VirtualService destination subset",
+        "Match with DestinationRule labels",
+        "Count pods with those labels"
+      ],
+      "diagnosis_guidance": "Envoy 'UH' often means subset mismatch.",
+      "recommendations": [
+        "Align DestinationRule labels with Pod labels",
+        "Update VirtualService to valid subset"
+      ]
+    },
+    {
+      "tier": 2,
+      "name": "Node Resource Contention",
+      "root_cause_resource_type": "Node",
+      "root_cause_issue_type": "noisy_neighbor",
+      "symptom_keywords": ["throttling", "node pressure"],
+      "description": "Noisy neighbor consuming node resources.",
+      "investigation_steps": [
+        "Identify common node for failing pods",
+        "Find pod with highest resource usage on that node"
+      ],
+      "diagnosis_guidance": "One pod with high usage causing others to starve.",
+      "recommendations": [
+        "Move noisy neighbor (Anti-Affinity)",
+        "Enforce resource limits"
+      ]
+    },
+    {
+      "tier": 2,
+      "name": "ConfigMap Propagation",
+      "root_cause_resource_type": "ConfigMap",
+      "root_cause_issue_type": "config_propagation",
+      "symptom_keywords": ["config change", "crash after update"],
+      "description": "Bad config pushed to running pods.",
+      "investigation_steps": [
+        "Correlate ConfigMap update time with Pod crash time"
+      ],
+      "diagnosis_guidance": "Crash within 5 mins of ConfigMap update is suspicious.",
+      "recommendations": [
+        "Revert ConfigMap",
+        "Implement config validation"
+      ]
+    },
+    {
+      "tier": 2,
+      "name": "Diamond Dependency Bottleneck",
+      "root_cause_resource_type": "Service",
+      "root_cause_issue_type": "fan_in_bottleneck",
+      "symptom_keywords": ["429", "multiple callers failing"],
+      "description": "Shared dependency overloaded by multiple callers.",
+      "investigation_steps": [
+        "Aggregate failures by TARGET service"
+      ],
+      "diagnosis_guidance": "If multiple unrelated services fail calling the SAME target, target is bottleneck.",
+      "recommendations": [
+        "Scale bottleneck service",
+        "Implement rate limiting"
+      ]
+    },
+    {
+      "tier": 2,
+      "name": "Shared PVC Exhaustion",
+      "root_cause_resource_type": "PersistentVolumeClaim",
+      "root_cause_issue_type": "storage_exhaustion",
+      "symptom_keywords": ["disk full", "507", "write error"],
+      "description": "Shared ReadWriteMany volume is full.",
+      "investigation_steps": [
+        "Find shared PVC",
+        "Identify pod writing most data"
+      ],
+      "diagnosis_guidance": "Disk errors across multiple pods sharing PVC.",
+      "recommendations": [
+        "Increase PVC capacity",
+        "Clean up data"
       ]
     },
     {
@@ -630,26 +540,15 @@
       "name": "Secret Rotation Cascade",
       "root_cause_resource_type": "Secret",
       "root_cause_issue_type": "credential_rotation",
-      "symptom_keywords": [
-        "401",
-        "403",
-        "auth failure",
-        "credential error"
-      ],
-      "description": "A Secret rotation with invalid credentials causes auth failures across all pods using that Secret. Multiple services fail auth simultaneously after the rotation.",
+      "symptom_keywords": ["401", "403", "auth failure"],
+      "description": "Bad credentials rotated into Secret.",
       "investigation_steps": [
-        "Find shared Secret: MATCH (p:Pod)-[:USES_SECRET]->(s:Secret) WHERE p.name IN $affected_pod_names WITH s, collect(p.name) as pods RETURN s.name, s.namespace, s.updated_at, pods",
-        "Check Secret update timestamp vs auth failure start time",
-        "Find all pods using that Secret: MATCH (s:Secret {name: $secret_name})<-[:USES_SECRET]-(p:Pod) RETURN p.name, p.namespace, p.restart_count",
-        "Verify if rollback is possible (previous Secret version)"
+        "Correlate Secret update time with Auth failure start"
       ],
-      "diagnosis_guidance": "Multiple services failing 401/403 at the same time is a strong signal of credential rotation gone wrong. Check USES_SECRET edges to find the common Secret. If auth failures started within minutes of Secret update, correlation is strong.",
+      "diagnosis_guidance": "Mass 401s after Secret update.",
       "recommendations": [
-        "Rollback Secret to previous valid credentials",
-        "Validate credentials before applying rotation",
-        "Implement staged credential rotation (update one service first)",
-        "Use external secret management with validation",
-        "Add credential testing to rotation process"
+        "Rollback Secret",
+        "Validate credentials"
       ]
     },
     {
@@ -657,25 +556,15 @@
       "name": "Node Drain Impact",
       "root_cause_resource_type": "Node",
       "root_cause_issue_type": "node_drain",
-      "symptom_keywords": [
-        "eviction",
-        "node drain",
-        "multiple restarts",
-        "NodeNotReady"
-      ],
-      "description": "A node is being drained or experiencing issues (DiskPressure, MemoryPressure), causing all pods on that node to be evicted and rescheduled.",
+      "symptom_keywords": ["eviction", "node drain", "NodeNotReady"],
+      "description": "Node issues causing mass eviction.",
       "investigation_steps": [
-        "Find common node: MATCH (p:Pod)-[:SCHEDULED_ON]->(n:Node) WHERE p.restart_count > 0 WITH n, collect(p.name) as pods, count(p) as count WHERE count > 3 RETURN n.name, pods, count ORDER BY count DESC",
-        "Check node events: MATCH (e:K8sEvent)-[:INVOLVES]->(n:Node {name: $node_name}) WHERE e.reason IN ['NodeNotReady', 'Draining', 'DiskPressure', 'MemoryPressure', 'EvictionThresholdMet'] RETURN e.reason, e.message, e.last_timestamp ORDER BY e.last_timestamp DESC",
-        "Verify node status: MATCH (n:Node {name: $node_name}) RETURN n.status, n.conditions, n.taints"
+        "Check Node events (Draining, DiskPressure)"
       ],
-      "diagnosis_guidance": "When multiple pods restart across different services but share a node, check for node-level events. Draining, DiskPressure, MemoryPressure all cause mass evictions. The node is the root cause, not the individual pods.",
+      "diagnosis_guidance": "Failures grouped by Node.",
       "recommendations": [
-        "Wait for drain to complete, pods will reschedule",
-        "Uncordon node if drain was unintended",
-        "Add node capacity if resource pressure",
-        "Ensure pod distribution with anti-affinity rules",
-        "Implement pod disruption budgets for critical workloads"
+        "Wait for drain/reschedule",
+        "Fix Node capacity"
       ]
     },
     {
@@ -683,25 +572,16 @@
       "name": "NetworkPolicy Block",
       "root_cause_resource_type": "NetworkPolicy",
       "root_cause_issue_type": "network_policy_block",
-      "symptom_keywords": [
-        "connection timeout",
-        "cross-namespace",
-        "network blocked"
-      ],
-      "description": "NetworkPolicy is blocking traffic between namespaces or services. Connection times out (not refused) because packets are dropped.",
+      "symptom_keywords": ["connection timeout", "network blocked"],
+      "description": "NetworkPolicy blocking cross-namespace traffic.",
       "investigation_steps": [
-        "Check if caller and target are in different namespaces: MATCH (caller:Service {name: $caller_service})-[:IN_NAMESPACE]->(callerNs:Namespace) MATCH (target:Service {name: $target_service})-[:IN_NAMESPACE]->(targetNs:Namespace) RETURN callerNs.name, targetNs.name",
-        "If different namespaces, check NetworkPolicies in target namespace",
-        "Verify target pods are healthy (to distinguish from other 503 causes)",
-        "Check if NetworkPolicy allows ingress from caller's namespace"
+        "Check Trace for missing Server spans (request sent but not received)",
+        "Check NetworkPolicies in target namespace"
       ],
-      "diagnosis_guidance": "Connection TIMEOUT (not refused) with healthy target pods suggests NetworkPolicy blocking. If target returns 503/500, that's application error (network works). If connection times out and target is healthy, check NetworkPolicy. Cross-namespace calls are commonly blocked by default deny policies.",
+      "diagnosis_guidance": "Timeout (dropped packet) implies Firewall/Policy. Refused implies App/Port issue.",
       "recommendations": [
-        "Update NetworkPolicy to allow traffic from caller's namespace",
-        "Add appropriate labels to caller pods for NetworkPolicy matching",
-        "Document which namespaces are allowed to communicate",
-        "Consider namespace labels for simpler policy management",
-        "Test connectivity after NetworkPolicy changes"
+        "Allow traffic in NetworkPolicy",
+        "Label pods correctly"
       ]
     }
   ]
