@@ -10,6 +10,7 @@ import (
 	storagev1 "k8s.io/api/storage/v1"
 
 	"github.com/aslakknutsen/kkbase/pkg/models"
+	"github.com/aslakknutsen/kkbase/pkg/watchers/handlers/common"
 )
 
 // serializeMap converts a map to JSON string for Neo4j storage
@@ -98,6 +99,11 @@ func NodeToGraphNode(node *corev1.Node) *models.GraphNode {
 	// Add labels as JSON string
 	if len(node.Labels) > 0 {
 		properties["labels"] = serializeMap(node.Labels)
+	}
+
+	// Add annotations
+	if annotations := common.SerializeAnnotations(node.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	return models.NewGraphNode(models.NodeType(NodeTypeNode), models.GetNodeID(NodeTypeNode, "", node.Name), properties)
@@ -191,6 +197,11 @@ func PodToGraphNode(pod *corev1.Pod) *models.GraphNode {
 	// Add labels
 	if len(pod.Labels) > 0 {
 		properties["labels"] = serializeMap(pod.Labels)
+	}
+
+	// Add annotations
+	if annotations := common.SerializeAnnotations(pod.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	// Add owner references
@@ -305,6 +316,11 @@ func DeploymentToGraphNode(deployment *appsv1.Deployment) *models.GraphNode {
 		properties["selector"] = serializeMap(deployment.Spec.Selector.MatchLabels)
 	}
 
+	// Add annotations
+	if annotations := common.SerializeAnnotations(deployment.Annotations); annotations != "" {
+		properties["annotations"] = annotations
+	}
+
 	return models.NewGraphNode(models.NodeType(NodeTypeDeployment), models.GetNodeID(NodeTypeDeployment, deployment.Namespace, deployment.Name), properties)
 }
 
@@ -347,6 +363,11 @@ func ReplicaSetToGraphNode(replicaSet *appsv1.ReplicaSet) *models.GraphNode {
 	}
 	if replicaSet.Spec.Selector != nil {
 		properties["selector"] = serializeMap(replicaSet.Spec.Selector.MatchLabels)
+	}
+
+	// Add annotations
+	if annotations := common.SerializeAnnotations(replicaSet.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	// Add owner references
@@ -402,6 +423,11 @@ func StatefulSetToGraphNode(statefulSet *appsv1.StatefulSet) *models.GraphNode {
 		properties["selector"] = serializeMap(statefulSet.Spec.Selector.MatchLabels)
 	}
 
+	// Add annotations
+	if annotations := common.SerializeAnnotations(statefulSet.Annotations); annotations != "" {
+		properties["annotations"] = annotations
+	}
+
 	return models.NewGraphNode(models.NodeType(NodeTypeStatefulSet), models.GetNodeID(NodeTypeStatefulSet, statefulSet.Namespace, statefulSet.Name), properties)
 }
 
@@ -447,6 +473,11 @@ func DaemonSetToGraphNode(daemonSet *appsv1.DaemonSet) *models.GraphNode {
 		properties["selector"] = serializeMap(daemonSet.Spec.Selector.MatchLabels)
 	}
 
+	// Add annotations
+	if annotations := common.SerializeAnnotations(daemonSet.Annotations); annotations != "" {
+		properties["annotations"] = annotations
+	}
+
 	return models.NewGraphNode(models.NodeType(NodeTypeDaemonSet), models.GetNodeID(NodeTypeDaemonSet, daemonSet.Namespace, daemonSet.Name), properties)
 }
 
@@ -489,6 +520,11 @@ func ServiceToGraphNode(service *corev1.Service) *models.GraphNode {
 		properties["labels"] = serializeMap(service.Labels)
 	}
 
+	// Add annotations
+	if annotations := common.SerializeAnnotations(service.Annotations); annotations != "" {
+		properties["annotations"] = annotations
+	}
+
 	return models.NewGraphNode(models.NodeType(NodeTypeService), models.GetNodeID(NodeTypeService, service.Namespace, service.Name), properties)
 }
 
@@ -511,6 +547,11 @@ func IngressToGraphNode(ingress *networkingv1.Ingress) *models.GraphNode {
 	// Add labels
 	if len(ingress.Labels) > 0 {
 		properties["labels"] = serializeMap(ingress.Labels)
+	}
+
+	// Add annotations
+	if annotations := common.SerializeAnnotations(ingress.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	return models.NewGraphNode(models.NodeType(NodeTypeIngress), models.GetNodeID(NodeTypeIngress, ingress.Namespace, ingress.Name), properties)
@@ -540,6 +581,11 @@ func NetworkPolicyToGraphNode(networkPolicy *networkingv1.NetworkPolicy) *models
 	// Add labels
 	if len(networkPolicy.Labels) > 0 {
 		properties["labels"] = serializeMap(networkPolicy.Labels)
+	}
+
+	// Add annotations
+	if annotations := common.SerializeAnnotations(networkPolicy.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	return models.NewGraphNode(models.NodeType(NodeTypeNetworkPolicy), models.GetNodeID(NodeTypeNetworkPolicy, networkPolicy.Namespace, networkPolicy.Name), properties)
@@ -577,6 +623,11 @@ func PersistentVolumeToGraphNode(pv *corev1.PersistentVolume) *models.GraphNode 
 	// Add labels
 	if len(pv.Labels) > 0 {
 		properties["labels"] = serializeMap(pv.Labels)
+	}
+
+	// Add annotations
+	if annotations := common.SerializeAnnotations(pv.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	return models.NewGraphNode(models.NodeType(NodeTypePersistentVolume), models.GetNodeID(NodeTypePersistentVolume, "", pv.Name), properties)
@@ -643,6 +694,11 @@ func PersistentVolumeClaimToGraphNode(pvc *corev1.PersistentVolumeClaim) *models
 		properties["labels"] = serializeMap(pvc.Labels)
 	}
 
+	// Add annotations
+	if annotations := common.SerializeAnnotations(pvc.Annotations); annotations != "" {
+		properties["annotations"] = annotations
+	}
+
 	return models.NewGraphNode(models.NodeType(NodeTypePersistentVolumeClaim), models.GetNodeID(NodeTypePersistentVolumeClaim, pvc.Namespace, pvc.Name), properties)
 }
 
@@ -665,6 +721,11 @@ func StorageClassToGraphNode(sc *storagev1.StorageClass) *models.GraphNode {
 	// Add labels
 	if len(sc.Labels) > 0 {
 		properties["labels"] = serializeMap(sc.Labels)
+	}
+
+	// Add annotations
+	if annotations := common.SerializeAnnotations(sc.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	return models.NewGraphNode(models.NodeType(NodeTypeStorageClass), models.GetNodeID(NodeTypeStorageClass, "", sc.Name), properties)
@@ -691,6 +752,11 @@ func ConfigMapToGraphNode(cm *corev1.ConfigMap) *models.GraphNode {
 		properties["labels"] = serializeMap(cm.Labels)
 	}
 
+	// Add annotations
+	if annotations := common.SerializeAnnotations(cm.Annotations); annotations != "" {
+		properties["annotations"] = annotations
+	}
+
 	return models.NewGraphNode(models.NodeType(NodeTypeConfigMap), models.GetNodeID(NodeTypeConfigMap, cm.Namespace, cm.Name), properties)
 }
 
@@ -714,6 +780,11 @@ func SecretToGraphNode(secret *corev1.Secret) *models.GraphNode {
 	// Add labels
 	if len(secret.Labels) > 0 {
 		properties["labels"] = serializeMap(secret.Labels)
+	}
+
+	// Add annotations
+	if annotations := common.SerializeAnnotations(secret.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	return models.NewGraphNode(models.NodeType(NodeTypeSecret), models.GetNodeID(NodeTypeSecret, secret.Namespace, secret.Name), properties)
@@ -809,6 +880,11 @@ func NamespaceToGraphNode(namespace *corev1.Namespace) *models.GraphNode {
 	// Add labels
 	if len(namespace.Labels) > 0 {
 		properties["labels"] = serializeMap(namespace.Labels)
+	}
+
+	// Add annotations
+	if annotations := common.SerializeAnnotations(namespace.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	return models.NewGraphNode(models.NodeType(NodeTypeNamespace), models.GetNodeID(NodeTypeNamespace, "", namespace.Name), properties)

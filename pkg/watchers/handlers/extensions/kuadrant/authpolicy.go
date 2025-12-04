@@ -6,6 +6,7 @@ import (
 	"github.com/aslakknutsen/kkbase/pkg/graph"
 	"github.com/aslakknutsen/kkbase/pkg/models"
 	"github.com/aslakknutsen/kkbase/pkg/watchers"
+	"github.com/aslakknutsen/kkbase/pkg/watchers/handlers/common"
 	"github.com/aslakknutsen/kkbase/pkg/watchers/schema"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -268,6 +269,11 @@ func (h *AuthPolicyHandler) HandleAdd(obj interface{}) {
 	// Add labels
 	if labels := policy.GetLabels(); len(labels) > 0 {
 		policyNode.Properties["labels"] = serializeMap(labels)
+	}
+
+	// Add annotations
+	if annotations := common.SerializeAnnotations(policy.GetAnnotations()); annotations != "" {
+		policyNode.Properties["annotations"] = annotations
 	}
 
 	// Store complete spec and status

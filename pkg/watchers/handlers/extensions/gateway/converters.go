@@ -9,6 +9,7 @@ import (
 	gatewayv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	"github.com/aslakknutsen/kkbase/pkg/models"
+	"github.com/aslakknutsen/kkbase/pkg/watchers/handlers/common"
 )
 
 // serializeMap converts a map to JSON string for Neo4j storage
@@ -64,6 +65,11 @@ func GatewayClassToGraphNode(gatewayClass *gatewayv1.GatewayClass) *models.Graph
 	// Add labels
 	if len(gatewayClass.Labels) > 0 {
 		properties["labels"] = serializeMap(gatewayClass.Labels)
+	}
+
+	// Add annotations
+	if annotations := common.SerializeAnnotations(gatewayClass.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	return models.NewGraphNode(models.NodeType(NodeTypeGatewayClass), models.GetNodeID(NodeTypeGatewayClass, "", gatewayClass.Name), properties)
@@ -173,6 +179,11 @@ func GatewayToGraphNode(gateway *gatewayv1.Gateway) *models.GraphNode {
 	// Add labels
 	if len(gateway.Labels) > 0 {
 		properties["labels"] = serializeMap(gateway.Labels)
+	}
+
+	// Add annotations
+	if annotations := common.SerializeAnnotations(gateway.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	return models.NewGraphNode(models.NodeType(NodeTypeGateway), models.GetNodeID(NodeTypeGateway, gateway.Namespace, gateway.Name), properties)
@@ -340,6 +351,11 @@ func HTTPRouteToGraphNode(httpRoute *gatewayv1.HTTPRoute) *models.GraphNode {
 		properties["labels"] = serializeMap(httpRoute.Labels)
 	}
 
+	// Add annotations
+	if annotations := common.SerializeAnnotations(httpRoute.Annotations); annotations != "" {
+		properties["annotations"] = annotations
+	}
+
 	return models.NewGraphNode(models.NodeType(NodeTypeHTTPRoute), models.GetNodeID(NodeTypeHTTPRoute, httpRoute.Namespace, httpRoute.Name), properties)
 }
 
@@ -505,6 +521,11 @@ func GRPCRouteToGraphNode(grpcRoute *gatewayv1.GRPCRoute) *models.GraphNode {
 		properties["labels"] = serializeMap(grpcRoute.Labels)
 	}
 
+	// Add annotations
+	if annotations := common.SerializeAnnotations(grpcRoute.Annotations); annotations != "" {
+		properties["annotations"] = annotations
+	}
+
 	return models.NewGraphNode(models.NodeType(NodeTypeGRPCRoute), models.GetNodeID(NodeTypeGRPCRoute, grpcRoute.Namespace, grpcRoute.Name), properties)
 }
 
@@ -616,6 +637,11 @@ func TCPRouteToGraphNode(tcpRoute *gatewayv1alpha2.TCPRoute) *models.GraphNode {
 		properties["labels"] = serializeMap(tcpRoute.Labels)
 	}
 
+	// Add annotations
+	if annotations := common.SerializeAnnotations(tcpRoute.Annotations); annotations != "" {
+		properties["annotations"] = annotations
+	}
+
 	return models.NewGraphNode(models.NodeType(NodeTypeTCPRoute), models.GetNodeID(NodeTypeTCPRoute, tcpRoute.Namespace, tcpRoute.Name), properties)
 }
 
@@ -725,6 +751,11 @@ func UDPRouteToGraphNode(udpRoute *gatewayv1alpha2.UDPRoute) *models.GraphNode {
 	// Add labels
 	if len(udpRoute.Labels) > 0 {
 		properties["labels"] = serializeMap(udpRoute.Labels)
+	}
+
+	// Add annotations
+	if annotations := common.SerializeAnnotations(udpRoute.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	return models.NewGraphNode(models.NodeType(NodeTypeUDPRoute), models.GetNodeID(NodeTypeUDPRoute, udpRoute.Namespace, udpRoute.Name), properties)
@@ -847,6 +878,11 @@ func TLSRouteToGraphNode(tlsRoute *gatewayv1alpha2.TLSRoute) *models.GraphNode {
 		properties["labels"] = serializeMap(tlsRoute.Labels)
 	}
 
+	// Add annotations
+	if annotations := common.SerializeAnnotations(tlsRoute.Annotations); annotations != "" {
+		properties["annotations"] = annotations
+	}
+
 	return models.NewGraphNode(models.NodeType(NodeTypeTLSRoute), models.GetNodeID(NodeTypeTLSRoute, tlsRoute.Namespace, tlsRoute.Name), properties)
 }
 
@@ -895,6 +931,11 @@ func ReferenceGrantToGraphNode(referenceGrant *gatewayv1beta1.ReferenceGrant) *m
 	// Add labels
 	if len(referenceGrant.Labels) > 0 {
 		properties["labels"] = serializeMap(referenceGrant.Labels)
+	}
+
+	// Add annotations
+	if annotations := common.SerializeAnnotations(referenceGrant.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	return models.NewGraphNode(models.NodeType(NodeTypeReferenceGrant), models.GetNodeID(NodeTypeReferenceGrant, referenceGrant.Namespace, referenceGrant.Name), properties)
@@ -1003,6 +1044,11 @@ func BackendTLSPolicyToGraphNode(backendTLSPolicy *gatewayv1.BackendTLSPolicy) *
 	// Add labels
 	if len(backendTLSPolicy.Labels) > 0 {
 		properties["labels"] = serializeMap(backendTLSPolicy.Labels)
+	}
+
+	// Add annotations
+	if annotations := common.SerializeAnnotations(backendTLSPolicy.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	return models.NewGraphNode(models.NodeType(NodeTypeBackendTLSPolicy), models.GetNodeID(NodeTypeBackendTLSPolicy, backendTLSPolicy.Namespace, backendTLSPolicy.Name), properties)

@@ -6,6 +6,7 @@ import (
 	"github.com/aslakknutsen/kkbase/pkg/graph"
 	"github.com/aslakknutsen/kkbase/pkg/models"
 	"github.com/aslakknutsen/kkbase/pkg/watchers"
+	"github.com/aslakknutsen/kkbase/pkg/watchers/handlers/common"
 	"github.com/aslakknutsen/kkbase/pkg/watchers/schema"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -115,6 +116,11 @@ func (h *KuadrantHandler) HandleAdd(obj interface{}) {
 
 	if labels := kuadrant.GetLabels(); len(labels) > 0 {
 		kuadrantNode.Properties["labels"] = serializeMap(labels)
+	}
+
+	// Add annotations
+	if annotations := common.SerializeAnnotations(kuadrant.GetAnnotations()); annotations != "" {
+		kuadrantNode.Properties["annotations"] = annotations
 	}
 
 	// Store complete spec and status

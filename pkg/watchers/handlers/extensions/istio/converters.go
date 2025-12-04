@@ -7,6 +7,7 @@ import (
 	istiosecurityv1 "istio.io/client-go/pkg/apis/security/v1"
 
 	"github.com/aslakknutsen/kkbase/pkg/models"
+	"github.com/aslakknutsen/kkbase/pkg/watchers/handlers/common"
 )
 
 // serializeMap converts a map to JSON string for Neo4j storage
@@ -36,8 +37,8 @@ func IstioGatewayToGraphNode(gateway *istiov1.Gateway) *models.GraphNode {
 	}
 
 	// Add annotations
-	if len(gateway.Annotations) > 0 {
-		properties["annotations"] = serializeMap(gateway.Annotations)
+	if annotations := common.SerializeAnnotations(gateway.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	// Add selector
@@ -71,8 +72,8 @@ func VirtualServiceToGraphNode(vs *istiov1.VirtualService) *models.GraphNode {
 	}
 
 	// Add annotations
-	if len(vs.Annotations) > 0 {
-		properties["annotations"] = serializeMap(vs.Annotations)
+	if annotations := common.SerializeAnnotations(vs.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	// Add hosts
@@ -133,8 +134,8 @@ func DestinationRuleToGraphNode(dr *istiov1.DestinationRule) *models.GraphNode {
 	}
 
 	// Add annotations
-	if len(dr.Annotations) > 0 {
-		properties["annotations"] = serializeMap(dr.Annotations)
+	if annotations := common.SerializeAnnotations(dr.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	// Add host
@@ -176,8 +177,8 @@ func ServiceEntryToGraphNode(se *istiov1.ServiceEntry) *models.GraphNode {
 	}
 
 	// Add annotations
-	if len(se.Annotations) > 0 {
-		properties["annotations"] = serializeMap(se.Annotations)
+	if annotations := common.SerializeAnnotations(se.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	// Add hosts
@@ -224,8 +225,8 @@ func SidecarToGraphNode(sidecar *istiov1.Sidecar) *models.GraphNode {
 	}
 
 	// Add annotations
-	if len(sidecar.Annotations) > 0 {
-		properties["annotations"] = serializeMap(sidecar.Annotations)
+	if annotations := common.SerializeAnnotations(sidecar.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	// Add workload selector
@@ -284,8 +285,8 @@ func AuthorizationPolicyToGraphNode(policy *istiosecurityv1.AuthorizationPolicy)
 	}
 
 	// Add annotations
-	if len(policy.Annotations) > 0 {
-		properties["annotations"] = serializeMap(policy.Annotations)
+	if annotations := common.SerializeAnnotations(policy.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	// Add selector
@@ -327,8 +328,8 @@ func PeerAuthenticationToGraphNode(pa *istiosecurityv1.PeerAuthentication) *mode
 	}
 
 	// Add annotations
-	if len(pa.Annotations) > 0 {
-		properties["annotations"] = serializeMap(pa.Annotations)
+	if annotations := common.SerializeAnnotations(pa.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	// Add selector
@@ -370,8 +371,8 @@ func RequestAuthenticationToGraphNode(ra *istiosecurityv1.RequestAuthentication)
 	}
 
 	// Add annotations
-	if len(ra.Annotations) > 0 {
-		properties["annotations"] = serializeMap(ra.Annotations)
+	if annotations := common.SerializeAnnotations(ra.Annotations); annotations != "" {
+		properties["annotations"] = annotations
 	}
 
 	// Add selector
