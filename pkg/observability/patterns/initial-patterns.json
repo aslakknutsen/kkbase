@@ -266,6 +266,55 @@
       ]
     },
     {
+      "tier": 1,
+      "name": "Connection Timeout",
+      "symptom_keywords": [
+        "connection timeout", "000", "status 000", "timed out", "network unreachable",
+        "connection refused", "no route to host", "connect: connection timed out"
+      ],
+      "description": "Triage pattern for connection timeouts (status 000). Distinguishes between NetworkPolicy blocks, DNS issues, and service unavailability. Key insight: Timeout indicates network-level blocking, 5xx indicates application errors.",
+      "discriminating_queries": [
+        {
+          "name": "check_cross_namespace",
+          "query": "MATCH (caller:Service {name: $caller_service})-[:IN_NAMESPACE]->(callerNs:Namespace) MATCH (target:Service {name: $target_service})-[:IN_NAMESPACE]->(targetNs:Namespace) RETURN callerNs.name as caller_namespace, targetNs.name as target_namespace, callerNs.name <> targetNs.name as is_cross_namespace",
+          "condition": "is_cross_namespace == true",
+          "suggests_pattern": "NetworkPolicy Block"
+        },
+        {
+          "name": "check_target_pods_healthy",
+          "query": "MATCH (s:Service {name: $target_service})-[:SELECTS_PODS]->(p:Pod) RETURN p.name, p.status, p.ready, count(p) as endpoint_count",
+          "condition": "endpoint_count > 0 AND all pods ready",
+          "suggests_pattern": "NetworkPolicy Block"
+        },
+        {
+          "name": "check_target_service_exists",
+          "query": "MATCH (s:Service {name: $target_service})-[:IN_NAMESPACE]->(ns:Namespace {name: $target_namespace}) OPTIONAL MATCH (s)-[:SELECTS_PODS]->(p:Pod) RETURN s.name, count(p) as endpoint_count",
+          "condition": "endpoint_count == 0",
+          "suggests_pattern": "Service Selector Mismatch"
+        },
+        {
+          "name": "check_failed_call_status",
+          "query": "MATCH (caller:Service {name: $caller_service})-[c:FAILED_CALL_TO]->(target:Service {name: $target_service}) RETURN c.status_code, c.error_message, c.last_observed",
+          "condition": "status_code == '000' OR error_message CONTAINS 'timeout'",
+          "suggests_pattern": "NetworkPolicy Block"
+        }
+      ],
+      "decision_logic": {
+        "cross_namespace_timeout_healthy_target": "NetworkPolicy Block",
+        "same_namespace_timeout": "Service Selector Mismatch",
+        "target_no_endpoints": "Service Selector Mismatch",
+        "5xx_errors": "Cascading Failure",
+        "default": "NetworkPolicy Block"
+      },
+      "initial_investigation_steps": [
+        "CRITICAL: Timeout (000) = network block, 5xx = application error",
+        "Check if caller and target services are in different namespaces",
+        "Verify target service has healthy endpoints (pods are Ready)",
+        "If cross-namespace + timeout + healthy target = NetworkPolicy blocking traffic",
+        "Check for FAILED_CALL_TO edges with status_code '000' or timeout errors"
+      ]
+    },
+    {
       "tier": 2,
       "name": "Service Selector Mismatch",
       "root_cause_resource_type": "Service",
@@ -572,16 +621,23 @@
       "name": "NetworkPolicy Block",
       "root_cause_resource_type": "NetworkPolicy",
       "root_cause_issue_type": "network_policy_block",
-      "symptom_keywords": ["connection timeout", "network blocked"],
-      "description": "NetworkPolicy blocking cross-namespace traffic.",
+      "symptom_keywords": ["connection timeout", "network blocked", "000", "cross-namespace"],
+      "description": "NetworkPolicy blocking cross-namespace traffic. Key diagnostic: timeout (000) with healthy target pods indicates network-level blocking, not application failure.",
       "investigation_steps": [
-        "Check Trace for missing Server spans (request sent but not received)",
-        "Check NetworkPolicies in target namespace"
+        "Check if caller and target are in different namespaces: MATCH (caller:Service {name: $caller_service})-[:IN_NAMESPACE]->(callerNs:Namespace) MATCH (target:Service {name: $target_service})-[:IN_NAMESPACE]->(targetNs:Namespace) RETURN callerNs.name, targetNs.name",
+        "Verify target service has healthy pods (rules out application issues): MATCH (s:Service {name: $target_service})-[:SELECTS_PODS]->(p:Pod) RETURN p.name, p.status, p.ready",
+        "Check the failing call relationship: MATCH (caller:Service {name: $caller_service})-[c:FAILED_CALL_TO]->(target:Service {name: $target_service}) RETURN c.status_code, c.error_message",
+        "If status_code is '000' or error contains 'timeout', this confirms network-level blocking",
+        "Check Trace for missing Server spans (request sent but not received by target)",
+        "List NetworkPolicies in target namespace: kubectl get networkpolicy -n <target_namespace>"
       ],
-      "diagnosis_guidance": "Timeout (dropped packet) implies Firewall/Policy. Refused implies App/Port issue.",
+      "diagnosis_guidance": "CRITICAL DISTINCTION: Timeout/000 = network block (packet dropped), 5xx = application error (packet reached but app failed). If cross-namespace call times out but target pods are healthy and have endpoints, NetworkPolicy is almost certainly blocking ingress traffic from the source namespace.",
       "recommendations": [
-        "Allow traffic in NetworkPolicy",
-        "Label pods correctly"
+        "Update NetworkPolicy to allow traffic from source namespace using namespaceSelector",
+        "Example fix: Add 'namespaceSelector: matchLabels: kubernetes.io/metadata.name: <source-namespace>' to NetworkPolicy ingress rules",
+        "Verify namespace labels exist: kubectl get namespace <source-namespace> --show-labels",
+        "Alternative: Add specific pod labels to allow traffic from specific pods",
+        "Test connectivity after fix: kubectl exec -n <source-ns> <pod> -- curl http://<target-svc>.<target-ns>.svc.cluster.local"
       ]
     }
   ]

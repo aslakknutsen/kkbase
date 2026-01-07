@@ -1,0 +1,56 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: scenario-13-networkpolicy-block
+  namespace: monitoring
+  labels:
+    release: prometheus
+    role: alert-rules
+    scenario: "13"
+spec:
+  groups:
+  - name: scenario_13_networkpolicy_block
+    interval: 10s
+    rules:
+    # Alert for connection timeout (status 000) - indicates network-level block
+    - alert: CrossNamespaceConnectionTimeout
+      expr: |
+        rate(http_client_requests_total{
+          status_code="000"
+        }[2m]) > 0
+      for: 20s
+      labels:
+        severity: critical
+        scenario: netpol-block
+        scenario_id: "13"
+      annotations:
+        summary: "{{ $labels.app }} connection timeout to {{ $labels.destination_service }}"
+        description: "Connection timeout (status 000) indicates network-level blocking. Check if caller and target are in different namespaces and if NetworkPolicy is blocking traffic."
+        alert_namespace: "{{ $labels.namespace }}"
+        alert_service: "{{ $labels.app }}"
+        alert_destination: "{{ $labels.destination_service }}"
+        diagnostic_hint: "Timeout=network block, 5xx=application error"
+
+    # Alternative: Alert when specific cross-namespace call fails
+    - alert: ApiGatewayCannotReachProductCatalog
+      expr: |
+        rate(http_client_requests_total{
+          app="api-gateway",
+          destination_service="product-catalog",
+          status_code="000"
+        }[2m]) > 0
+      for: 20s
+      labels:
+        severity: critical
+        scenario: netpol-block
+        scenario_id: "13"
+      annotations:
+        summary: "api-gateway cannot reach product-catalog (connection timeout)"
+        description: "api-gateway in sf-gateway namespace cannot reach product-catalog in sf-products namespace. This is likely due to NetworkPolicy blocking cross-namespace traffic."
+        alert_namespace: "sf-gateway"
+        alert_service: "api-gateway"
+        alert_destination: "product-catalog"
+        alert_destination_namespace: "sf-products"
+
+
+
